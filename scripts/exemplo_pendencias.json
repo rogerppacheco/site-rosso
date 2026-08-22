@@ -1,0 +1,30 @@
+[
+  {
+    "nome": "0001-AGENDAMENTO OCO",
+    "tipo_pendencia": "CLIENTE"
+  },
+  {
+    "nome": "0004-FALHA DE ETAPAS DO PROCESSO",
+    "tipo_pendencia": "TÉCNICA"
+  },
+  {
+    "nome": "0007-FIM DA ESTEIRA SEM CONTATO",
+    "tipo_pendencia": "CLIENTE"
+  },
+  {
+    "nome": "7074-RISER NÃO CONSTRUIDO",
+    "tipo_pendencia": "CLIENTE"
+  },
+  {
+    "nome": "7085-ELABORAR PROJ. INFRA CLIENTE",
+    "tipo_pendencia": "TÉCNICA"
+  },
+  {
+    "nome": "VALIDAR OSAB",
+    "tipo_pendencia": "Operacional"
+  },
+  {
+    "nome": "APROVISIONAMENTO S/ DATA",
+    "tipo_pendencia": "Sistêmica"
+  }
+]

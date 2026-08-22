@@ -1,0 +1,61 @@
+{
+  "name": "Site Record — CRM → Teams (Outbound)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "site-record-teams-notificar",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "sr-teams-webhook",
+      "name": "Webhook Site Record Teams",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "site-record-crm-teams-outbound"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json;\nconst body = payload.body ?? payload;\n\nconst title = String(body.title ?? 'Site Record').trim();\nconst text = String(body.text ?? body.message_body ?? '').trim();\nconst source = String(body.source ?? 'site-record').trim();\nconst imageUrl = String(body.image_url ?? '').trim();\n\nif (!text) {\n  throw new Error('text vazio no payload Teams outbound');\n}\n\nconst card = {\n  '@type': 'MessageCard',\n  '@context': 'http://schema.org/extensions',\n  themeColor: '0076D7',\n  summary: title,\n  sections: [\n    {\n      activityTitle: title,\n      activitySubtitle: source,\n      text: text.replace(/\\n/g, '<br>'),\n    },\n  ],\n};\n\nif (imageUrl) {\n  card.sections[0].images = [{ image: imageUrl }];\n}\n\nconst teamsWebhook = $env.TEAMS_INCOMING_WEBHOOK_URL;\nif (!teamsWebhook) {\n  throw new Error('Defina TEAMS_INCOMING_WEBHOOK_URL no n8n (Incoming Webhook do canal Teams)');\n}\n\nreturn [{ json: { teams_webhook_url: teamsWebhook, card } }];"
+      },
+      "id": "sr-teams-map",
+      "name": "Mapear MessageCard Teams",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.teams_webhook_url }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.card) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "sr-teams-post",
+      "name": "Teams Incoming Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Site Record Teams": {
+      "main": [[{ "node": "Mapear MessageCard Teams", "type": "main", "index": 0 }]]
+    },
+    "Mapear MessageCard Teams": {
+      "main": [[{ "node": "Teams Incoming Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null
+}

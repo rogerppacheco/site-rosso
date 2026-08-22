@@ -1,0 +1,32 @@
+{% load static %}
+<header class="main-header">
+    <div class="header-container">
+        <a href="{% block brand_url %}/{% endblock %}" class="brand-link" aria-label="{{ SITE_BRAND }} - Início">
+            {% include "partials/brand_mark.html" %}
+        </a>
+
+        <nav class="main-nav" id="main-nav" aria-label="Navegação principal">
+            <ul>
+                {% block header_nav %}
+                <li>
+                    <a href="/area-interna/" class="nav-button">Área Interna</a>
+                </li>
+                {% endblock %}
+            </ul>
+        </nav>
+
+        <button type="button"
+                id="theme-toggle"
+                class="theme-toggle-btn"
+                aria-label="Alternar tema claro/escuro"
+                title="Alternar tema">
+            <i class="bi bi-moon-stars-fill" aria-hidden="true"></i>
+        </button>
+
+        <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menu" aria-expanded="false">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+        </button>
+    </div>
+</header>

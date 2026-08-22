@@ -1,0 +1,1169 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Antecipar Instalação / Reparo / Instalação Física - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+        .antecipar-page .tool-container { max-width: 820px; margin: 0 auto; padding: 20px; }
+        .antecipar-page .tool-container.tool-container-wide { max-width: min(1400px, 96vw); }
+        .antecipar-page .pedido-item { border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+        .antecipar-page .pedido-item:hover { border-color: var(--accent-primary); background: var(--bg-secondary); }
+        .antecipar-page .pedido-item.selected { border-color: var(--accent-primary); background: var(--bg-secondary); }
+        .antecipar-page .msg-preview { background: var(--bg-secondary); border-radius: 8px; padding: 16px; white-space: pre-wrap; font-size: 0.9rem; }
+        .antecipar-page .btn-solicitar { min-width: 200px; }
+        .antecipar-page .nav-tabs .nav-link { font-weight: 600; color: var(--text-secondary); }
+        .antecipar-page .nav-tabs .nav-link.active { color: var(--accent-primary); }
+        .antecipar-page .historico-table { font-size: 0.85rem; min-width: 1100px; table-layout: fixed; width: 100%; }
+        .antecipar-page .historico-table th { white-space: nowrap; vertical-align: middle; }
+        .antecipar-page .historico-table td { vertical-align: top; word-break: break-word; }
+        .antecipar-page .historico-table .col-data { width: 108px; }
+        .antecipar-page .historico-table .col-tipo { width: 88px; }
+        .antecipar-page .historico-table .col-os { width: 88px; }
+        .antecipar-page .historico-table .col-status { width: 92px; }
+        .antecipar-page .historico-table .col-resp-gc { width: 200px; min-width: 180px; }
+        .antecipar-page .historico-table .col-acoes { width: 72px; }
+        .antecipar-page .historico-table .cell-ellipsis { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .antecipar-page .historico-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .antecipar-page .msg-historico-block { background: var(--bg-secondary); border-radius: 8px; padding: 12px; white-space: pre-wrap; font-size: 0.9rem; max-height: 320px; overflow-y: auto; }
+        .antecipar-page .bg-white { background-color: var(--bg-card) !important; }
+        .antecipar-page .text-dark { color: var(--text-primary) !important; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/" class="nav-button">Área Interna</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<div class="tool-container antecipar-page" id="tool-container">
+        <h2 class="mb-3"><i class="bi bi-lightning-charge-fill text-primary"></i> Antecipar Instalação / Reparo / Instalação Física</h2>
+
+        <ul class="nav nav-tabs mb-4" id="tab-main" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tab-solicitar-btn" data-bs-toggle="tab" data-bs-target="#tab-solicitar" type="button">Solicitar</button>
+            </li>
+            <li class="nav-item" role="presentation" id="nav-item-config">
+                <button class="nav-link" id="tab-config-btn" data-bs-toggle="tab" data-bs-target="#tab-config" type="button">Configuração</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-historico-btn" data-bs-toggle="tab" data-bs-target="#tab-historico" type="button">Histórico</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="tab-main-content">
+            <!-- Aba Solicitar -->
+            <div class="tab-pane fade show active" id="tab-solicitar" role="tabpanel">
+                <p class="text-muted mb-4">Solicite prioridade ao gerente de contas (GC) da Nio. Informe CPF ou número do pedido (O.S). Pedidos <strong>agendados</strong> podem solicitar antecipação; pedidos <strong>instalados há até 14 dias</strong> podem solicitar <strong>reparo</strong> (internet não funciona após instalação). Pedidos com <strong>instalação física já realizada</strong> e que seguem <strong>em pendência no CRM</strong> podem usar <strong>Instalação física / pendência</strong> (descrição e imagem opcional).</p>
+                <div class="card card-modern">
+                    <label class="form-label fw-bold">Buscar por CPF ou número do pedido (O.S)</label>
+                    <div class="input-group">
+                        <input type="text" id="busca" class="form-control" placeholder="Ex: 123.456.789-00 ou número da O.S" maxlength="50">
+                        <button type="button" class="btn btn-primary" id="btn-buscar"><i class="bi bi-search"></i> Buscar</button>
+                    </div>
+                    <div id="erro-busca" class="text-danger mt-2 small" style="display:none;"></div>
+                </div>
+                <div id="lista-pedidos" class="card card-modern" style="display:none;">
+                    <h6 class="fw-bold mb-3">Selecione o pedido</h6>
+                    <div id="lista-pedidos-inner"></div>
+                </div>
+                <!-- Painel Antecipação (pedido agendado) -->
+                <div id="painel-antecipacao" class="card card-modern" style="display:none;">
+                    <h6 class="fw-bold mb-3">Mensagem que será enviada aos destinos configurados</h6>
+                    <div class="mb-3">
+                        <label class="form-label">Motivo da solicitação de antecipação <span class="text-danger">*</span></label>
+                        <textarea id="descricao" class="form-control" rows="3" placeholder="Descreva o motivo da tentativa de antecipação..." maxlength="500"></textarea>
+                    </div>
+                    <div id="msg-preview" class="msg-preview mb-3" style="display:none;"></div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-success btn-solicitar" id="btn-solicitar"><i class="bi bi-whatsapp"></i> Solicitar antecipação</button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-outro-pedido">Escolher outro pedido</button>
+                    </div>
+                    <div id="erro-solicitar" class="text-danger mt-2 small" style="display:none;"></div>
+                    <div id="sucesso-solicitar" class="text-success mt-2 small" style="display:none;"></div>
+                </div>
+                <!-- Painel Reparo (pedido instalado até 14 dias) -->
+                <div id="painel-reparo" class="card card-modern" style="display:none;">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-wrench text-warning"></i> Solicitar reparo - Internet pós-instalação</h6>
+                    <p class="text-muted small mb-3">Mensagem padrão de reparo será enviada aos destinos configurados. Informe duas opções de data/turno para retorno do técnico e detalhe a solicitação.</p>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Opção 1 - Data <span class="text-danger">*</span></label>
+                            <input type="text" id="reparo-data-1" class="form-control" placeholder="dd/mm/aaaa" maxlength="10">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Opção 1 - Turno <span class="text-danger">*</span></label>
+                            <select id="reparo-turno-1" class="form-select">
+                                <option value="">Selecione</option>
+                                <option value="MANHA">Manhã</option>
+                                <option value="TARDE">Tarde</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Opção 2 - Data <span class="text-danger">*</span></label>
+                            <input type="text" id="reparo-data-2" class="form-control" placeholder="dd/mm/aaaa" maxlength="10">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Opção 2 - Turno <span class="text-danger">*</span></label>
+                            <select id="reparo-turno-2" class="form-select">
+                                <option value="">Selecione</option>
+                                <option value="MANHA">Manhã</option>
+                                <option value="TARDE">Tarde</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Solicitação (texto livre) <span class="text-danger">*</span></label>
+                        <select id="observacao-reparo-opcao" class="form-select mb-2">
+                            <option value="">Selecione</option>
+                            <option value="Internet não funciona (total)">Internet não funciona (total)</option>
+                            <option value="Internet com lentidão">Internet com lentidão</option>
+                            <option value="outro">Outra (descreva abaixo)</option>
+                        </select>
+                        <textarea id="observacao-reparo" class="form-control" rows="2" placeholder="Ex.: internet cai toda hora, sem sinal..." maxlength="500" style="display:none;"></textarea>
+                    </div>
+                    <div id="msg-preview-reparo" class="msg-preview mb-3" style="display:none;"></div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-warning btn-solicitar" id="btn-solicitar-reparo"><i class="bi bi-wrench"></i> Solicitar reparo</button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-outro-pedido-reparo">Escolher outro pedido</button>
+                    </div>
+                    <div id="erro-solicitar-reparo" class="text-danger mt-2 small" style="display:none;"></div>
+                    <div id="sucesso-solicitar-reparo" class="text-success mt-2 small" style="display:none;"></div>
+                </div>
+                <!-- Painel Instalação física / pendência -->
+                <div id="painel-instalacao-fisica" class="card card-modern" style="display:none;">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-building-check text-info"></i> Instalação física / pendência no sistema</h6>
+                    <p class="text-muted small mb-3">Para pedidos <strong>pendentes na esteira</strong>. Se a <strong>data de instalação física (no cliente)</strong> não estiver preenchida, o pedido ainda pode ser sinalizado com aviso. Descreva a situação; você pode anexar uma imagem (JPG, PNG ou WEBP, até 6 MB).</p>
+                    <div id="aviso-sem-data-if" class="alert alert-warning py-2 small" style="display:none;">
+                        Este pedido está pendente, mas sem data de instalação física preenchida no CRM.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição da situação <span class="text-danger">*</span></label>
+                        <textarea id="descricao-instalacao-fisica" class="form-control" rows="3" placeholder="Ex.: instalação realizada no cliente, mas o sistema ainda mostra pendência de X..." maxlength="500"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Imagem (opcional)</label>
+                        <input type="file" class="form-control" id="imagem-instalacao-fisica" accept="image/jpeg,image/png,image/webp">
+                    </div>
+                    <div id="msg-preview-instalacao-fisica" class="msg-preview mb-3" style="display:none;"></div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-info text-dark btn-solicitar" id="btn-solicitar-instalacao-fisica"><i class="bi bi-send"></i> Enviar sinalização</button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-outro-pedido-if">Escolher outro pedido</button>
+                    </div>
+                    <div id="erro-solicitar-if" class="text-danger mt-2 small" style="display:none;"></div>
+                    <div id="sucesso-solicitar-if" class="text-success mt-2 small" style="display:none;"></div>
+                </div>
+                <div id="nenhum-resultado" class="card card-modern text-center text-muted" style="display:none;">
+                    <i class="bi bi-inbox display-6"></i>
+                    <p class="mb-0 mt-2">Nenhum pedido encontrado para esta busca.</p>
+                    <p class="small">Podem ser solicitados: pedidos <strong>Agendados</strong> (antecipação), <strong>Instalados há até 14 dias</strong> (reparo) ou <strong>Pendentes</strong> (instalação física, com ou sem data física informada).</p>
+                </div>
+            </div>
+
+            <!-- Aba Configuração -->
+            <div class="tab-pane fade" id="tab-config" role="tabpanel">
+                <div class="card card-modern">
+                    <h6 class="fw-bold mb-3">Dados do GC (ajuda / relatório)</h6>
+                    <p class="text-muted small mb-3">Usados em pedidos de ajuda e no relatório diário da esteira. Apenas Admin, Diretoria e BackOffice podem alterar.</p>
+                    <div id="config-visualizar" class="mb-3">
+                        <p class="mb-1"><strong>Nome do GC:</strong> <span id="config-nome-display">—</span></p>
+                        <p class="mb-1"><strong>Telefone do GC:</strong> <span id="config-telefone-display">—</span></p>
+                        <p class="mb-1"><strong>E-mail do GC:</strong> <span id="config-email-display">—</span></p>
+                        <p class="mb-1"><strong>Sem SLOT por e-mail:</strong> <span id="config-sem-slot-email-display">—</span></p>
+                        <p class="mb-1"><strong>Grupos de destino:</strong> <span id="config-grupo-display">—</span></p>
+                        <p class="mb-1"><strong>Telefones individuais:</strong> <span id="config-telefones-destino-display">—</span></p>
+                        <p class="mb-1"><strong>Relatório diário esteira:</strong> <span id="config-relatorio-display">—</span></p>
+                        <p class="mb-0"><strong>Horários do relatório:</strong> <span id="config-horarios-display">—</span></p>
+                    </div>
+                    <div id="config-form" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label">Nome do GC</label>
+                            <input type="text" id="config-nome-gc" class="form-control" placeholder="Ex: João Silva" maxlength="100">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Telefone do GC (WhatsApp)</label>
+                            <input type="text" id="config-telefone" class="form-control" placeholder="Ex: 21979630377" maxlength="20">
+                            <div class="form-text">Identidade do GC para ajuda e relatório. Para receber Antecipação/Sem SLOT, inclua também em Telefones individuais abaixo.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">E-mail do GC</label>
+                            <input type="email" id="config-email-gc" class="form-control" placeholder="Ex: gc@exemplo.com" maxlength="254">
+                            <div class="form-text">Usado nos pedidos de ajuda/socorro (abrir chamado TI) e no envio da máscara Sem SLOT.</div>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="config-sem-slot-email" checked>
+                            <label class="form-check-label" for="config-sem-slot-email">Enviar máscara Sem SLOT também por e-mail do GC</label>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="fw-bold mb-2">Destinos das mensagens (Antecipação e Sem SLOT)</h6>
+                        <p class="text-muted small mb-3">Os mesmos destinos WhatsApp valem para Antecipação e para Sem SLOT na auditoria. A máscara Sem SLOT também pode ir ao e-mail do GC (interruptor acima).</p>
+                        <div class="mb-3">
+                            <label class="form-label">Grupos WhatsApp</label>
+                            <select id="config-grupo" class="form-select" multiple size="6"></select>
+                            <div class="form-text">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar vários.</div>
+                            <div id="config-grupos-aviso" class="form-text text-warning" style="display:none;">Nenhum grupo cadastrado. Cadastre em Integração &gt; Grupos de disparo (ou use a opção listar grupos da Z-API).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Telefones WhatsApp individuais</label>
+                            <div id="config-telefones-destino-list" class="d-flex flex-column gap-2 mb-2"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-add-telefone-destino">
+                                <i class="bi bi-plus-lg"></i> Adicionar telefone
+                            </button>
+                            <div class="form-text">Um número por linha. Ex.: 21979630377</div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="fw-bold mb-2">Relatório diário de vendas (esteira)</h6>
+                        <p class="text-muted small mb-3">Envia ao GC o volume de ativados e a esteira de auditoria do dia (segunda a sexta).</p>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="config-relatorio-ativo">
+                            <label class="form-check-label" for="config-relatorio-ativo">Ativar envio automático</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Horários de envio</label>
+                            <div id="config-horarios-list" class="d-flex flex-column gap-2 mb-2"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-add-horario-relatorio">
+                                <i class="bi bi-plus-lg"></i> Adicionar horário
+                            </button>
+                            <div class="form-text">Segunda a sexta. O primeiro horário do dia envia o relatório; os demais enviam atualização. Máximo de 12 horários.</div>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="btn-salvar-config"><i class="bi bi-check-lg"></i> Salvar</button>
+                        <span id="config-msg" class="ms-2 small"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aba Histórico -->
+            <div class="tab-pane fade" id="tab-historico" role="tabpanel">
+                <div class="card card-modern">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <h6 class="fw-bold mb-0">Últimas solicitações</h6>
+                        <button type="button" class="btn btn-sm btn-outline-success" id="btn-exportar-historico" style="display:none;">
+                            <i class="bi bi-file-earmark-excel"></i> Exportar histórico (Excel)
+                        </button>
+                    </div>
+                    <p class="text-muted small mb-3">Deslize horizontalmente se necessário. Use <strong>Ver</strong> para ler a mensagem completa enviada ao GC e o retorno do GC.</p>
+                    <div id="historico-loading" class="text-muted text-center py-4">Carregando...</div>
+                    <div id="historico-table-wrap" style="display:none;">
+                        <div class="historico-scroll table-responsive">
+                            <table class="table table-sm table-hover historico-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-data">Data</th>
+                                        <th class="col-tipo">Tipo</th>
+                                        <th>Solicitante</th>
+                                        <th class="col-os">O.S</th>
+                                        <th>Cliente</th>
+                                        <th>Descrição</th>
+                                        <th class="col-status">Status</th>
+                                        <th class="col-resp-gc">Resposta GC</th>
+                                        <th class="col-acoes"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historico-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div id="historico-pagination" class="d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2"></div>
+                    </div>
+                    <div id="historico-vazio" class="text-center text-muted py-4" style="display:none;">Nenhuma solicitação encontrada.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-historico-detalhe" tabindex="-1" aria-labelledby="modalHistoricoDetalheLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalHistoricoDetalheLabel">Detalhes da solicitação</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body" id="modal-historico-detalhe-body"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        (function() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) { window.location.href = '/'; return; }
+
+            const apiBase = '/api/crm';
+            let resultadosAtuais = [];
+            let pedidoSelecionado = null;
+            let configData = null;
+            let historicoPage = 1;
+            let historicoCache = [];
+            let modalHistoricoDetalhe = null;
+
+            function getAuthHeader(useJson) {
+                const h = { 'Authorization': 'Bearer ' + token };
+                if (useJson !== false) {
+                    h['Content-Type'] = 'application/json';
+                }
+                return h;
+            }
+
+            function setBtnEnviando(btn, enviando, labelPronto) {
+                if (!btn) return;
+                if (enviando) {
+                    btn.dataset._oldHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Enviando...';
+                } else {
+                    btn.disabled = false;
+                    if (labelPronto) {
+                        btn.innerHTML = labelPronto;
+                        setTimeout(function() {
+                            if (btn.dataset._oldHtml) btn.innerHTML = btn.dataset._oldHtml;
+                        }, 2500);
+                    } else if (btn.dataset._oldHtml) {
+                        btn.innerHTML = btn.dataset._oldHtml;
+                    }
+                }
+            }
+
+            function show(el, show) {
+                if (typeof el === 'string') el = document.getElementById(el);
+                if (el) el.style.display = show ? '' : 'none';
+            }
+
+            function escapeHtml(s) {
+                return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function setToolContainerWide(wide) {
+                const el = document.getElementById('tool-container');
+                if (el) el.classList.toggle('tool-container-wide', !!wide);
+            }
+
+            function normalizeDateBrInput(value) {
+                const digits = (value || '').replace(/\D/g, '').slice(0, 8);
+                if (digits.length <= 2) return digits;
+                if (digits.length <= 4) return digits.slice(0, 2) + '/' + digits.slice(2);
+                return digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+            }
+
+            function isDateBr(value) {
+                if (!/^\d{2}\/\d{2}\/\d{4}$/.test(value || '')) return false;
+                const parts = value.split('/');
+                const d = parseInt(parts[0], 10);
+                const m = parseInt(parts[1], 10);
+                const y = parseInt(parts[2], 10);
+                const dt = new Date(y, m - 1, d);
+                return dt.getFullYear() === y && (dt.getMonth() + 1) === m && dt.getDate() === d;
+            }
+
+            function turnoLabel(turno) {
+                if (turno === 'MANHA') return 'MANHÃ';
+                if (turno === 'TARDE') return 'TARDE';
+                return '';
+            }
+
+            function showErro(id, msg) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = msg || '';
+                show(el, !!msg);
+            }
+
+            // --- Aba Solicitar (lógica existente) ---
+            document.getElementById('btn-buscar').addEventListener('click', buscar);
+            document.getElementById('busca').addEventListener('keypress', function(e) { if (e.key === 'Enter') buscar(); });
+
+            async function buscar() {
+                const q = document.getElementById('busca').value.trim();
+                show('erro-busca', false);
+                show('lista-pedidos', false);
+                show('nenhum-resultado', false);
+                show('painel-mensagem', false);
+                if (!q) {
+                    showErro('erro-busca', 'Informe CPF ou número do pedido (O.S).');
+                    return;
+                }
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/buscar/?q=' + encodeURIComponent(q), { headers: getAuthHeader(true) });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        showErro('erro-busca', data.detail || 'Erro ao buscar.');
+                        return;
+                    }
+                    resultadosAtuais = data.results || [];
+                    if (resultadosAtuais.length === 0) {
+                        show('nenhum-resultado', true);
+                        return;
+                    }
+                    if (resultadosAtuais.length === 1) {
+                        selecionarPedido(resultadosAtuais[0]);
+                        showPainelPorTipo(resultadosAtuais[0].tipo_disponivel);
+                        show('lista-pedidos', false);
+                        return;
+                    }
+                    const inner = document.getElementById('lista-pedidos-inner');
+                    inner.innerHTML = resultadosAtuais.map(function(p) {
+                        let badge;
+                        if (p.tipo_disponivel === 'reparo') {
+                            badge = '<span class="badge bg-warning text-dark me-1">Reparo</span> Instalado em ' + (p.data_instalacao || '');
+                        } else if (p.tipo_disponivel === 'instalacao_fisica') {
+                            const avisoData = p.aviso_sem_data_instalacao_fisica
+                                ? ' <span class="badge bg-warning text-dark ms-1">Sem data física</span>'
+                                : '';
+                            badge = '<span class="badge bg-info text-dark me-1">Inst. física</span> Pendência · física '
+                                + (p.data_instalacao_fisica || 'não informada') + avisoData;
+                        } else {
+                            badge = '<span class="badge bg-primary me-1">Agendado</span> ' + (p.data_agendamento || '') + ' ' + (p.periodo_agendamento || '');
+                        }
+                        return '<div class="pedido-item" data-id="' + p.id + '">' +
+                            '<strong>O.S ' + (p.ordem_servico || '-') + '</strong> · ' + badge + '<br>' +
+                            '<small class="text-muted">' + (p.cliente_nome || '') + '</small>' +
+                            '</div>';
+                    }).join('');
+                    inner.querySelectorAll('.pedido-item').forEach(function(node) {
+                        node.addEventListener('click', function() {
+                            inner.querySelectorAll('.pedido-item').forEach(function(n) { n.classList.remove('selected'); });
+                            this.classList.add('selected');
+                            const id = parseInt(this.getAttribute('data-id'), 10);
+                            const p = resultadosAtuais.find(function(r) { return r.id === id; });
+                            if (p) { selecionarPedido(p); showPainelPorTipo(p.tipo_disponivel); }
+                        });
+                    });
+                    show('lista-pedidos', true);
+                } catch (e) {
+                    showErro('erro-busca', 'Erro de conexão. Tente novamente.');
+                }
+            }
+
+            function showPainelPorTipo(tipo) {
+                show('painel-reparo', tipo === 'reparo');
+                show('painel-antecipacao', tipo === 'antecipacao');
+                show('painel-instalacao-fisica', tipo === 'instalacao_fisica');
+                if (tipo === 'reparo') setTimeout(function() { atualizarPreviewReparo(); }, 0);
+                if (tipo === 'instalacao_fisica') setTimeout(function() { atualizarPreviewInstalacaoFisica(); }, 0);
+            }
+
+            function selecionarPedido(p) {
+                pedidoSelecionado = p;
+                document.getElementById('descricao').value = '';
+                show('msg-preview', false);
+                showErro('erro-solicitar', '');
+                show('sucesso-solicitar', false);
+                document.getElementById('observacao-reparo-opcao').value = '';
+                document.getElementById('observacao-reparo').value = '';
+                document.getElementById('observacao-reparo').style.display = 'none';
+                document.getElementById('reparo-data-1').value = '';
+                document.getElementById('reparo-turno-1').value = '';
+                document.getElementById('reparo-data-2').value = '';
+                document.getElementById('reparo-turno-2').value = '';
+                show('msg-preview-reparo', false);
+                showErro('erro-solicitar-reparo', '');
+                show('sucesso-solicitar-reparo', false);
+                document.getElementById('descricao-instalacao-fisica').value = '';
+                document.getElementById('imagem-instalacao-fisica').value = '';
+                show('msg-preview-instalacao-fisica', false);
+                showErro('erro-solicitar-if', '');
+                show('sucesso-solicitar-if', false);
+                const avisoSemDataIf = document.getElementById('aviso-sem-data-if');
+                if (avisoSemDataIf) {
+                    const exibirAviso = p.tipo_disponivel === 'instalacao_fisica' && !!p.aviso_sem_data_instalacao_fisica;
+                    avisoSemDataIf.style.display = exibirAviso ? '' : 'none';
+                }
+            }
+
+            function atualizarPreview() {
+                if (!pedidoSelecionado) return;
+                const desc = document.getElementById('descricao').value.trim();
+                if (!desc) { show('msg-preview', false); return; }
+                const msg = (
+                    '*MÁSCARA PADRÃO DE ACIONAMENTO - GRUPO ELITE:*\n\n' +
+                    '- *OS:* ' + (pedidoSelecionado.ordem_servico || '') + '\n' +
+                    '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
+                    '- *NOME DO PDV:* 1067100 - RECORD\n' +
+                    '- *DATA AGENDADA:* ' + (pedidoSelecionado.data_agendamento || '') + ' - ' + (pedidoSelecionado.periodo_agendamento || '') + '\n' +
+                    '- *DESCRIÇÃO DETALHADA DA SOLICITAÇÃO:* ' + desc
+                );
+                document.getElementById('msg-preview').textContent = msg;
+                show('msg-preview', true);
+            }
+
+            document.getElementById('descricao').addEventListener('input', atualizarPreview);
+
+            document.getElementById('observacao-reparo-opcao').addEventListener('change', function() {
+                const txt = document.getElementById('observacao-reparo');
+                txt.style.display = this.value === 'outro' ? 'block' : 'none';
+                if (this.value !== 'outro') txt.value = '';
+                atualizarPreviewReparo();
+            });
+            document.getElementById('observacao-reparo').addEventListener('input', atualizarPreviewReparo);
+            document.getElementById('reparo-data-1').addEventListener('input', function() {
+                this.value = normalizeDateBrInput(this.value);
+                atualizarPreviewReparo();
+            });
+            document.getElementById('reparo-turno-1').addEventListener('change', atualizarPreviewReparo);
+            document.getElementById('reparo-data-2').addEventListener('input', function() {
+                this.value = normalizeDateBrInput(this.value);
+                atualizarPreviewReparo();
+            });
+            document.getElementById('reparo-turno-2').addEventListener('change', atualizarPreviewReparo);
+
+            function atualizarPreviewReparo() {
+                if (!pedidoSelecionado || pedidoSelecionado.tipo_disponivel !== 'reparo') return;
+                const opcao = document.getElementById('observacao-reparo-opcao').value;
+                const txt = document.getElementById('observacao-reparo').value.trim();
+                const obs = opcao === 'outro' ? txt : (opcao || '');
+                const d1 = document.getElementById('reparo-data-1').value.trim();
+                const t1 = turnoLabel(document.getElementById('reparo-turno-1').value);
+                const d2 = document.getElementById('reparo-data-2').value.trim();
+                const t2 = turnoLabel(document.getElementById('reparo-turno-2').value);
+                const nomeGc = (configData && configData.nome_gc) ? configData.nome_gc : 'NÃO INFORMADO';
+                const contatoCliente = pedidoSelecionado.telefone_contato || 'NÃO INFORMADO';
+                const msg = (
+                    '*MÁSCARA PADRÃO DE ACIONAMENTO PARA REPAROS DE OSS RECÉM INSTALADAS:*\n\n' +
+                    '- *OS:* ' + (pedidoSelecionado.ordem_servico || '') + '\n' +
+                    '- *NOME DO CLIENTE:* ' + (pedidoSelecionado.cliente_nome || '') + '\n' +
+                    '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
+                    '- *CONTATO DO CLIENTE:* ' + contatoCliente + '\n' +
+                    '- *PDV:* 1068561 - RECORD PAP\n' +
+                    '- *GC:* ' + nomeGc + '\n' +
+                    '- *DATA INSTALAÇÃO:* ' + (pedidoSelecionado.data_instalacao || '') + '\n' +
+                    '- *DATA E HORÁRIO AGENDADO COM O CLIENTE:*\n' +
+                    '  1) ' + (d1 && t1 ? (d1 + ' - ' + t1) : '') + '\n' +
+                    '  2) ' + (d2 && t2 ? (d2 + ' - ' + t2) : '') + '\n' +
+                    '- *SOLICITAÇÃO:* ' + (obs || '')
+                );
+                document.getElementById('msg-preview-reparo').textContent = msg.toUpperCase();
+                show('msg-preview-reparo', true);
+            }
+
+            document.getElementById('btn-solicitar').addEventListener('click', async function() {
+                if (!pedidoSelecionado) return;
+                const desc = document.getElementById('descricao').value.trim();
+                showErro('erro-solicitar', '');
+                show('sucesso-solicitar', false);
+                if (!desc) {
+                    showErro('erro-solicitar', 'Descreva o motivo da solicitação de antecipação.');
+                    return;
+                }
+                const btn = this;
+                setBtnEnviando(btn, true);
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/solicitar/', {
+                        method: 'POST',
+                        headers: getAuthHeader(true),
+                        body: JSON.stringify({ venda_id: pedidoSelecionado.id, descricao_solicitacao: desc })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        document.getElementById('sucesso-solicitar').textContent = data.message || 'Mensagem enviada.';
+                        show('sucesso-solicitar', true);
+                        document.getElementById('descricao').value = '';
+                        show('msg-preview', false);
+                        setBtnEnviando(btn, false, '<i class="bi bi-check-lg"></i> Enviado');
+                    } else {
+                        showErro('erro-solicitar', data.detail || 'Erro ao enviar.');
+                        setBtnEnviando(btn, false);
+                    }
+                } catch (e) {
+                    showErro('erro-solicitar', 'Erro de conexão. Tente novamente.');
+                    setBtnEnviando(btn, false);
+                }
+            });
+
+            document.getElementById('btn-outro-pedido').addEventListener('click', function() {
+                pedidoSelecionado = null;
+                show('painel-antecipacao', false);
+                show('painel-reparo', false);
+                show('painel-instalacao-fisica', false);
+                show('lista-pedidos', resultadosAtuais.length > 1);
+                show('nenhum-resultado', false);
+            });
+            document.getElementById('btn-outro-pedido-reparo').addEventListener('click', function() {
+                document.getElementById('btn-outro-pedido').click();
+            });
+
+            document.getElementById('btn-solicitar-reparo').addEventListener('click', async function() {
+                if (!pedidoSelecionado || pedidoSelecionado.tipo_disponivel !== 'reparo') return;
+                const opcao = document.getElementById('observacao-reparo-opcao').value;
+                const txt = document.getElementById('observacao-reparo').value.trim();
+                const observacao_reparo = opcao === 'outro' ? txt : (opcao || '');
+                const data_opcao_1 = document.getElementById('reparo-data-1').value.trim();
+                const turno_opcao_1 = document.getElementById('reparo-turno-1').value;
+                const data_opcao_2 = document.getElementById('reparo-data-2').value.trim();
+                const turno_opcao_2 = document.getElementById('reparo-turno-2').value;
+                showErro('erro-solicitar-reparo', '');
+                show('sucesso-solicitar-reparo', false);
+                if (!data_opcao_1 || !turno_opcao_1 || !data_opcao_2 || !turno_opcao_2) {
+                    showErro('erro-solicitar-reparo', 'Informe duas opções de data e turno para retorno do técnico.');
+                    return;
+                }
+                if (!isDateBr(data_opcao_1) || !isDateBr(data_opcao_2)) {
+                    showErro('erro-solicitar-reparo', 'As datas devem estar no formato dd/mm/aaaa.');
+                    return;
+                }
+                if (!observacao_reparo) {
+                    showErro('erro-solicitar-reparo', 'Informe a solicitação no campo de texto livre.');
+                    return;
+                }
+                const btn = this;
+                setBtnEnviando(btn, true);
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/solicitar/', {
+                        method: 'POST',
+                        headers: getAuthHeader(true),
+                        body: JSON.stringify({
+                            venda_id: pedidoSelecionado.id,
+                            tipo: 'reparo',
+                            observacao_reparo: observacao_reparo,
+                            data_opcao_1: data_opcao_1,
+                            turno_opcao_1: turno_opcao_1,
+                            data_opcao_2: data_opcao_2,
+                            turno_opcao_2: turno_opcao_2
+                        })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        document.getElementById('sucesso-solicitar-reparo').textContent = data.message || 'Solicitação de reparo enviada.';
+                        show('sucesso-solicitar-reparo', true);
+                        document.getElementById('observacao-reparo-opcao').value = '';
+                        document.getElementById('observacao-reparo').value = '';
+                        document.getElementById('observacao-reparo').style.display = 'none';
+                        document.getElementById('reparo-data-1').value = '';
+                        document.getElementById('reparo-turno-1').value = '';
+                        document.getElementById('reparo-data-2').value = '';
+                        document.getElementById('reparo-turno-2').value = '';
+                        show('msg-preview-reparo', false);
+                        setBtnEnviando(btn, false, '<i class="bi bi-check-lg"></i> Enviado');
+                    } else {
+                        showErro('erro-solicitar-reparo', data.detail || 'Erro ao enviar.');
+                        setBtnEnviando(btn, false);
+                    }
+                } catch (e) {
+                    showErro('erro-solicitar-reparo', 'Erro de conexão. Tente novamente.');
+                    setBtnEnviando(btn, false);
+                }
+            });
+
+            function atualizarPreviewInstalacaoFisica() {
+                if (!pedidoSelecionado || pedidoSelecionado.tipo_disponivel !== 'instalacao_fisica') return;
+                const desc = document.getElementById('descricao-instalacao-fisica').value.trim();
+                if (!desc) { show('msg-preview-instalacao-fisica', false); return; }
+                const df = pedidoSelecionado.data_instalacao_fisica || 'NÃO INFORMADA';
+                const msg = (
+                    '*SINALIZAÇÃO - INSTALAÇÃO FÍSICA / PENDÊNCIA NO SISTEMA:*\n\n' +
+                    '- *OS:* ' + (pedidoSelecionado.ordem_servico || '') + '\n' +
+                    '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
+                    '- *NOME DO PDV:* 1067100 - RECORD\n' +
+                    '- *DATA INSTALAÇÃO FÍSICA (NO CLIENTE):* ' + df + '\n' +
+                    '- *CONTEXTO:* Houve instalação física; o pedido segue com pendência na esteira.\n' +
+                    '- *DESCRIÇÃO DETALHADA:* ' + desc
+                );
+                document.getElementById('msg-preview-instalacao-fisica').textContent = msg.toUpperCase();
+                show('msg-preview-instalacao-fisica', true);
+            }
+            document.getElementById('descricao-instalacao-fisica').addEventListener('input', atualizarPreviewInstalacaoFisica);
+            document.getElementById('imagem-instalacao-fisica').addEventListener('change', atualizarPreviewInstalacaoFisica);
+
+            document.getElementById('btn-solicitar-instalacao-fisica').addEventListener('click', async function() {
+                if (!pedidoSelecionado || pedidoSelecionado.tipo_disponivel !== 'instalacao_fisica') return;
+                const desc = document.getElementById('descricao-instalacao-fisica').value.trim();
+                showErro('erro-solicitar-if', '');
+                show('sucesso-solicitar-if', false);
+                if (!desc) {
+                    showErro('erro-solicitar-if', 'Descreva a situação.');
+                    return;
+                }
+                const btn = this;
+                setBtnEnviando(btn, true);
+                try {
+                    const fd = new FormData();
+                    fd.append('venda_id', pedidoSelecionado.id);
+                    fd.append('tipo', 'instalacao_fisica');
+                    fd.append('descricao_solicitacao', desc);
+                    const f = document.getElementById('imagem-instalacao-fisica').files[0];
+                    if (f) fd.append('imagem', f);
+                    const res = await fetch(apiBase + '/antecipar-instalacao/solicitar/', {
+                        method: 'POST',
+                        headers: getAuthHeader(false),
+                        body: fd
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        document.getElementById('sucesso-solicitar-if').textContent = data.message || 'Sinalização enviada.';
+                        show('sucesso-solicitar-if', true);
+                        document.getElementById('descricao-instalacao-fisica').value = '';
+                        document.getElementById('imagem-instalacao-fisica').value = '';
+                        show('msg-preview-instalacao-fisica', false);
+                        setBtnEnviando(btn, false, '<i class="bi bi-check-lg"></i> Enviado');
+                    } else {
+                        showErro('erro-solicitar-if', data.detail || 'Erro ao enviar.');
+                        setBtnEnviando(btn, false);
+                    }
+                } catch (e) {
+                    showErro('erro-solicitar-if', 'Erro de conexão. Tente novamente.');
+                    setBtnEnviando(btn, false);
+                }
+            });
+            document.getElementById('btn-outro-pedido-if').addEventListener('click', function() {
+                document.getElementById('btn-outro-pedido').click();
+            });
+
+            // --- Aba Configuração ---
+            document.getElementById('tab-config-btn').addEventListener('shown.bs.tab', carregarConfig);
+
+            function rotuloHorarioRelatorio(indice) {
+                if (indice === 0) return '1º envio';
+                return (indice + 1) + 'º envio (atualização)';
+            }
+
+            function atualizarRotulosHorariosRelatorio() {
+                const rows = document.querySelectorAll('#config-horarios-list .config-horario-row');
+                rows.forEach(function(row, idx) {
+                    const label = row.querySelector('label');
+                    if (label) label.textContent = rotuloHorarioRelatorio(idx);
+                });
+                const btnAdd = document.getElementById('btn-add-horario-relatorio');
+                if (btnAdd) btnAdd.style.display = rows.length >= 12 ? 'none' : '';
+            }
+
+            function addHorarioRelatorioRow(valor) {
+                const list = document.getElementById('config-horarios-list');
+                const idx = list.querySelectorAll('.config-horario-row').length;
+                const row = document.createElement('div');
+                row.className = 'input-group config-horario-row';
+                row.innerHTML =
+                    '<span class="input-group-text"><label class="mb-0 small fw-bold">' + rotuloHorarioRelatorio(idx) + '</label></span>' +
+                    '<input type="time" class="form-control config-horario-relatorio-input">' +
+                    '<button type="button" class="btn btn-outline-danger" title="Remover"><i class="bi bi-trash"></i></button>';
+                row.querySelector('input').value = valor || '';
+                row.querySelector('button').addEventListener('click', function() {
+                    const restantes = list.querySelectorAll('.config-horario-row');
+                    if (restantes.length <= 1) {
+                        row.querySelector('input').value = '';
+                        return;
+                    }
+                    row.remove();
+                    atualizarRotulosHorariosRelatorio();
+                });
+                list.appendChild(row);
+                atualizarRotulosHorariosRelatorio();
+            }
+
+            function renderHorariosRelatorioInputs(horarios) {
+                const list = document.getElementById('config-horarios-list');
+                list.innerHTML = '';
+                const items = (horarios && horarios.length) ? horarios : ['17:20'];
+                items.forEach(function(h) {
+                    addHorarioRelatorioRow(h);
+                });
+            }
+
+            function coletarHorariosRelatorio() {
+                const horarios = [];
+                document.querySelectorAll('.config-horario-relatorio-input').forEach(function(inp) {
+                    const v = (inp.value || '').trim();
+                    if (v && horarios.indexOf(v) === -1) horarios.push(v);
+                });
+                return horarios;
+            }
+
+            function formatarHorariosDisplay(data) {
+                const horarios = data.relatorio_esteira_horarios || [];
+                if (horarios.length) return horarios.join(', ');
+                const h1 = data.relatorio_esteira_horario_1 || '17:20';
+                const h2 = data.relatorio_esteira_horario_2 || '18:00';
+                return h1 + ' e ' + h2;
+            }
+
+            function renderTelefonesDestinoInputs(telefones) {
+                const list = document.getElementById('config-telefones-destino-list');
+                list.innerHTML = '';
+                const items = (telefones && telefones.length) ? telefones : [''];
+                items.forEach(function(tel) {
+                    addTelefoneDestinoRow(tel);
+                });
+            }
+
+            function addTelefoneDestinoRow(valor) {
+                const list = document.getElementById('config-telefones-destino-list');
+                const row = document.createElement('div');
+                row.className = 'input-group';
+                row.innerHTML =
+                    '<input type="text" class="form-control config-telefone-destino-input" placeholder="Ex: 21979630377" maxlength="20">' +
+                    '<button type="button" class="btn btn-outline-danger" title="Remover"><i class="bi bi-trash"></i></button>';
+                row.querySelector('input').value = valor || '';
+                row.querySelector('button').addEventListener('click', function() {
+                    row.remove();
+                    if (!list.querySelector('.config-telefone-destino-input')) {
+                        addTelefoneDestinoRow('');
+                    }
+                });
+                list.appendChild(row);
+            }
+
+            function coletarTelefonesDestino() {
+                const tels = [];
+                document.querySelectorAll('.config-telefone-destino-input').forEach(function(inp) {
+                    const v = (inp.value || '').trim();
+                    if (v) tels.push(v);
+                });
+                return tels;
+            }
+
+            function formatarDestinosDisplay(data) {
+                const nomes = (data.grupos_destino || []).map(function(g) { return g.nome; });
+                document.getElementById('config-grupo-display').textContent =
+                    nomes.length ? nomes.join(', ') : 'Nenhum';
+                const tels = data.telefones_destino || [];
+                document.getElementById('config-telefones-destino-display').textContent =
+                    tels.length ? tels.join(', ') : 'Nenhum';
+            }
+
+            async function carregarConfig() {
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/config/', { headers: getAuthHeader(true) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Erro');
+                    configData = data;
+                    document.getElementById('config-nome-display').textContent = data.nome_gc || 'Não configurado';
+                    document.getElementById('config-telefone-display').textContent = data.telefone_gc || 'Não configurado';
+                    document.getElementById('config-email-display').textContent = data.email_gc || 'Não configurado';
+                    document.getElementById('config-sem-slot-email-display').textContent = data.sem_slot_email_gc_ativo === false ? 'Inativo' : 'Ativo';
+                    formatarDestinosDisplay(data);
+                    document.getElementById('config-relatorio-display').textContent = data.relatorio_esteira_gc_ativo ? 'Ativo' : 'Inativo';
+                    document.getElementById('config-horarios-display').textContent = formatarHorariosDisplay(data);
+                    const sel = document.getElementById('config-grupo');
+                    sel.innerHTML = '';
+                    const selectedIds = new Set((data.grupo_ids || []).map(Number));
+                    (data.grupos || []).forEach(function(g) {
+                        const opt = document.createElement('option');
+                        opt.value = g.id;
+                        opt.textContent = g.nome;
+                        if (selectedIds.has(Number(g.id))) opt.selected = true;
+                        sel.appendChild(opt);
+                    });
+                    document.getElementById('config-grupos-aviso').style.display = (data.grupos && data.grupos.length) ? 'none' : 'block';
+                    document.getElementById('config-nome-gc').value = data.nome_gc || '';
+                    document.getElementById('config-telefone').value = data.telefone_gc || '';
+                    document.getElementById('config-email-gc').value = data.email_gc || '';
+                    document.getElementById('config-sem-slot-email').checked = data.sem_slot_email_gc_ativo !== false;
+                    renderTelefonesDestinoInputs(data.telefones_destino || []);
+                    document.getElementById('config-relatorio-ativo').checked = !!data.relatorio_esteira_gc_ativo;
+                    renderHorariosRelatorioInputs(data.relatorio_esteira_horarios || []);
+                    if (data.pode_editar) {
+                        show('config-form', true);
+                        show('config-visualizar', false);
+                    } else {
+                        show('config-form', false);
+                        show('config-visualizar', true);
+                    }
+                } catch (e) {
+                    document.getElementById('config-telefone-display').textContent = 'Erro ao carregar';
+                    document.getElementById('config-nome-display').textContent = 'Erro ao carregar';
+                    document.getElementById('config-grupo-display').textContent = '—';
+                    document.getElementById('config-telefones-destino-display').textContent = '—';
+                }
+            }
+
+            document.getElementById('btn-add-telefone-destino').addEventListener('click', function() {
+                addTelefoneDestinoRow('');
+            });
+
+            document.getElementById('btn-add-horario-relatorio').addEventListener('click', function() {
+                const qtd = document.querySelectorAll('#config-horarios-list .config-horario-row').length;
+                if (qtd >= 12) return;
+                addHorarioRelatorioRow('');
+            });
+
+            document.getElementById('btn-salvar-config').addEventListener('click', async function() {
+                const msgEl = document.getElementById('config-msg');
+                msgEl.textContent = '';
+                const nomeGc = document.getElementById('config-nome-gc').value.trim();
+                const telefone = document.getElementById('config-telefone').value.trim();
+                const emailGc = document.getElementById('config-email-gc').value.trim();
+                const grupoIds = Array.from(document.getElementById('config-grupo').selectedOptions).map(function(o) {
+                    return parseInt(o.value, 10);
+                });
+                const telefonesDestino = coletarTelefonesDestino();
+                const relatorioAtivo = document.getElementById('config-relatorio-ativo').checked;
+                const semSlotEmailAtivo = document.getElementById('config-sem-slot-email').checked;
+                const horariosRelatorio = coletarHorariosRelatorio();
+                if (!horariosRelatorio.length) {
+                    msgEl.textContent = 'Informe ao menos um horário para o relatório diário.';
+                    msgEl.className = 'ms-2 small text-danger';
+                    return;
+                }
+                try {
+                    const body = {
+                        nome_gc: nomeGc || null,
+                        telefone_gc: telefone || null,
+                        email_gc: emailGc || null,
+                        grupo_ids: grupoIds,
+                        telefones_destino: telefonesDestino,
+                        sem_slot_email_gc_ativo: semSlotEmailAtivo,
+                        relatorio_esteira_gc_ativo: relatorioAtivo,
+                        relatorio_esteira_horarios: horariosRelatorio
+                    };
+                    const res = await fetch(apiBase + '/antecipar-instalacao/config/', {
+                        method: 'PATCH',
+                        headers: getAuthHeader(true),
+                        body: JSON.stringify(body)
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Erro ao salvar');
+                    msgEl.textContent = data.detail || 'Configuração salva. Antecipação e Sem SLOT usarão estes destinos.';
+                    msgEl.className = 'ms-2 small text-success';
+                    configData = data;
+                    document.getElementById('config-nome-display').textContent = data.nome_gc || 'Não configurado';
+                    document.getElementById('config-telefone-display').textContent = data.telefone_gc || 'Não configurado';
+                    document.getElementById('config-email-display').textContent = data.email_gc || 'Não configurado';
+                    document.getElementById('config-sem-slot-email-display').textContent = data.sem_slot_email_gc_ativo === false ? 'Inativo' : 'Ativo';
+                    formatarDestinosDisplay(data);
+                    document.getElementById('config-relatorio-display').textContent = data.relatorio_esteira_gc_ativo ? 'Ativo' : 'Inativo';
+                    document.getElementById('config-horarios-display').textContent = formatarHorariosDisplay(data);
+                    renderHorariosRelatorioInputs(data.relatorio_esteira_horarios || horariosRelatorio);
+                } catch (e) {
+                    msgEl.textContent = e.message || 'Erro ao salvar';
+                    msgEl.className = 'ms-2 small text-danger';
+                }
+            });
+
+            // --- Aba Histórico (não passar evento do tab como page) ---
+            document.getElementById('tab-historico-btn').addEventListener('shown.bs.tab', function() {
+                setToolContainerWide(true);
+                carregarHistorico();
+            });
+            document.getElementById('tab-solicitar-btn').addEventListener('shown.bs.tab', function() { setToolContainerWide(false); });
+            document.getElementById('tab-config-btn').addEventListener('shown.bs.tab', function() { setToolContainerWide(false); });
+
+            const btnExportHistorico = document.getElementById('btn-exportar-historico');
+            if (btnExportHistorico) {
+                btnExportHistorico.addEventListener('click', exportarHistorico);
+            }
+
+            let podeRegistrarRespostaGc = false;
+
+            function abrirDetalheHistorico(id) {
+                const r = historicoCache.find(function(x) { return x.id === id; });
+                if (!r) return;
+                const body = document.getElementById('modal-historico-detalhe-body');
+                if (!body) return;
+                const desc = (r.descricao_solicitacao || '') + (r.observacao_reparo ? '\n\nObs. reparo: ' + r.observacao_reparo : '');
+                let html = '<dl class="row small mb-0">'
+                    + '<dt class="col-sm-3">Data</dt><dd class="col-sm-9">' + escapeHtml(r.data_solicitacao) + '</dd>'
+                    + '<dt class="col-sm-3">Tipo</dt><dd class="col-sm-9">' + escapeHtml(r.tipo_solicitacao_label || r.tipo_solicitacao) + '</dd>'
+                    + '<dt class="col-sm-3">Solicitante</dt><dd class="col-sm-9">' + escapeHtml(r.usuario_nome) + '</dd>'
+                    + '<dt class="col-sm-3">O.S</dt><dd class="col-sm-9">' + escapeHtml(r.ordem_servico) + '</dd>'
+                    + '<dt class="col-sm-3">Cliente</dt><dd class="col-sm-9">' + escapeHtml(r.cliente_nome) + '</dd>'
+                    + '<dt class="col-sm-3">Status envio</dt><dd class="col-sm-9">' + escapeHtml(r.status_envio) + '</dd>'
+                    + '</dl>';
+                if (desc.trim()) {
+                    html += '<h6 class="fw-bold mt-3">Resumo interno</h6><div class="msg-historico-block">' + escapeHtml(desc) + '</div>';
+                }
+                html += '<h6 class="fw-bold mt-3">Mensagem enviada ao GC / grupo</h6>'
+                    + '<div class="msg-historico-block">' + escapeHtml(r.mensagem_enviada || '(não registrada)') + '</div>';
+                if (r.resposta_gc) {
+                    html += '<h6 class="fw-bold mt-3">Resposta do GC</h6><p class="small mb-1"><strong>' + escapeHtml(r.resposta_gc_label || r.resposta_gc) + '</strong>'
+                        + (r.resposta_gc_em ? ' — ' + escapeHtml(r.resposta_gc_em) : '')
+                        + (r.resposta_gc_por_nome ? ' — por ' + escapeHtml(r.resposta_gc_por_nome) : '') + '</p>';
+                    if (r.resposta_gc_complemento_vendedor) {
+                        html += '<p class="small text-muted mb-1">Complemento ao vendedor:</p><div class="msg-historico-block">' + escapeHtml(r.resposta_gc_complemento_vendedor) + '</div>';
+                    }
+                    if (r.mensagem_resposta_vendedor) {
+                        html += '<p class="small text-muted mb-1 mt-2">Mensagem enviada ao vendedor:</p><div class="msg-historico-block">' + escapeHtml(r.mensagem_resposta_vendedor) + '</div>';
+                    }
+                }
+                body.innerHTML = html;
+                if (!modalHistoricoDetalhe) {
+                    modalHistoricoDetalhe = new bootstrap.Modal(document.getElementById('modal-historico-detalhe'));
+                }
+                modalHistoricoDetalhe.show();
+            }
+
+            async function exportarHistorico() {
+                const btn = document.getElementById('btn-exportar-historico');
+                if (!btn) return;
+                const oldHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Exportando...';
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/historico/exportar/', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (!res.ok) {
+                        let msg = 'Erro ao exportar.';
+                        try { const j = await res.json(); msg = j.detail || msg; } catch (e) { /* ignora */ }
+                        throw new Error(msg);
+                    }
+                    const blob = await res.blob();
+                    const disp = res.headers.get('Content-Disposition') || '';
+                    let filename = 'historico_antecipar_instalacao.xlsx';
+                    const m = /filename="?([^";]+)"?/i.exec(disp);
+                    if (m) filename = m[1];
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    alert(e.message || 'Erro ao exportar histórico.');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = oldHtml;
+                }
+            }
+
+            async function carregarHistorico(page) {
+                if (typeof page === 'number') historicoPage = page;
+                show('historico-loading', true);
+                show('historico-table-wrap', false);
+                show('historico-vazio', false);
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/historico/?page=' + historicoPage + '&page_size=20', { headers: getAuthHeader(true) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Erro');
+                    show('historico-loading', false);
+                    const results = data.results || [];
+                    historicoCache = results;
+                    const total = data.total || 0;
+                    podeRegistrarRespostaGc = data.pode_registrar_resposta_gc === true;
+                    show('btn-exportar-historico', total > 0);
+                    if (results.length === 0) {
+                        show('historico-vazio', true);
+                        return;
+                    }
+                    const respostasLabels = { solicitado: 'Solicitado', antecipada: 'Antecipada', nao_antecipada: 'Não antecipada' };
+                    const tbody = document.getElementById('historico-tbody');
+                    tbody.innerHTML = results.map(function(r) {
+                        const status = r.sucesso ? '<span class="badge bg-success">Enviado</span>' : '<span class="badge bg-danger">Erro</span>';
+                        const tipoSol = r.tipo_solicitacao || 'antecipacao';
+                        let tipoLabel;
+                        if (tipoSol === 'reparo') {
+                            tipoLabel = '<span class="badge bg-warning text-dark">Reparo</span>';
+                        } else if (tipoSol === 'instalacao_fisica') {
+                            tipoLabel = '<span class="badge bg-info text-dark">Inst. física</span>';
+                        } else {
+                            tipoLabel = '<span class="badge bg-primary">Antecipação</span>';
+                        }
+                        const desc = (r.descricao_solicitacao || '') + (r.observacao_reparo ? ' | ' + r.observacao_reparo : '');
+                        let respGcCell;
+                        if (r.resposta_gc) {
+                            const comp = (r.resposta_gc_complemento_vendedor || '').trim();
+                            respGcCell = '<span class="badge bg-secondary">' + escapeHtml(r.resposta_gc_label || respostasLabels[r.resposta_gc] || r.resposta_gc) + '</span>'
+                                + '<br><small class="text-muted">' + escapeHtml(r.resposta_gc_em || '') + '</small>'
+                                + (comp ? '<br><small class="text-body cell-ellipsis">' + escapeHtml(comp) + '</small>' : '');
+                        } else if (podeRegistrarRespostaGc) {
+                            respGcCell = '<div class="d-flex flex-column gap-1">'
+                                + '<div class="d-flex flex-wrap gap-1 align-items-center">'
+                                + '<select class="form-select form-select-sm resp-gc-select" data-id="' + r.id + '" style="width:auto;min-width:120px"><option value="">—</option><option value="solicitado">Solicitado</option><option value="antecipada">Antecipada</option><option value="nao_antecipada">Não antecipada</option></select>'
+                                + '<button type="button" class="btn btn-sm btn-outline-primary btn-registrar-resp-gc" data-id="' + r.id + '">Registrar</button></div>'
+                                + '<textarea class="form-control form-control-sm resp-gc-complemento" data-id="' + r.id + '" rows="2" placeholder="Texto extra ao vendedor (opcional)"></textarea>'
+                                + '</div>';
+                        } else {
+                            respGcCell = '<span class="text-muted">—</span>';
+                        }
+                        const verBtn = '<button type="button" class="btn btn-sm btn-outline-secondary btn-ver-historico" data-id="' + r.id + '" title="Ver mensagem completa">Ver</button>';
+                        return '<tr>'
+                            + '<td class="col-data">' + escapeHtml(r.data_solicitacao) + '</td>'
+                            + '<td class="col-tipo">' + tipoLabel + '</td>'
+                            + '<td><span class="cell-ellipsis">' + escapeHtml(r.usuario_nome) + '</span></td>'
+                            + '<td class="col-os">' + escapeHtml(r.ordem_servico) + '</td>'
+                            + '<td><span class="cell-ellipsis">' + escapeHtml(r.cliente_nome) + '</span></td>'
+                            + '<td><span class="cell-ellipsis" title="' + escapeHtml(desc) + '">' + escapeHtml(desc) + '</span></td>'
+                            + '<td class="col-status">' + status + '</td>'
+                            + '<td class="col-resp-gc">' + respGcCell + '</td>'
+                            + '<td class="col-acoes text-nowrap">' + verBtn + '</td>'
+                            + '</tr>';
+                    }).join('');
+                    tbody.querySelectorAll('.btn-ver-historico').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            abrirDetalheHistorico(parseInt(this.getAttribute('data-id'), 10));
+                        });
+                    });
+                    tbody.querySelectorAll('.btn-registrar-resp-gc').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            const id = parseInt(this.getAttribute('data-id'), 10);
+                            const row = this.closest('tr');
+                            const sel = row.querySelector('.resp-gc-select');
+                            const compEl = row.querySelector('.resp-gc-complemento');
+                            const valor = (sel && sel.value) || '';
+                            if (!valor) { alert('Escolha uma opção de resposta do GC.'); return; }
+                            btn.disabled = true;
+                            btn.textContent = 'Enviando...';
+                            fetch(apiBase + '/antecipar-instalacao/solicitacao/' + id + '/resposta/', {
+                                method: 'PATCH',
+                                headers: getAuthHeader(true),
+                                body: JSON.stringify({
+                                    resposta_gc: valor,
+                                    complemento_mensagem_vendedor: (compEl && compEl.value) ? compEl.value.trim() : ''
+                                })
+                            }).then(function(res) { return res.json(); }).then(function(data) {
+                                if (data.success) {
+                                    alert(data.message || 'Resposta registrada.');
+                                    carregarHistorico(historicoPage);
+                                } else {
+                                    alert(data.detail || 'Erro ao registrar.');
+                                    btn.disabled = false;
+                                    btn.textContent = 'Registrar';
+                                }
+                            }).catch(function() {
+                                alert('Erro de conexão.');
+                                btn.disabled = false;
+                                btn.textContent = 'Registrar';
+                            });
+                        });
+                    });
+                    show('historico-table-wrap', true);
+                    const pagEl = document.getElementById('historico-pagination');
+                    if (total > 20) {
+                        const totalPages = Math.ceil(total / 20);
+                        let html = '<small class="text-muted">Total: ' + total + '</small>';
+                        if (historicoPage > 1) html += ' <button type="button" class="btn btn-sm btn-outline-primary">Anterior</button>';
+                        if (historicoPage < totalPages) html += ' <button type="button" class="btn btn-sm btn-outline-primary">Próxima</button>';
+                        pagEl.innerHTML = html;
+                        pagEl.querySelectorAll('button').forEach(function(btn) {
+                            btn.onclick = function() {
+                                if (btn.textContent === 'Anterior') carregarHistorico(historicoPage - 1);
+                                else carregarHistorico(historicoPage + 1);
+                            };
+                        });
+                    } else {
+                        pagEl.innerHTML = total ? '<small class="text-muted">Total: ' + total + '</small>' : '';
+                    }
+                } catch (e) {
+                    show('historico-loading', false);
+                    document.getElementById('historico-vazio').textContent = 'Erro ao carregar histórico.';
+                    show('historico-vazio', true);
+                }
+            }
+
+            // --- Ao carregar a página: esconder aba Configuração para quem não é BackOffice/Diretoria/Admin ---
+            (async function() {
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/config/', { headers: getAuthHeader(true) });
+                    const data = await res.json();
+                    if (res.ok && data.pode_editar === false) {
+                        const el = document.getElementById('nav-item-config');
+                        if (el) el.style.display = 'none';
+                    }
+                } catch (e) { /* ignora */ }
+            })();
+
+            function logout() {
+                localStorage.removeItem('accessToken');
+                window.location.href = '/';
+            }
+            window.logout = logout;
+        })();
+    </script>
+{% endblock %}

@@ -1,0 +1,756 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Importar Agendamentos e Tarefas{% endblock %}
+
+{% block extra_css %}
+<style>
+        .import-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #6f42c1;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            background: var(--bg-card);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover {
+            border-color: #5a32a3;
+            background: var(--bg-secondary);
+            transform: scale(1.02);
+        }
+
+        .upload-zone.dragging {
+            border-color: #1cc88a;
+            background: #d1f2eb;
+        }
+
+        .upload-zone i {
+            font-size: 4rem;
+            color: #6f42c1;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone h3 {
+            color: #6f42c1;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .upload-zone p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .btn-upload {
+            font-size: 1.1rem;
+            padding: 12px 30px;
+            margin-top: 20px;
+        }
+
+        .info-card {
+            background: var(--bg-card);
+            border-left: 4px solid #6f42c1;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .required-columns {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .column-tag {
+            display: inline-block;
+            background: #6f42c1;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 5px;
+            font-family: monospace;
+        }
+
+        .spinner-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner-content {
+            text-align: center;
+            color: white;
+        }
+
+        .spinner-border {
+            width: 4rem;
+            height: 4rem;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .progress {
+            height: 30px;
+            border-radius: 15px;
+            background-color: #e9ecef;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #6f42c1 0%, #8b5ed6 100%);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .progress-text {
+            margin-top: 15px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-left: 4px solid #6f42c1;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #6f42c1;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .btn-primary {
+            background: #6f42c1;
+            border: none;
+            padding: 12px 30px;
+            font-weight: 600;
+            border-radius: 8px;
+        }
+
+        .btn-primary:hover {
+            background: #5a32a3;
+        }
+
+        .result-message {
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-weight: 600;
+        }
+
+        .result-message.success {
+            background: #d1f2eb;
+            color: #1cc88a;
+            border-left: 4px solid #1cc88a;
+        }
+
+        .result-message.error {
+            background: #ffeaea;
+            color: #e74a3b;
+            border-left: 4px solid #e74a3b;
+        }
+
+        .importar-page .bg-white { background-color: var(--bg-card) !important; }
+        .importar-page .bg-light { background-color: var(--bg-secondary) !important; }
+        .importar-page .text-dark { color: var(--text-primary) !important; }
+        .importar-page .info-card,
+        .importar-page .upload-zone,
+        .importar-page .progress-container,
+        .importar-page .filter-card { border: 1px solid var(--border-color); color: var(--text-primary); }
+
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/importacoes/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="importar-page"><div class="import-container">
+        <div class="text-center mb-4">
+            <h2 class="fw-bold text-dark"><i class="bi bi-calendar-check"></i> Importar Agendamentos e Tarefas</h2>
+            <p class="text-muted">Agendamentos Futuros e Tarefas Fechadas</p>
+        </div>
+
+        <!-- Informações -->
+        <div class="info-card card-modern">
+            <h5 class="mb-3" style="color: #6f42c1;"><i class="bi bi-info-circle"></i> Instruções de Importação</h5>
+            <ul class="mb-0">
+                <li><strong>Formato aceito:</strong> Excel (.xlsx, .xls, .xlsb)</li>
+                <li><strong>Colunas obrigatórias:</strong> sg_uf, nm_municipio, cd_nrba, nr_ordem, dt_agendamento</li>
+                <li><strong>Colunas de data:</strong> dt_abertura_ba, dt_execucao_particao, dt_agendamento</li>
+                <li><strong>Colunas de data/hora:</strong> dt_inicio_agendamento, dt_fim_agendamento, dt_inicio_execucao_real, dt_fim_execucao_real</li>
+            </ul>
+
+            <div class="required-columns">
+                <strong class="text-dark">Principais colunas da planilha:</strong><br>
+                <span class="column-tag">sg_uf</span>
+                <span class="column-tag">nm_municipio</span>
+                <span class="column-tag">cd_nrba</span>
+                <span class="column-tag">st_ba</span>
+                <span class="column-tag">nr_ordem</span>
+                <span class="column-tag">dt_agendamento</span>
+                <span class="column-tag">anomes</span>
+                <span class="column-tag">nm_gc</span>
+            </div>
+        </div>
+
+        <!-- Upload Zone -->
+        <div class="upload-zone card-modern" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <i class="bi bi-cloud-upload"></i>
+            <h3>Arraste o arquivo aqui ou clique para selecionar</h3>
+            <p>Arquivos Excel: .xlsx, .xls, .xlsb</p>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsb" style="display: none;" onchange="handleFileSelect(event)">
+        </div>
+
+        <!-- Arquivo Selecionado -->
+        <div id="fileInfo" style="display: none;" class="mt-3 p-3 bg-light rounded">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-file-earmark-excel text-success fs-4"></i>
+                    <span id="fileName" class="ms-2 fw-bold"></span>
+                    <span id="fileSize" class="ms-2 text-muted"></span>
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="clearFile()">
+                    <i class="bi bi-x"></i> Remover
+                </button>
+            </div>
+        </div>
+
+        <!-- Botão Enviar -->
+        <div class="text-center mt-4">
+            <button id="btnUpload" class="btn btn-primary btn-lg" onclick="uploadFile()" disabled>
+                <i class="bi bi-upload"></i> Iniciar Importação
+            </button>
+        </div>
+
+        <!-- Progress Bar -->
+        <div id="progressContainer" class="progress-container card-modern">
+            <h5 class="text-center mb-3">Processando Importação...</h5>
+            <div class="progress">
+                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                     role="progressbar" style="width: 0%">0%</div>
+            </div>
+            <p id="progressMessage" class="progress-text">Aguarde...</p>
+        </div>
+
+        <!-- Resultado -->
+        <div id="resultContainer" style="display: none;"></div>
+
+        <!-- Histórico de Importações -->
+        <div class="mt-5">
+            <h4 class="fw-bold text-dark mb-3">
+                <i class="bi bi-clock-history"></i> Histórico de Importações Agendamento
+            </h4>
+            <div id="historicoImportacoes" class="table-responsive">
+                <p class="text-center text-muted">Carregando histórico...</p>
+            </div>
+        </div>
+    </div>
+</main>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        // Função de logout
+        function logout() {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            window.location.href = '/';
+        }
+
+        // Menu Toggle
+        const menuToggle = document.getElementById('menu-toggle');
+        const mainNav = document.getElementById('main-nav');
+        if (menuToggle) {
+            menuToggle.addEventListener('click', () => mainNav.classList.toggle('active'));
+        }
+        let selectedFile = null;
+
+        // Drag and Drop
+        const uploadZone = document.getElementById('uploadZone');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragging');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragging');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragging');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            // Valida extensão
+            const validExtensions = ['.xlsx', '.xls', '.xlsb'];
+            const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(fileExt)) {
+                alert('Formato inválido! Envie apenas arquivos Excel (.xlsx, .xls, .xlsb)');
+                return;
+            }
+
+            selectedFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = `(${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('btnUpload').disabled = false;
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('btnUpload').disabled = true;
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('resultContainer').style.display = 'none';
+        }
+
+        async function uploadFile() {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            // Mostra progress
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('resultContainer').style.display = 'none';
+            document.getElementById('btnUpload').disabled = true;
+
+            // Simula progresso
+            updateProgress(10, 'Lendo arquivo...');
+            
+            setTimeout(() => updateProgress(30, 'Validando dados...'), 500);
+
+            try {
+                setTimeout(() => updateProgress(70, 'Importando registros...'), 1000);
+
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/crm/import/agendamento/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                let data;
+                try {
+                    data = await response.json();
+                } catch (parseErr) {
+                    throw new Error('Não foi possível ler a resposta do servidor');
+                }
+
+                if (!response.ok) {
+                    throw new Error(data?.error || 'Erro ao importar arquivo');
+                }
+
+                updateProgress(90, 'Finalizando...');
+
+                setTimeout(() => {
+                    updateProgress(100, 'Concluído!');
+
+                    // Fluxo assíncrono: apenas inicia processamento e mostra o log
+                    if (data.background || data.log_id) {
+                        showResult(true, `
+                            <div class="text-center mb-3">
+                                <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                                <h5 class="mt-2 fw-bold">Processamento iniciado</h5>
+                                <p class="mb-1">Acompanhe o andamento no histórico abaixo.</p>
+                                <p class="mb-0"><small>Log ID: <strong>${data.log_id || '-'}</strong></small></p>
+                            </div>
+                        `);
+
+                        // Força refresh do histórico e liga auto-refresh enquanto houver PROCESSANDO
+                        carregarHistoricoImportacoes();
+                        iniciarAutoRefresh();
+                        document.getElementById('btnUpload').disabled = false;
+                        return;
+                    }
+
+                    if (data.success) {
+                        const sucessoPercent = ((data.registros_criados / data.total_linhas) * 100).toFixed(1);
+                        const errosCount = data.total_linhas - data.registros_criados;
+                        
+                        showResult(true, `
+                            <div class="text-center mb-4">
+                                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                                <h4 class="mt-3 fw-bold">Importação Concluída com Sucesso!</h4>
+                            </div>
+                            
+                            <div class="stats-grid mb-4">
+                                <div class="stat-box">
+                                    <div class="stat-number">${data.total_linhas}</div>
+                                    <div class="stat-label">Total de Linhas</div>
+                                </div>
+                                <div class="stat-box" style="border-left-color: #1cc88a;">
+                                    <div class="stat-number" style="color: #1cc88a;">${data.registros_criados}</div>
+                                    <div class="stat-label">Importados</div>
+                                </div>
+                                <div class="stat-box" style="border-left-color: ${errosCount > 0 ? '#e74a3b' : '#1cc88a'};">
+                                    <div class="stat-number" style="color: ${errosCount > 0 ? '#e74a3b' : '#1cc88a'};">${errosCount}</div>
+                                    <div class="stat-label">Erros</div>
+                                </div>
+                                <div class="stat-box" style="border-left-color: #1cc88a;">
+                                    <div class="stat-number" style="color: #1cc88a;">${sucessoPercent}%</div>
+                                    <div class="stat-label">Taxa de Sucesso</div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-success border-success">
+                                <h6 class="fw-bold mb-2"><i class="bi bi-info-circle"></i> Resumo da Importação</h6>
+                                <ul class="mb-0 small">
+                                    <li><strong>${data.registros_criados}</strong> agendamentos foram importados e estão disponíveis no sistema</li>
+                                    <li>Arquivo processado: <strong>${selectedFile ? selectedFile.name : 'N/A'}</strong></li>
+                                    <li>Data da importação: <strong>${new Date().toLocaleString('pt-BR')}</strong></li>
+                                    <li>Os dados podem ser consultados através do painel administrativo</li>
+                                </ul>
+                            </div>
+
+                            ${data.erros && data.erros.length > 0 ? `
+                                <div class="alert alert-warning border-warning mt-3">
+                                    <h6 class="fw-bold mb-2"><i class="bi bi-exclamation-triangle"></i> Erros Encontrados (${data.erros.length})</h6>
+                                    <p class="small mb-2">As seguintes linhas não foram importadas devido a erros:</p>
+                                    <div style="max-height: 200px; overflow-y: auto;">
+                                        <ul class="small mb-0">
+                                            ${data.erros.map(err => `<li>${err}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="alert alert-info border-info mt-3">
+                                    <p class="mb-0 small"><i class="bi bi-check-all"></i> Todas as linhas foram processadas sem erros!</p>
+                                </div>
+                            `}
+
+                            <div class="text-center mt-4">
+                                <button class="btn btn-primary" onclick="location.reload()">
+                                    <i class="bi bi-arrow-clockwise"></i> Nova Importação
+                                </button>
+                                <a href="/importacoes/" class="btn btn-secondary ms-2">
+                                    <i class="bi bi-arrow-left"></i> Voltar
+                                </a>
+                            </div>
+                        `);
+                    } else {
+                        showResult(false, `
+                            <div class="text-center mb-4">
+                                <i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>
+                                <h4 class="mt-3 fw-bold">Erro na Importação</h4>
+                            </div>
+                            <div class="alert alert-danger">
+                                <h6 class="fw-bold"><i class="bi bi-exclamation-triangle"></i> Detalhes do Erro:</h6>
+                                <p class="mb-0">${data.error || 'Erro desconhecido. Verifique o formato do arquivo e tente novamente.'}</p>
+                            </div>
+                            <div class="text-center mt-4">
+                                <button class="btn btn-primary" onclick="location.reload()">
+                                    <i class="bi bi-arrow-clockwise"></i> Tentar Novamente
+                                </button>
+                            </div>
+                        `);
+                    }
+
+                    // Não limpa o arquivo para manter o contexto
+                    // clearFile(); - REMOVIDO
+                    
+                    // Atualiza histórico após upload
+                    setTimeout(() => carregarHistoricoImportacoes(), 1000);
+                }, 500);
+
+            } catch (error) {
+                console.error('Erro:', error);
+                updateProgress(0, '');
+                showResult(false, `
+                    <h5><i class="bi bi-x-circle"></i> Erro na Importação</h5>
+                    <p>${error.message || 'Erro ao conectar com o servidor'}</p>
+                `);
+                document.getElementById('btnUpload').disabled = false;
+            }
+        }
+
+        function updateProgress(percent, message) {
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = percent + '%';
+            document.getElementById('progressMessage').textContent = message;
+        }
+
+        function showResult(success, message) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.className = `result-message ${success ? 'success' : 'error'}`;
+            resultContainer.innerHTML = message;
+            resultContainer.style.display = 'block';
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        // Carregar histórico de importações
+        let autoRefreshInterval = null;
+
+        async function carregarHistoricoImportacoes() {
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/crm/logs-agendamento/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar histórico');
+                }
+
+                const data = await response.json();
+                
+                if (data.success && data.logs && data.logs.length > 0) {
+                    exibirHistorico(data.logs);
+                    
+                    // Se houver importações PROCESSANDO, continuar auto-refresh
+                    const temProcessando = data.logs.some(log => log.status === 'PROCESSANDO');
+                    if (temProcessando && !autoRefreshInterval) {
+                        iniciarAutoRefresh();
+                    } else if (!temProcessando && autoRefreshInterval) {
+                        pararAutoRefresh();
+                    }
+                } else {
+                    document.getElementById('historicoImportacoes').innerHTML = `
+                        <p class="text-center text-muted">Nenhuma importação encontrada</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar histórico:', error);
+                document.getElementById('historicoImportacoes').innerHTML = `
+                    <p class="text-center text-danger">Erro ao carregar histórico</p>
+                `;
+            }
+        }
+
+        function exibirHistorico(logs) {
+            const container = document.getElementById('historicoImportacoes');
+            
+            let html = `
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Status</th>
+                            <th>Iniciado</th>
+                            <th>Duração</th>
+                            <th>Métricas</th>
+                            <th>Usuário</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            logs.forEach(log => {
+                const statusBadge = getStatusBadge(log.status, log.status_display);
+                const duracao = log.duracao_segundos 
+                    ? `${log.duracao_segundos}s` 
+                    : (log.status === 'PROCESSANDO' ? '<i class="spinner-border spinner-border-sm"></i>' : '-');
+                
+                // Formatar data de forma segura
+                let iniciado = '-';
+                if (log.iniciado_em) {
+                    try {
+                        const date = new Date(log.iniciado_em);
+                        if (!isNaN(date.getTime())) {
+                            iniciado = date.toLocaleString('pt-BR');
+                        }
+                    } catch (e) {
+                        console.error('Erro ao formatar data:', e, log.iniciado_em);
+                    }
+                }
+                
+                const usuario = log.usuario || log.usuario_nome || '-';
+                
+                // Métricas específicas do Agendamento
+                let metricas = [];
+                if (log.agendamentos_criados > 0) metricas.push(`<span class="badge bg-success">${log.agendamentos_criados} criados</span>`);
+                if (log.agendamentos_atualizados > 0) metricas.push(`<span class="badge bg-info">${log.agendamentos_atualizados} atualizados</span>`);
+                if (log.nao_encontrados > 0) metricas.push(`<span class="badge bg-warning">${log.nao_encontrados} não encontrados</span>`);
+                if (log.erros_count > 0) metricas.push(`<span class="badge bg-danger">${log.erros_count} erros</span>`);
+                
+                // Adicionar mensagem de erro se houver
+                let detalhesErro = '';
+                if (log.mensagem_erro) {
+                    // Limitar tamanho da mensagem para não quebrar o layout
+                    const mensagemLimpa = log.mensagem_erro.length > 200 
+                        ? log.mensagem_erro.substring(0, 200) + '...' 
+                        : log.mensagem_erro;
+                    detalhesErro = `<div class="text-danger small mt-1" style="max-width: 400px;" title="${log.mensagem_erro.replace(/"/g, '&quot;')}"><i class="bi bi-exclamation-triangle"></i> ${mensagemLimpa.replace(/\n/g, '<br>')}</div>`;
+                }
+                
+                // Botão cancelar (apenas para status PROCESSANDO)
+                let acoes = '';
+                if (log.status === 'PROCESSANDO') {
+                    acoes = `<button class="btn btn-sm btn-danger" onclick="cancelarImportacao(${log.id})" title="Cancelar importação">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </button>`;
+                } else {
+                    acoes = '-';
+                }
+                
+                html += `
+                    <tr>
+                        <td><small>${log.nome_arquivo || '-'}</small></td>
+                        <td>${statusBadge}</td>
+                        <td><small>${iniciado}</small></td>
+                        <td>${duracao}</td>
+                        <td>
+                            ${metricas.join(' ')}
+                            ${detalhesErro}
+                        </td>
+                        <td><small>${usuario}</small></td>
+                        <td>${acoes}</td>
+                    </tr>
+                    ${detalhesErro ? `<tr><td colspan="7">${detalhesErro}</td></tr>` : ''}
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        async function cancelarImportacao(logId) {
+            if (!confirm('Tem certeza que deseja cancelar esta importação?')) {
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch(`/api/crm/logs-agendamento/${logId}/cancelar/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Mostrar mensagem informativa
+                    let mensagem = data.message || 'Importação cancelada com sucesso.';
+                    if (data.info) {
+                        mensagem += '\n\n' + data.info;
+                    }
+                    alert(mensagem);
+                    
+                    // Recarregar histórico
+                    carregarHistoricoImportacoes();
+                } else {
+                    alert('Erro ao cancelar: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro ao cancelar importação:', error);
+                alert('Erro ao cancelar importação. Tente novamente.');
+            }
+        }
+        
+        function getStatusBadge(status, display) {
+            const badges = {
+                'PROCESSANDO': '<span class="badge bg-info"><i class="spinner-border spinner-border-sm me-1"></i> Processando</span>',
+                'SUCESSO': '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i> Sucesso</span>',
+                'ERRO': '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i> Erro</span>',
+                'PARCIAL': '<span class="badge bg-warning"><i class="bi bi-exclamation-triangle me-1"></i> Parcial</span>',
+                'CANCELADO': '<span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i> Cancelado</span>'
+            };
+            return badges[status] || `<span class="badge bg-secondary">${display}</span>`;
+        }
+
+        function iniciarAutoRefresh() {
+            if (autoRefreshInterval) return;
+            
+            autoRefreshInterval = setInterval(() => {
+                carregarHistoricoImportacoes();
+            }, 3000); // Atualiza a cada 3 segundos
+            
+            console.log('Auto-refresh iniciado');
+        }
+
+        function pararAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                console.log('Auto-refresh parado');
+            }
+        }
+
+        // Carregar histórico ao abrir a página
+        window.addEventListener('DOMContentLoaded', () => {
+            carregarHistoricoImportacoes();
+        });
+    </script>
+{% endblock %}

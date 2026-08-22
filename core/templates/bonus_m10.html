@@ -1,0 +1,1439 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}{{ SITE_MODULE_PREFIX }} Vertical - Bônus M-10 & FPD{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.bonus-m10-page .system-container-full { max-width: 100% !important; }
+            .bonus-m10-page .titulo-bonus-m10 { font-size: 1.8rem; margin: 0; }
+            .bonus-m10-page .table-responsive-400 { max-height: 400px; overflow-y: auto; }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: transform 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card.blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .stat-card.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .stat-card.orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .stat-card.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .table-wide {
+            min-width: 1600px;
+        }
+
+        .table-wide th, .table-wide td {
+            padding: 8px 5px;
+            font-size: 0.88rem;
+        }
+
+        .table-wide th {
+            padding: 8px 4px;
+            font-size: 0.85rem;
+            line-height: 1.2;
+        }
+
+        .col-os { max-width: 85px; }
+        .col-vendedor { max-width: 80px; }
+        .col-instalacao { max-width: 90px; }
+        .col-status-fpd { max-width: 75px; }
+        .col-vencimento-fpd { max-width: 85px; }
+        .col-pagamento-fpd { max-width: 85px; }
+        .col-faturas-pagas { max-width: 65px; }
+
+        .bonus-m10-page .table-responsive { overflow-x: auto; width: 100%; }
+
+        .bonus-m10-page .row-elegivel { background-color: color-mix(in srgb, var(--color-success) 12%, var(--bg-card)) !important; }
+        .bonus-m10-page .row-nao-elegivel { background-color: color-mix(in srgb, var(--color-warning) 12%, var(--bg-card)) !important; }
+        .bonus-m10-page .row-elegivel td { background-color: color-mix(in srgb, var(--color-success) 12%, var(--bg-card)) !important; }
+        .bonus-m10-page .row-nao-elegivel td { background-color: color-mix(in srgb, var(--color-warning) 12%, var(--bg-card)) !important; }
+        .bonus-m10-page .row-elegivel:hover td { background-color: color-mix(in srgb, var(--color-success) 18%, var(--bg-card)) !important; }
+        .bonus-m10-page .row-nao-elegivel:hover td { background-color: color-mix(in srgb, var(--color-warning) 18%, var(--bg-card)) !important; }
+
+        .bonus-m10-page .wrap-text { white-space: normal !important; word-break: break-word; }
+        .bonus-m10-page .bg-white { background-color: var(--bg-card) !important; }
+        .bonus-m10-page .text-dark { color: var(--text-primary) !important; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="area-interna-section bonus-m10-page">
+        <div class="system-container system-container-full card-modern">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="titulo-bonus-m10"><i class="bi bi-piggy-bank-fill text-success"></i> Bônus M-10 & FPD</h1>
+                    <p class="text-muted mb-0">Controle de pagamentos e elegibilidade para bônus</p>
+                </div>
+                <div>
+                    <button class="btn btn-success" onclick="exportarDados()"><i class="bi bi-download"></i> Exportar Excel</button>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs mb-4" id="bonusTabs" role="tablist">
+                <li class="nav-item"><button class="nav-link active" id="m10-tab" data-bs-toggle="tab" data-bs-target="#m10-content" type="button"><i class="bi bi-cash-coin"></i> Bônus M-10</button></li>
+                <li class="nav-item"><button class="nav-link" id="fpd-tab" data-bs-toggle="tab" data-bs-target="#fpd-content" type="button"><i class="bi bi-calendar-check"></i> FPD (Primeira Fatura)</button></li>
+                <li class="nav-item"><button class="nav-link" id="analise-tab" data-bs-toggle="tab" data-bs-target="#analise-content" type="button"><i class="bi bi-graph-up"></i> Análise de Buscas</button></li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- TAB: BÔNUS M-10 -->
+                <div class="tab-pane fade show active" id="m10-content">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="stat-card blue">
+                                <div class="stat-label"><i class="bi bi-bar-chart-fill"></i> Total de Contratos</div>
+                                <div class="stat-value" id="m10-total">0</div>
+                                <small>na safra selecionada</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card green">
+                                <div class="stat-label"><i class="bi bi-check-circle-fill"></i> Ativos</div>
+                                <div class="stat-value" id="m10-ativos">0</div>
+                                <small id="m10-taxa-ativos">0% de permanência</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card orange">
+                                <div class="stat-label"><i class="bi bi-trophy-fill"></i> Elegíveis</div>
+                                <div class="stat-value" id="m10-elegiveis">0</div>
+                                <small>para receber bônus</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card red" id="card-valor-bonus">
+                                <div class="stat-label"><i class="bi bi-cash-stack"></i> Valor Total</div>
+                                <div class="stat-value" id="m10-valor">R$ 0,00</div>
+                                <small>bônus a pagar</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Safra (Mês/Ano)</label>
+                                    <select id="filtro-safra" class="form-select" onchange="onSafraChange()" title="Selecione a safra">
+                                        <option value="">Selecione...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Vendedor</label>
+                                    <select id="filtro-vendedor-m10" class="form-select" onchange="carregarDadosM10()" title="Selecione o vendedor">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Status</label>
+                                    <select id="filtro-status-m10" class="form-select" onchange="carregarDadosM10()" title="Selecione o status">
+                                        <option value="">Todos</option>
+                                        <option value="ATIVO">Ativo</option>
+                                        <option value="CANCELADO">Cancelado</option>
+                                        <option value="DOWNGRADE">Downgrade</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Elegibilidade</label>
+                                    <select id="filtro-elegivel" class="form-select" onchange="carregarDadosM10()" title="Selecione a elegibilidade">
+                                        <option value="">Todos</option>
+                                        <option value="true">Elegíveis</option>
+                                        <option value="false">Não Elegíveis</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-3 col-md-6">
+                                    <label class="form-label fw-bold">Busca rápida</label>
+                                    <div class="input-group">
+                                        <input id="filtro-busca-m10" type="text" class="form-control" placeholder="CPF, contrato, cliente ou O.S" onkeypress="if(event.key==='Enter'){carregarDadosM10();}">
+                                        <button class="btn btn-outline-primary" type="button" onclick="carregarDadosM10()" title="Buscar"><i class="bi bi-search"></i></button>
+                                    </div>
+                                </div>
+                                <div class="col-lg-3 col-md-6">
+                                    <label class="form-label fw-bold">Ações em Lote</label>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <button class="btn btn-success flex-grow-1" onclick="buscarFaturasSafra()" title="Buscar faturas Nio dos contratos da safra">
+                                            <i class="bi bi-cloud-arrow-down"></i> Buscar Faturas
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="popularSafra()" title="Criar ContratoM10 a partir das vendas INSTALADA com data_instalacao no mês">
+                                            <i class="bi bi-plus-circle"></i> Popular Safra
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+                        <i class="bi bi-info-circle fs-4 me-3"></i>
+                        <div>
+                            <strong>Importações:</strong> Para importar bases FPD ou Churn, acesse a 
+                            <a href="/importacoes/" class="alert-link fw-bold">Central de Importações</a>.
+                            <br><strong>Poucos contratos na safra?</strong> Use <strong>Popular Safra</strong> para criar ContratoM10 a partir das vendas INSTALADA com data de instalação no mês.
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header bg-white d-flex justify-content-between">
+                            <h5 class="m-0 text-primary">Contratos da Safra</h5>
+                            <button class="btn btn-sm btn-outline-primary" onclick="carregarDadosM10()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover align-middle mb-0 table-wide">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>O.S/PEDIDO</th>
+                                        <th>Nº Contrato</th>
+                                        <th>Cliente</th>
+                                        <th>Vendedor</th>
+                                        <th>Instalação</th>
+                                        <th>Plano</th>
+                                        <th>Status<br>Contrato</th>
+                                        <th>Status FPD</th>
+                                        <th>Vencimento<br>FPD</th>
+                                        <th>Pagamento<br>FPD</th>
+                                        <th>Faturas<br>Pagas</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-contratos-m10"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: ANÁLISE DE BUSCAS -->
+                <div class="tab-pane fade" id="analise-content">
+                    <!-- Estatísticas Gerais -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="stat-card blue">
+                                <div class="stat-label"><i class="bi bi-search"></i> Total de Buscas</div>
+                                <div class="stat-value" id="analise-total-buscas">0</div>
+                                <small id="analise-periodo">últimos 30 dias</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card green">
+                                <div class="stat-label"><i class="bi bi-check-circle-fill"></i> Taxa de Sucesso</div>
+                                <div class="stat-value" id="analise-taxa-sucesso">0%</div>
+                                <small id="analise-faturas-sucesso">0 faturas</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card orange">
+                                <div class="stat-label"><i class="bi bi-clock-history"></i> Tempo Médio</div>
+                                <div class="stat-value" id="analise-tempo-medio">0s</div>
+                                <small>por fatura</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card red">
+                                <div class="stat-label"><i class="bi bi-exclamation-triangle-fill"></i> Com Erro</div>
+                                <div class="stat-value" id="analise-com-erro">0</div>
+                                <small>faturas pendentes</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros -->
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Período</label>
+                                    <select id="filtro-periodo-analise" class="form-select" onchange="carregarAnalise()" title="Selecione o período">
+                                        <option value="7">Últimos 7 dias</option>
+                                        <option value="30" selected>Últimos 30 dias</option>
+                                        <option value="60">Últimos 60 dias</option>
+                                        <option value="90">Últimos 90 dias</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Tipo de Busca</label>
+                                    <select id="filtro-tipo-busca" class="form-select" onchange="carregarAnalise()" title="Selecione o tipo de busca">
+                                        <option value="">Todos</option>
+                                        <option value="AUTOMATICA">Automática (Agendada)</option>
+                                        <option value="SAFRA">Por Safra</option>
+                                        <option value="INDIVIDUAL">Individual</option>
+                                        <option value="RETRY">Retry</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Safra</label>
+                                    <select id="filtro-safra-analise" class="form-select" onchange="carregarAnalise()" title="Selecione a safra">
+                                        <option value="">Todas</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button class="btn btn-primary w-100" onclick="carregarAnalise()">
+                                        <i class="bi bi-arrow-clockwise"></i> Atualizar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico de Performance -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0 text-primary"><i class="bi bi-graph-up"></i> Performance Diária</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="chartPerformance" height="80"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="row g-4 mb-4">
+                        <!-- Últimas Execuções -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-white">
+                                    <h5 class="mb-0 text-primary"><i class="bi bi-clock-history"></i> Últimas Execuções</h5>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th>Data/Hora</th>
+                                                    <th>Tipo</th>
+                                                    <th>Faturas</th>
+                                                    <th>Sucesso</th>
+                                                    <th>Tempo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-execucoes"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Faturas com Problema -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0 text-primary"><i class="bi bi-exclamation-circle-fill"></i> Faturas com Problema</h5>
+                                    <span class="badge bg-danger" id="badge-problemas">0</span>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th>Contrato</th>
+                                                    <th>Fatura</th>
+                                                    <th>Tentativas</th>
+                                                    <th>Erro</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-problemas"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Estatísticas por Tipo -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0 text-primary"><i class="bi bi-pie-chart-fill"></i> Estatísticas por Tipo de Busca</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Execuções</th>
+                                            <th>Faturas</th>
+                                            <th>Sucesso</th>
+                                            <th>Erros</th>
+                                            <th>Tempo Médio</th>
+                                            <th>Taxa Sucesso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-por-tipo"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top 10 Faturas Mais Lentas -->
+                    <div class="card">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0 text-primary"><i class="bi bi-speedometer2"></i> Top 10 Faturas Mais Lentas</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Contrato</th>
+                                            <th>Fatura</th>
+                                            <th>Tempo</th>
+                                            <th>Status</th>
+                                            <th>Tentativas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-lentas"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="fpd-content">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="stat-card blue">
+                                <div class="stat-label"><i class="bi bi-file-text-fill"></i> Faturas Geradas</div>
+                                <div class="stat-value" id="fpd-geradas">0</div>
+                                <small>no mês selecionado</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card green">
+                                <div class="stat-label"><i class="bi bi-check-circle-fill"></i> Pagas</div>
+                                <div class="stat-value" id="fpd-pagas">0</div>
+                                <small>primeira fatura quitada</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card orange">
+                                <div class="stat-label"><i class="bi bi-hourglass-split"></i> Em Aberto</div>
+                                <div class="stat-value" id="fpd-aberto">0</div>
+                                <small>aguardando pagamento</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card red">
+                                <div class="stat-label"><i class="bi bi-percent"></i> Taxa FPD</div>
+                                <div class="stat-value" id="fpd-taxa">0%</div>
+                                <small>em aberto / total</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+                        <i class="bi bi-info-circle fs-5 me-2"></i>
+                        <div>
+                            <strong>FPD (First Payment Default):</strong> acompanhamento do <strong>pagamento da primeira fatura</strong> apenas. O indicador mede se o cliente quitou a 1ª fatura; não é necessário preencher as 10 faturas para FPD.
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Mês de Vencimento</label>
+                                    <input type="month" id="filtro-mes-fpd" class="form-control" onchange="carregarDadosFPD()" placeholder="Selecione o mês" title="Selecione o mês">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Status</label>
+                                    <select id="filtro-status-fpd" class="form-select" onchange="carregarDadosFPD()" title="Selecione o status FPD">
+                                        <option value="">Todos</option>
+                                        <option value="PAGO">Pago</option>
+                                        <option value="NAO_PAGO">Não Pago</option>
+                                        <option value="AGUARDANDO">Aguardando</option>
+                                        <option value="ATRASADO">Atrasado</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Vendedor</label>
+                                    <select id="filtro-vendedor-fpd" class="form-select" onchange="carregarDadosFPD()" title="Selecione o vendedor FPD">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header bg-white d-flex justify-content-between">
+                            <h5 class="m-0 text-primary">Primeira Fatura (FPD)</h5>
+                            <button class="btn btn-sm btn-outline-primary" onclick="carregarDadosFPD()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+                        </div>
+                        <div class="card-body p-0 table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Contrato</th>
+                                        <th>Cliente</th>
+                                        <th>Vendedor</th>
+                                        <th>Vencimento</th>
+                                        <th>Valor</th>
+                                        <th>Pagamento</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-fpd"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal fade" id="modalFaturas" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title mb-1"><i class="bi bi-receipt"></i> Gerenciar Faturas - <span id="modal-contrato-nome"></span></h5>
+                        <small class="text-muted"><strong>Cliente:</strong> <span id="modal-cliente-nome"></span> | <strong>CPF:</strong> <span id="modal-cliente-cpf"></span></small>
+                        <small class="d-block text-muted mt-1">FPD: apenas 1ª fatura | M-10: 10 faturas para bônus</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" title="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="modal-contrato-id">
+                    <ul class="nav nav-pills mb-3" id="faturas-tabs" role="tablist"></ul>
+                    <div class="tab-content" id="faturas-content"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button class="btn btn-primary" onclick="salvarFaturas()">Salvar Alterações</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        const token = localStorage.getItem('accessToken');
+
+        const formatSafraLabel = (isoDate, friendly) => {
+            if (friendly) return friendly;
+            if (!isoDate) return '-';
+            const d = new Date(isoDate);
+            if (isNaN(d)) return isoDate;
+            return d.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
+        };
+
+        async function carregarSafras() {
+            const select = document.getElementById('filtro-safra');
+            const current = select.value;
+            select.innerHTML = '<option value="">Selecione...</option>';
+            try {
+                const res = await fetch('/api/bonus-m10/safras/', { headers: { Authorization: `Bearer ${token}` } });
+                const safras = await res.json();
+                safras.forEach(s => {
+                    const label = formatSafraLabel(s.mes_referencia, s.mes_referencia_formatado);
+                    const mesRef = (s.mes_referencia || '').slice(0, 7);
+                    select.insertAdjacentHTML('beforeend', `<option value="${s.id}" data-mes="${mesRef}">${label}</option>`);
+                });
+                const defaultValue = current || (safras[0] ? String(safras[0].id) : '');
+                if (defaultValue) {
+                    select.value = defaultValue;
+                    await onSafraChange();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar safras', error);
+                alert('Erro ao carregar safras.');
+            }
+        }
+
+        async function onSafraChange() {
+            const safra = document.getElementById('filtro-safra').value;
+            if (!safra) return;
+            await carregarVendedores(safra);
+            carregarDadosM10();
+            carregarDadosFPD();
+        }
+
+        async function carregarVendedores(safraId = '') {
+            const url = safraId ? `/api/bonus-m10/vendedores/?safra=${safraId}` : '/api/bonus-m10/vendedores/';
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            const vendedores = await res.json();
+            const selects = [document.getElementById('filtro-vendedor-m10'), document.getElementById('filtro-vendedor-fpd')];
+            selects.forEach(sel => {
+                const current = sel.value;
+                sel.innerHTML = '<option value="">Todos</option>';
+                vendedores.forEach(v => {
+                    sel.insertAdjacentHTML('beforeend', `<option value="${v.id}">${v.username}</option>`);
+                });
+                if ([...sel.options].some(o => o.value === current)) sel.value = current;
+            });
+        }
+
+        async function carregarDadosM10(page = 1) {
+            const safra = document.getElementById('filtro-safra').value;
+            if (!safra) return;
+            const vendedor = document.getElementById('filtro-vendedor-m10').value;
+            const status = document.getElementById('filtro-status-m10').value;
+            const elegivel = document.getElementById('filtro-elegivel').value;
+            const busca = document.getElementById('filtro-busca-m10').value;
+            const params = new URLSearchParams({ safra, vendedor, status, elegivel, page });
+            if (busca) params.append('q', busca);
+            const res = await fetch(`/api/bonus-m10/dashboard-m10/?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+            const data = await res.json();
+            document.getElementById('m10-total').textContent = data.total;
+            document.getElementById('m10-ativos').textContent = data.ativos;
+            document.getElementById('m10-taxa-ativos').textContent = `${data.taxa_permanencia}% de permanência`;
+            document.getElementById('m10-elegiveis').textContent = data.elegiveis;
+            const cardValor = document.getElementById('card-valor-bonus');
+            const m10Valor = document.getElementById('m10-valor');
+            if (data.pode_ver_valor_bonus) {
+                cardValor.closest('.col-md-3').classList.remove('d-none');
+                m10Valor.textContent = `R$ ${(data.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+                if (cardValor) cardValor.title = '';
+            } else {
+                cardValor.closest('.col-md-3').classList.add('d-none');
+            }
+            const tbody = document.getElementById('tbody-contratos-m10');
+            tbody.innerHTML = data.contratos.length ? '' : '<tr><td colspan="11" class="text-center">Nenhum contrato encontrado</td></tr>';
+            data.contratos.forEach(c => {
+                const clienteCpf = c.cpf_cliente || '-';
+                const statusBadge = c.status === 'ATIVO' ? 'success' : c.status === 'CANCELADO' ? 'danger' : 'warning';
+                const faturasResumo = c.total_faturas ? `${c.faturas_pagas}/${c.total_faturas}` : '0/0';
+                const rowClass = c.elegivel ? 'row-elegivel' : 'row-nao-elegivel';
+                let statusFpdBadge = 'secondary';
+                if (c.status_fatura_fpd && c.status_fatura_fpd !== '-') {
+                    if (c.status_fatura_fpd.includes('PAGA')) statusFpdBadge = 'success';
+                    else if (c.status_fatura_fpd.includes('AGUARDANDO')) statusFpdBadge = 'warning';
+                    else if (c.status_fatura_fpd.includes('VENCID') || c.status_fatura_fpd.includes('ATRASAD')) statusFpdBadge = 'danger';
+                }
+                tbody.insertAdjacentHTML('beforeend', `
+                    <tr class="${rowClass}" style="cursor: pointer;" onclick="abrirModalFaturas(${c.id})">
+                        <td class="col-os"><span class="badge bg-info text-dark">${c.numero_contrato}</span></td>
+                        <td class="col-num-contrato wrap-text">${c.numero_contrato_definitivo}</td>
+                        <td class="wrap-text col-cliente"><div>${c.cliente_nome}</div><small class="text-muted">CPF: ${clienteCpf}</small></td>
+                        <td class="col-vendedor">${c.vendedor_nome}</td>
+                        <td class="col-instalacao">${c.data_instalacao}</td>
+                        <td class="wrap-text col-plano">${c.plano_atual}</td>
+                        <td class="col-status-contrato"><span class="badge bg-${statusBadge}">${c.status_display}</span></td>
+                        <td class="col-status-fpd"><span class="badge bg-${statusFpdBadge}">${c.status_fatura_fpd_display || '-'}</span></td>
+                        <td class="col-vencimento-fpd">${c.data_vencimento_fpd || '-'}</td>
+                        <td class="col-pagamento-fpd"><strong class="text-success">${c.data_pagamento_fpd || '-'}</strong></td>
+                        <td class="col-faturas-pagas"><span class="badge bg-primary">${faturasResumo}</span></td>
+                    </tr>`);
+            });
+            if (data.total_pages > 1) {
+                let paginationHtml = '<nav aria-label="Page navigation"><ul class="pagination">';
+                for (let i = 1; i <= data.total_pages; i++) {
+                    const active = i === data.page ? 'active' : '';
+                    paginationHtml += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="carregarDadosM10(${i}); return false;">${i}</a></li>`;
+                }
+                paginationHtml += '</ul></nav>';
+                if (!document.getElementById('pagination-m10')) {
+                    tbody.parentElement.parentElement.insertAdjacentHTML('afterend', '<div id="pagination-m10"></div>');
+                }
+                document.getElementById('pagination-m10').innerHTML = paginationHtml;
+            }
+        }
+
+        async function carregarDadosFPD() {
+            const mes = document.getElementById('filtro-mes-fpd').value;
+            const status = document.getElementById('filtro-status-fpd').value;
+            const vendedor = document.getElementById('filtro-vendedor-fpd').value;
+            const params = new URLSearchParams({ mes, status, vendedor });
+            const res = await fetch(`/api/bonus-m10/dashboard-fpd/?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) {
+                const raw = await res.text();
+                console.error('Erro dashboard FPD', raw);
+                alert('Erro ao carregar FPD. Veja o console para detalhes.');
+                return;
+            }
+            const data = await res.json();
+            const faturasLista = Array.isArray(data.faturas) ? data.faturas : [];
+            document.getElementById('fpd-geradas').textContent = data.total_geradas;
+            document.getElementById('fpd-pagas').textContent = data.total_pagas;
+            document.getElementById('fpd-aberto').textContent = data.total_aberto;
+            document.getElementById('fpd-taxa').textContent = `${data.taxa_fpd}%`;
+            const tbody = document.getElementById('tbody-fpd');
+            tbody.innerHTML = faturasLista.length ? '' : '<tr><td colspan="8" class="text-center">Nenhuma fatura encontrada</td></tr>';
+            faturasLista.forEach(f => {
+                const statusClass = f.status === 'PAGO' ? 'success' : f.status === 'NAO_PAGO' ? 'danger' : 'warning';
+                const valorStr = typeof f.valor === 'number' ? f.valor.toFixed(2) : Number(f.valor || 0).toFixed(2);
+                tbody.insertAdjacentHTML('beforeend', `
+                    <tr>
+                        <td>${f.numero_contrato}</td>
+                        <td>${f.cliente_nome}</td>
+                        <td>${f.vendedor_nome}</td>
+                        <td>${f.data_vencimento}</td>
+                        <td>R$ ${valorStr}</td>
+                        <td>${f.data_pagamento || '-'}</td>
+                        <td><span class="badge bg-${statusClass}">${f.status_display}</span></td>
+                        <td><button class="btn btn-icon btn-icon-primary" onclick="abrirModalFaturas(${f.contrato_id}, true)" title="Editar 1ª fatura (FPD)" aria-label="Editar fatura"><i class="bi bi-pencil" aria-hidden="true"></i></button></td>
+                    </tr>`);
+            });
+        }
+
+        async function abrirModalFaturas(contratoId, somenteFpd = false) {
+            try {
+                const resContrato = await fetch(`/api/bonus-m10/contratos/${contratoId}/`, { headers: { Authorization: `Bearer ${token}` } });
+                const contrato = await resContrato.json();
+                window.contratoAtual = contrato;
+                window.modalSomenteFpd = somenteFpd;
+                const resFaturas = await fetch(`/api/bonus-m10/faturas/?contrato_id=${contratoId}`, { headers: { Authorization: `Bearer ${token}` } });
+                const responseData = await resFaturas.json();
+                const faturasDetalhadas = Array.isArray(responseData) ? responseData : responseData.results || [];
+                document.getElementById('modal-contrato-id').value = contratoId;
+                document.getElementById('modal-contrato-nome').textContent = contrato.numero_contrato;
+                document.getElementById('modal-cliente-nome').textContent = contrato.cliente_nome || '-';
+                document.getElementById('modal-cliente-cpf').textContent = contrato.cpf_cliente || '-';
+                const totalFaturas = somenteFpd ? 1 : 10;
+                const faturas = [];
+                for (let i = 1; i <= totalFaturas; i++) {
+                    const faturaExistente = faturasDetalhadas.find(f => f.numero_fatura === i);
+                    if (!faturaExistente && i === 1 && contrato.data_vencimento_fpd) {
+                        faturas.push({
+                            id: null,
+                            numero_fatura: 1,
+                            valor: contrato.valor_fatura_fpd || 0,
+                            data_vencimento: contrato.data_vencimento_fpd || '',
+                            data_pagamento: contrato.data_pagamento_fpd || '',
+                            status: contrato.status_fatura_fpd && contrato.status_fatura_fpd.toLowerCase().includes('paga') ? 'PAGO' : 'NAO_PAGO',
+                            codigo_pix: '',
+                            codigo_barras: '',
+                                pdf_url: null,
+                                arquivo_pdf_url: null
+                        });
+                    } else {
+                        faturas.push(faturaExistente || {
+                            id: null,
+                            numero_fatura: i,
+                            valor: 0,
+                            data_vencimento: '',
+                            data_pagamento: '',
+                            status: 'NAO_PAGO',
+                            codigo_pix: '',
+                            codigo_barras: '',
+                                pdf_url: null,
+                                arquivo_pdf_url: null
+                        });
+                    }
+                }
+                window.faturasAtuais = faturas;
+                const tabsHtml = faturas.map((f, i) => {
+                    const statusIcon = f.valor > 0 ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-circle text-muted"></i>';
+                    const label = somenteFpd ? '1ª Fatura (FPD)' : `Fatura ${i + 1}`;
+                    return `<li class="nav-item"><button class="nav-link ${i === 0 ? 'active' : ''}" id="tab-fatura-${i+1}" data-bs-toggle="pill" data-bs-target="#content-fatura-${i+1}" type="button">${statusIcon} ${label}</button></li>`;
+                }).join('');
+                document.getElementById('faturas-tabs').innerHTML = tabsHtml;
+                const contentHtml = faturas.map((f, i) => `
+                    <div class="tab-pane fade ${i === 0 ? 'show active' : ''}" id="content-fatura-${i+1}">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="bi bi-receipt"></i> ${somenteFpd ? '1ª Fatura (FPD)' : `Fatura ${i + 1} de 10`}</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold"><i class="bi bi-cash"></i> Valor (R$) *</label>
+                                        <input type="number" step="0.01" class="form-control" id="valor-${i}" value="${f.valor}" placeholder="0,00">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold"><i class="bi bi-calendar"></i> Data de Vencimento *</label>
+                                        <input type="date" class="form-control" id="vencimento-${i}" value="${f.data_vencimento}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold"><i class="bi bi-calendar-check"></i> Data de Pagamento</label>
+                                        <input type="date" class="form-control" id="pagamento-${i}" value="${f.data_pagamento || ''}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold"><i class="bi bi-flag"></i> Status *</label>
+                                        <select class="form-select" id="status-${i}">
+                                            <option value="NAO_PAGO" ${f.status === 'NAO_PAGO' ? 'selected' : ''}>Não Pago</option>
+                                            <option value="PAGO" ${f.status === 'PAGO' ? 'selected' : ''}>Pago</option>
+                                            <option value="AGUARDANDO" ${f.status === 'AGUARDANDO' ? 'selected' : ''}>Aguardando Arrecadação</option>
+                                            <option value="ATRASADO" ${f.status === 'ATRASADO' ? 'selected' : ''}>Atrasado</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold"><i class="bi bi-qr-code"></i> Código PIX (Copia e Cola)</label>
+                                        <textarea class="form-control" id="pix-${i}" rows="3" placeholder="Cole aqui o código PIX para pagamento...">${f.codigo_pix || ''}</textarea>
+                                        <small class="text-muted">Exemplo: 00020126360014br.gov.bcb.pix...</small>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold"><i class="bi bi-upc-scan"></i> Código de Barras</label>
+                                        <input type="text" class="form-control" id="barras-${i}" value="${f.codigo_barras || ''}" placeholder="Digite o código de barras (47 dígitos)" maxlength="60">
+                                        <small class="text-muted">Código numérico da linha digitável</small>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold"><i class="bi bi-link-45deg"></i> Link da Fatura (PDF)</label>
+                                        <input type="url" class="form-control" id="pdf-url-${i}" value="${f.pdf_url || f.arquivo_pdf_url || ''}" placeholder="https://exemplo.com/fatura.pdf">
+                                        ${f.pdf_url || f.arquivo_pdf_url ? `<small class="text-success mt-1 d-block"><i class="bi bi-check-circle"></i> <a href="${f.pdf_url || f.arquivo_pdf_url}" target="_blank">Abrir link atual</a></small>` : '<small class="text-muted mt-1 d-block">Cole o link público da fatura</small>'}
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-primary" id="btn-buscar-auto-${i}" onclick="buscarFaturaAutomatica(${contratoId}, ${f.numero_fatura}, ${i})"><i class="bi bi-cloud-download"></i> Buscar Automaticamente (Nio)</button>
+                                            <button class="btn btn-success" id="btn-salvar-${i}" onclick="salvarFaturaIndividual(${contratoId}, ${f.numero_fatura}, ${f.id || 'null'}, ${i})"><i class="bi bi-save"></i> Salvar Fatura ${i + 1}</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`).join('');
+                document.getElementById('faturas-content').innerHTML = contentHtml;
+                new bootstrap.Modal(document.getElementById('modalFaturas')).show();
+            } catch (error) {
+                console.error('Erro ao abrir modal de faturas:', error);
+                alert(`❌ Erro ao abrir faturas: ${error.message}`);
+            }
+        }
+
+        async function salvarFaturaIndividual(contratoId, numeroFatura, faturaId, indice, silent = false) {
+            const btn = document.getElementById(`btn-salvar-${indice}`);
+            if (btn && btn.disabled) return;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+            }
+            try {
+                const valor = parseFloat(document.getElementById(`valor-${indice}`).value.replace(',', '.'));
+                const vencimento = document.getElementById(`vencimento-${indice}`).value;
+                const pagamento = document.getElementById(`pagamento-${indice}`).value;
+                const status = document.getElementById(`status-${indice}`).value;
+                const codigoPix = document.getElementById(`pix-${indice}`).value;
+                const codigoBarras = document.getElementById(`barras-${indice}`).value;
+                const pdfUrl = document.getElementById(`pdf-url-${indice}`).value.trim();
+                if (valor < 0 || !Number.isFinite(valor)) throw new Error('O valor da fatura não pode ser negativo ou inválido.');
+                if (!vencimento) throw new Error('A data de vencimento é obrigatória!');
+                const payload = {
+                    contrato: contratoId,
+                    numero_fatura: numeroFatura,
+                    valor,
+                    data_vencimento: vencimento,
+                    status
+                };
+                if (pagamento) payload.data_pagamento = pagamento;
+                if (codigoPix) payload.codigo_pix = codigoPix;
+                if (codigoBarras) payload.codigo_barras = codigoBarras;
+                if (pdfUrl) payload.pdf_url = pdfUrl;
+                const url = faturaId && faturaId !== 'null' ? `/api/bonus-m10/faturas/${faturaId}/` : '/api/bonus-m10/faturas/';
+                const method = faturaId && faturaId !== 'null' ? 'PATCH' : 'POST';
+                const response = await fetch(url, {
+                    method,
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const raw = await response.text();
+                const data = raw ? JSON.parse(raw) : {};
+                if (!response.ok) throw new Error(data.error || raw || 'Erro ao salvar fatura');
+                if (!silent) alert(`✅ Fatura ${numeroFatura} salva com sucesso!`);
+                return data;
+            } catch (error) {
+                console.error('Erro ao salvar fatura:', error);
+                if (!silent) alert(`❌ Erro ao salvar fatura: ${error.message}`);
+                throw error;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="bi bi-save"></i> Salvar Fatura ${numeroFatura}`;
+                }
+            }
+        }
+
+        async function salvarFaturas() {
+            const contratoId = document.getElementById('modal-contrato-id').value;
+            if (!contratoId || !window.faturasAtuais) return;
+            try {
+                let salvas = 0;
+                for (let i = 0; i < window.faturasAtuais.length; i++) {
+                    const f = window.faturasAtuais[i];
+                    // Pula faturas com valor zerado ou vazio (não preenchidas)
+                    const valorInput = document.getElementById(`valor-${i}`);
+                    const valor = parseFloat(valorInput?.value || 0);
+                    if (valor <= 0) {
+                        console.log(`Pulando fatura ${f.numero_fatura} (valor zerado ou vazio)`);
+                        continue;
+                    }
+                    await salvarFaturaIndividual(contratoId, f.numero_fatura, f.id, i, true);
+                    salvas++;
+                }
+                if (salvas > 0) {
+                    alert(`✅ ${salvas} fatura(s) salva(s) com sucesso.`);
+                    bootstrap.Modal.getInstance(document.getElementById('modalFaturas')).hide();
+                    carregarDadosM10();
+                    carregarDadosFPD();
+                } else {
+                    alert('⚠️ Nenhuma fatura com valor válido para salvar.');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar todas as faturas', error);
+            }
+        }
+
+        async function buscarFaturaAutomatica(contratoId, numeroFatura, indice) {
+            const btnBuscar = document.getElementById(`btn-buscar-auto-${indice}`);
+            if (!window.contratoAtual || !window.contratoAtual.cpf_cliente) {
+                alert('⚠️ CPF do cliente não cadastrado no contrato. Não é possível buscar automaticamente.');
+                return;
+            }
+            btnBuscar.disabled = true;
+            btnBuscar.innerHTML = '<i class="bi bi-hourglass-split"></i> Buscando na Nio...';
+            try {
+                const vencimentoInput = document.getElementById(`vencimento-${indice}`);
+                const dataVencimentoEsperada = vencimentoInput && vencimentoInput.value ? vencimentoInput.value : null;
+                const url = '/api/bonus-m10/buscar-fatura-nio/';
+                const body = {
+                    cpf: window.contratoAtual.cpf_cliente,
+                    contrato_id: contratoId,
+                    numero_fatura: numeroFatura,
+                    salvar: false
+                };
+                if (dataVencimentoEsperada) body.data_vencimento_esperada = dataVencimentoEsperada;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const raw = await response.text();
+                const data = raw ? JSON.parse(raw) : {};
+                
+                // Se CPF sem dívidas
+                if (data.sem_dividas) {
+                    alert(`ℹ️ ${data.mensagem || 'CPF sem dívidas no momento.'}`);
+                    return;
+                }
+                
+                if (!response.ok || !data.success) throw new Error(data.error || data.detail || 'Erro ao buscar fatura');
+                const dados = data.dados || {};
+
+                const valor = dados.valor || 0;
+                const vencimento = dados.data_vencimento || '';
+                const pix = dados.codigo_pix || '';
+                const barras = dados.codigo_barras || '';
+                const pdfUrl = dados.pdf_url || '';
+                const estaVencida = false; // Playwright já retorna a fatura ativa mais recente
+
+                if (valor) document.getElementById(`valor-${indice}`).value = valor;
+                if (vencimento) document.getElementById(`vencimento-${indice}`).value = vencimento;
+                if (pix) document.getElementById(`pix-${indice}`).value = pix;
+                if (barras) document.getElementById(`barras-${indice}`).value = barras;
+                if (pdfUrl) document.getElementById(`pdf-url-${indice}`).value = pdfUrl;
+
+                alert('✅ Campos preenchidos com os dados da Nio. Revise e salve.');
+            } catch (error) {
+                console.error('Erro ao buscar fatura automaticamente:', error);
+                alert(`❌ ${error.message}\n\nVerifique se:\n- O CPF está correto\n- Existe fatura disponível na Nio`);
+            } finally {
+                btnBuscar.disabled = false;
+                btnBuscar.innerHTML = '<i class="bi bi-cloud-download"></i> Buscar Automaticamente (Nio)';
+            }
+        }
+
+        async function exportarDados() {
+            try {
+                const response = await fetch('/api/bonus-m10/exportar/', { headers: { Authorization: `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Falha ao exportar dados');
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'bonus_m10.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Erro ao exportar', error);
+                alert('Erro ao exportar dados.');
+            }
+        }
+
+        async function popularSafra() {
+            const sel = document.getElementById('filtro-safra');
+            const safraId = sel.value;
+            const opt = sel.selectedOptions[0];
+            const mesRef = opt && opt.getAttribute('data-mes');
+            if (!safraId || !mesRef) {
+                alert('Selecione uma safra primeiro.');
+                return;
+            }
+            if (!confirm('Popular safra ' + mesRef + '? Serão criados ContratoM10 para vendas INSTALADA com data_instalacao neste mês. Pode levar alguns segundos.')) return;
+            try {
+                const res = await fetch('/api/bonus-m10/safras/criar/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ mes_referencia: mesRef })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('Safra populada. Criados: ' + (data.contratos_criados || 0) + ' | Já existiam: ' + (data.contratos_duplicados || 0) + ' | Total na safra: ' + (data.total_contratos_safra || 0));
+                    carregarDadosM10();
+                } else alert(data.error || 'Erro ao popular safra.');
+            } catch (e) {
+                console.error(e);
+                alert('Erro ao popular safra.');
+            }
+        }
+
+        async function buscarFaturasSafra() {
+            const safraId = document.getElementById('filtro-safra').value;
+            
+            if (!safraId) {
+                alert('Selecione uma safra primeiro!');
+                return;
+            }
+            
+            if (!confirm('Deseja buscar automaticamente todas as faturas disponíveis desta safra? Esta operação pode demorar alguns minutos.')) {
+                return;
+            }
+            
+            // Mostrar modal de progresso
+            const modal = document.createElement('div');
+            modal.className = 'modal fade show d-block';
+            modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-cloud-download"></i> Buscando Faturas da Safra</h5>
+                        </div>
+                        <div class="modal-body">
+                            <div class="text-center mb-3">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Carregando...</span>
+                                </div>
+                            </div>
+                            <p class="text-center text-muted">Aguarde enquanto buscamos as faturas no Nio Negocia...</p>
+                            <div id="progress-container"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            try {
+                const response = await fetch('/api/bonus-m10/buscar-faturas-safra/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        safra_id: safraId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Remover modal de progresso
+                document.body.removeChild(modal);
+                
+                if (data.background && data.success) {
+                    alert(data.message || 'Busca iniciada em segundo plano. Atualize a página em alguns minutos para ver os resultados.');
+                    carregarDadosM10();
+                    return;
+                }
+                
+                if (response.ok && data.success) {
+                    const resumo = data.resumo;
+                    
+                    // Mostrar resultado
+                    const resultModal = document.createElement('div');
+                    resultModal.className = 'modal fade show d-block';
+                    resultModal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                    resultModal.innerHTML = `
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header bg-success text-white">
+                                    <h5 class="modal-title"><i class="bi bi-check-circle"></i> Busca Concluída</h5>
+                                    <button type="button" class="btn-close btn-close-white" onclick="this.closest('.modal').remove()"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="row text-center mb-4">
+                                        <div class="col-md-3">
+                                            <div class="card bg-light">
+                                                <div class="card-body">
+                                                    <h3 class="text-primary">${resumo.total_contratos}</h3>
+                                                    <small class="text-muted">Contratos</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-success text-white">
+                                                <div class="card-body">
+                                                    <h3>${resumo.sucesso}</h3>
+                                                    <small>Sucesso</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-warning">
+                                                <div class="card-body">
+                                                    <h3>${resumo.nao_disponiveis}</h3>
+                                                    <small>Não Disponíveis</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card bg-danger text-white">
+                                                <div class="card-body">
+                                                    <h3>${resumo.erros}</h3>
+                                                    <small>Erros</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <h6>Detalhes:</h6>
+                                        <div style="max-height: 300px; overflow-y: auto;">
+                                            <ul class="list-group">
+                                                ${resumo.detalhes.slice(0, 50).map(d => `
+                                                    <li class="list-group-item ${
+                                                        d.status === 'atualizado' || d.status === 'sucesso' || d.status === 'sem_alteracao' ? 'list-group-item-success' :
+                                                        d.status === 'nao_disponivel' || d.status === 'sem_dividas_nio' || d.status === 'sem_match' || d.status === 'erro_400_nio' ? 'list-group-item-warning' :
+                                                        'list-group-item-danger'
+                                                    }">
+                                                        <strong>${d.contrato}</strong>
+                                                        ${d.fatura ? ` - Fatura ${d.fatura}` : ''}:
+                                                        ${d.mensagem || d.status}
+                                                        ${d.valor ? ` (R$ ${d.valor.toFixed(2)})` : ''}
+                                                    </li>
+                                                `).join('')}
+                                                ${resumo.detalhes.length > 50 ? `<li class="list-group-item">... e mais ${resumo.detalhes.length - 50} registros</li>` : ''}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-primary" onclick="this.closest('.modal').remove(); carregarDadosM10();">OK</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(resultModal);
+                } else {
+                    alert(data.error || 'Erro ao buscar faturas da safra.');
+                }
+                
+            } catch (error) {
+                document.body.removeChild(modal);
+                console.error('Erro:', error);
+                alert('Erro ao buscar faturas da safra.');
+            }
+        }
+
+        async function verificarPermissao() { return true; }
+
+        // =============================================================================
+        // FUNÇÕES DA ABA DE ANÁLISE DE BUSCAS
+        // =============================================================================
+
+        let chartPerformance = null;
+
+        async function carregarAnalise() {
+            const periodo = document.getElementById('filtro-periodo-analise').value;
+            const tipo = document.getElementById('filtro-tipo-busca').value;
+            const safra = document.getElementById('filtro-safra-analise').value;
+            
+            const params = new URLSearchParams({ dias: periodo });
+            if (tipo) params.append('tipo_busca', tipo);
+            if (safra) params.append('safra', safra);
+            
+            try {
+                const res = await fetch(`/api/crm/analise-buscas/?${params}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const msg = res.status === 401
+                        ? 'Sessão expirada. Renove o token ou faça login novamente.'
+                        : (data.detail || 'Erro ao carregar dados de análise.');
+                    alert(msg);
+                    return;
+                }
+                const stats = data.estatisticas_gerais || {};
+                const perf = data.performance_diaria || [];
+                const recentes = data.execucoes_recentes || [];
+                const problemas = data.faturas_problema || [];
+                const porTipo = data.por_tipo_busca || [];
+                const lentas = data.faturas_lentas || [];
+
+                atualizarCardsAnalise(stats);
+                atualizarGraficoPerformance(perf);
+                atualizarTabelaExecucoes(recentes);
+                atualizarTabelaProblemas(problemas);
+                atualizarTabelaPorTipo(porTipo);
+                atualizarTabelaLentas(lentas);
+            } catch (error) {
+                console.error('Erro ao carregar análise:', error);
+                alert('Erro ao carregar dados de análise.');
+            }
+        }
+
+        function atualizarCardsAnalise(stats) {
+            if (!stats || typeof stats !== 'object') return;
+            const el = (id) => document.getElementById(id);
+            if (el('analise-total-buscas')) el('analise-total-buscas').textContent = stats.total_execucoes ?? 0;
+            if (el('analise-periodo')) el('analise-periodo').textContent = `últimos ${stats.periodo_dias ?? 30} dias`;
+            if (el('analise-taxa-sucesso')) el('analise-taxa-sucesso').textContent = `${stats.taxa_sucesso ?? 0}%`;
+            if (el('analise-faturas-sucesso')) el('analise-faturas-sucesso').textContent = `${stats.total_sucesso ?? 0} faturas`;
+            const tempoMedio = stats.tempo_medio != null ? parseFloat(stats.tempo_medio).toFixed(3) : '0';
+            if (el('analise-tempo-medio')) el('analise-tempo-medio').textContent = `${tempoMedio}s`;
+            if (el('analise-com-erro')) el('analise-com-erro').textContent = stats.total_erros ?? 0;
+        }
+
+        function atualizarGraficoPerformance(performanceDiaria) {
+            performanceDiaria = performanceDiaria || [];
+            const canvas = document.getElementById('chartPerformance');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            
+            // Destruir gráfico anterior se existir
+            if (chartPerformance) {
+                chartPerformance.destroy();
+            }
+            
+            const labels = performanceDiaria.map(d => {
+                const date = new Date(d.dia);
+                return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            });
+            
+            chartPerformance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Sucesso',
+                            data: performanceDiaria.map(d => d.sucesso || 0),
+                            borderColor: '#28a745',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Erros',
+                            data: performanceDiaria.map(d => d.erros || 0),
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: (context) => {
+                                    const idx = context.dataIndex;
+                                    const tempo = performanceDiaria[idx]?.tempo_total;
+                                    return tempo ? `Tempo: ${parseFloat(tempo).toFixed(1)}s` : '';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function atualizarTabelaExecucoes(execucoes) {
+            const tbody = document.getElementById('tbody-execucoes');
+            tbody.innerHTML = '';
+            
+            if (!execucoes || execucoes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Nenhuma execução encontrada</td></tr>';
+                return;
+            }
+            
+            execucoes.forEach(exec => {
+                const data = new Date(exec.inicio_em);
+                const dataFormatada = data.toLocaleString('pt-BR');
+                const duracao = exec.duracao_segundos ? parseFloat(exec.duracao_segundos).toFixed(1) : '-';
+                const tipoLabel = {
+                    'AUTOMATICA': '<span class="badge bg-primary">Automática</span>',
+                    'SAFRA': '<span class="badge bg-info">Safra</span>',
+                    'INDIVIDUAL': '<span class="badge bg-secondary">Individual</span>',
+                    'RETRY': '<span class="badge bg-warning">Retry</span>'
+                }[exec.tipo_busca] || exec.tipo_busca;
+                
+                const taxaSucesso = exec.total_faturas > 0 
+                    ? ((exec.faturas_sucesso / exec.total_faturas) * 100).toFixed(0)
+                    : 0;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><small>${dataFormatada}</small></td>
+                        <td>${tipoLabel}</td>
+                        <td>${exec.total_faturas || 0}</td>
+                        <td><span class="badge bg-success">${exec.faturas_sucesso || 0}</span> (${taxaSucesso}%)</td>
+                        <td>${duracao}s</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function atualizarTabelaProblemas(problemas) {
+            const tbody = document.getElementById('tbody-problemas');
+            const badge = document.getElementById('badge-problemas');
+            
+            badge.textContent = problemas.length;
+            tbody.innerHTML = '';
+            
+            if (!problemas || problemas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-success">✓ Nenhuma fatura com problema</td></tr>';
+                return;
+            }
+            
+            problemas.slice(0, 20).forEach(fatura => {
+                const erro = fatura.erro_busca || 'Erro desconhecido';
+                const erroTruncado = erro.length > 50 ? erro.substring(0, 50) + '...' : erro;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><small>${fatura.contrato__numero_contrato}</small></td>
+                        <td class="text-center">${fatura.numero_fatura}</td>
+                        <td class="text-center"><span class="badge bg-danger">${fatura.tentativas_busca}</span></td>
+                        <td><small class="text-danger" title="${erro}">${erroTruncado}</small></td>
+                    </tr>
+                `;
+            });
+            
+            if (problemas.length > 20) {
+                tbody.innerHTML += `
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">
+                            <small>... e mais ${problemas.length - 20} faturas com problema</small>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function atualizarTabelaPorTipo(porTipo) {
+            const tbody = document.getElementById('tbody-por-tipo');
+            tbody.innerHTML = '';
+            
+            if (!porTipo || porTipo.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum dado disponível</td></tr>';
+                return;
+            }
+            
+            porTipo.forEach(item => {
+                const tipoNome = {
+                    'AUTOMATICA': 'Automática (Agendada)',
+                    'SAFRA': 'Por Safra',
+                    'INDIVIDUAL': 'Individual',
+                    'RETRY': 'Retry'
+                }[item.tipo_busca] || item.tipo_busca;
+                
+                const tempoMedio = item.tempo_medio ? parseFloat(item.tempo_medio).toFixed(2) : '-';
+                const taxaSucesso = item.faturas > 0 
+                    ? ((item.sucesso / item.faturas) * 100).toFixed(1)
+                    : 0;
+                
+                const corTaxa = taxaSucesso >= 80 ? 'success' : (taxaSucesso >= 50 ? 'warning' : 'danger');
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${tipoNome}</strong></td>
+                        <td>${item.quantidade || 0}</td>
+                        <td>${item.faturas || 0}</td>
+                        <td class="text-success">${item.sucesso || 0}</td>
+                        <td class="text-danger">${item.erros || 0}</td>
+                        <td>${tempoMedio}s</td>
+                        <td><span class="badge bg-${corTaxa}">${taxaSucesso}%</span></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function atualizarTabelaLentas(lentas) {
+            const tbody = document.getElementById('tbody-lentas');
+            tbody.innerHTML = '';
+            
+            if (!lentas || lentas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum dado disponível</td></tr>';
+                return;
+            }
+            
+            lentas.forEach((fatura, idx) => {
+                const tempo = fatura.tempo_busca_segundos ? parseFloat(fatura.tempo_busca_segundos).toFixed(3) : '-';
+                const statusClass = {
+                    'SUCESSO': 'success',
+                    'ERRO': 'danger',
+                    'PENDENTE': 'warning'
+                }[fatura.status_busca] || 'secondary';
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${fatura.contrato__numero_contrato}</td>
+                        <td class="text-center">${fatura.numero_fatura}</td>
+                        <td><strong>${tempo}s</strong></td>
+                        <td><span class="badge bg-${statusClass}">${fatura.status_busca}</span></td>
+                        <td class="text-center">${fatura.tentativas_busca}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Inicializar aba de análise ao trocar
+        document.getElementById('analise-tab').addEventListener('shown.bs.tab', function() {
+            carregarAnalise();
+        });
+
+        // Botão para atualizar manualmente
+        document.querySelector('#analise-content .btn-primary').addEventListener('click', function() {
+            carregarAnalise();
+        });
+
+        // =============================================================================
+        // FIM DAS FUNÇÕES DA ABA DE ANÁLISE
+        // =============================================================================
+
+        (async () => {
+            await carregarSafras();
+            await carregarVendedores();
+            await carregarDadosFPD();
+        })();
+    </script>
+{% endblock %}

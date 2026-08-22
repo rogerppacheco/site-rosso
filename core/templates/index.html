@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}{{ SITE_BRAND }} - Internet Fibra Ótica{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Ajustes Locais Específicos da Landing Page */
+        
+        /* Hero Section */
+        .hero-section {
+            padding-top: 120px;
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            background-color: var(--bg-primary);
+        }
+
+        .hero-section h1,
+        .hero-section p,
+        .planos-section h2,
+        .depoimentos-section h2 {
+            color: var(--text-main);
+        }
+        
+        @media (max-width: 768px) {
+            .hero-section {
+                background-position: center right; 
+                text-align: center;
+                padding-top: 100px;
+                min-height: 60vh;
+            }
+            .hero-content h1 { font-size: 2.2rem; } 
+            .hero-content p { font-size: 1.1rem; }
+        }
+
+        /* Cards de Planos */
+        .card-item {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            justify-content: space-between;
+            border-top: 5px solid var(--accent-primary);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--card-shadow);
+        }
+
+        /* Grid de Cards */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+        
+        /* Modal Mobile */
+        @media (max-width: 576px) {
+            .modal-overlay .modal-content {
+                padding: 1.5rem;
+                width: 90%;
+                margin: 0 10px;
+            }
+            .hero-content { padding: 0 15px; }
+        }
+
+        .landing-section-alt {
+            background-color: var(--bg-secondary);
+        }
+
+        .landing-footer {
+            background: var(--bg-secondary);
+            color: var(--text-main);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .landing-footer a {
+            color: var(--accent-color);
+        }
+
+        .modal-overlay .modal-content {
+            background: var(--bg-surface);
+            color: var(--text-main);
+        }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="#inicio" class="menu-link">Início</a></li>
+    <li><a href="#planos" class="menu-link">Planos</a></li>
+    <li><a href="#depoimentos" class="menu-link">Depoimentos</a></li>
+    <li><a href="#contato" class="menu-link">Contato</a></li>
+    <li>
+        <a href="#" class="nav-button btn-login-trigger" id="btnOpenLogin">Área Interna</a>
+    </li>
+{% endblock %}
+
+{% block content %}
+<div class="modal-overlay" id="loginModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: var(--bg-surface); padding: 2rem; border-radius: 12px; max-width: 400px; width: 100%;">
+            <div style="text-align: center; margin-bottom: 25px;">
+                <h3 style="color: var(--cor-texto); font-weight: 800;">Acesso Restrito</h3>
+                <p style="color: var(--cor-texto-suave); font-size: 0.9rem;">Digite suas credenciais para continuar</p>
+            </div>
+
+            <form id="loginForm">
+                {% csrf_token %}
+                <div class="form-group mb-3">
+                    <label for="username" class="form-label">Usuário</label>
+                    <input type="text" id="username" name="username" class="form-control" required autocapitalize="none">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="password" class="form-label">Senha</label>
+                    <input type="password" id="password" name="password" class="form-control" required>
+                </div>
+                
+                <div style="text-align: right; margin-bottom: 15px;">
+                    <a href="#" id="linkEsqueciSenha" style="font-size: 0.85rem; color: #6c757d; text-decoration: none;">Esqueceu a senha?</a>
+                </div>
+
+                <div id="error-message" style="display: none; background-color: #ffe6e6; color: var(--cor-perigo); padding: 10px; border-radius: 6px; margin: 15px 0; font-size: 0.9rem; text-align: center;"></div>
+
+                <div class="modal-actions d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg">Entrar</button>
+                    <button type="button" class="btn btn-light" id="btnCancelLogin">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modalEsqueciSenha" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: var(--bg-surface); padding: 2rem; border-radius: 12px; max-width: 400px; width: 100%;">
+            <div style="text-align: center; margin-bottom: 25px;">
+                <h3 style="color: var(--cor-texto); font-weight: 800;">Recuperar Senha</h3>
+                <p style="color: var(--cor-texto-suave); font-size: 0.9rem;">Informe seus dados para receber uma senha provisória no WhatsApp.</p>
+            </div>
+            <form id="formEsqueciSenha">
+                <div class="form-group mb-3">
+                    <label for="esqueciCpf" class="form-label">Seu CPF (apenas números)</label>
+                    <input type="text" id="esqueciCpf" name="cpf" class="form-control" placeholder="Ex: 12345678900" required>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="esqueciZap" class="form-label">Seu WhatsApp (com DDD)</label>
+                    <input type="text" id="esqueciZap" name="whatsapp" class="form-control" placeholder="Ex: 31999999999" required>
+                </div>
+                <div class="modal-actions d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg">Enviar Senha Provisória</button>
+                    <button type="button" class="btn btn-light" onclick="document.getElementById('modalEsqueciSenha').style.display='none'; document.getElementById('loginModalOverlay').style.display='flex';">Voltar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modalTrocaSenha" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2050; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: var(--bg-surface); padding: 2rem; border-radius: 12px; max-width: 400px; width: 100%; border: 2px solid #dc3545;">
+            <div style="text-align: center; margin-bottom: 25px;">
+                <h3 style="color: #dc3545; font-weight: 800;"><i class="bi bi-shield-lock-fill"></i> Troca Obrigatória</h3>
+                <p style="color: var(--cor-texto-suave); font-size: 0.9rem;">Por segurança, você deve definir uma nova senha para continuar acessando o sistema.</p>
+            </div>
+            
+            <form id="formTrocaSenha">
+                <div class="form-group mb-3">
+                    <label for="novaSenhaInput" class="form-label">Nova Senha</label>
+                    <input type="password" id="novaSenhaInput" class="form-control" required minlength="6" placeholder="Mínimo 6 caracteres">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="confirmaSenhaInput" class="form-label">Confirme a Nova Senha</label>
+                    <input type="password" id="confirmaSenhaInput" class="form-control" required minlength="6" placeholder="Repita a senha">
+                </div>
+                <div class="modal-actions d-grid gap-2">
+                    <button type="submit" class="btn btn-danger btn-lg">Salvar Nova Senha</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <main>
+        <section id="inicio" class="hero-section">
+            <div class="container hero-content">
+                <div class="row">
+                    <div class="col-lg-6">
+                        <h1 class="display-4 fw-bold mb-3">Internet Fibra Ótica de Alta Velocidade</h1>
+                        <p class="lead mb-4">Conecte-se com a melhor internet da região! Estabilidade e velocidade para sua casa e empresa.</p>
+                        <a href="#planos" class="btn btn-primary btn-lg rounded-pill px-5">Conheça Nossos Planos</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="planos" class="planos-section py-5">
+            <div class="container section-container">
+                <h2 class="text-center mb-5">Nossos Planos</h2>
+                <div class="cards-grid">
+                    <div class="card-item card-modern">
+                        <div>
+                            <h3 class="text-primary">500 Mbps</h3>
+                            <p>Perfeito para múltiplos dispositivos e jogos online.</p>
+                        </div>
+                        <a href="https://wa.me/31994588810?text=Quero%20o%20plano%20de%20500%20Mbps" target="_blank" class="btn btn-primary rounded-pill w-100 mt-3">Contratar</a>
+                    </div>
+                    <div class="card-item card-modern">
+                        <div>
+                            <h3 class="text-primary">700 Mbps</h3>
+                            <p>Ótimo para famílias grandes e uso profissional.</p>
+                        </div>
+                        <a href="https://wa.me/31994588810?text=Quero%20o%20plano%20de%20700%20Mbps" target="_blank" class="btn btn-primary rounded-pill w-100 mt-3">Contratar</a>
+                    </div>
+                    <div class="card-item card-modern">
+                        <div>
+                            <h3 class="text-primary">1 Gbps</h3>
+                            <p>Máxima velocidade para demandas extremas.</p>
+                        </div>
+                        <a href="https://wa.me/31994588810?text=Quero%20o%20plano%20de%201%20Gbps" target="_blank" class="btn btn-primary rounded-pill w-100 mt-3">Contratar</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="depoimentos" class="depoimentos-section py-5 landing-section-alt">
+            <div class="container section-container">
+                <h2 class="text-center mb-5">O que nossos clientes dizem</h2>
+                <div class="cards-grid">
+                    <div class="card-item card-modern" style="border-top: none; border-left: 5px solid var(--color-success);">
+                        <p class="fst-italic">"A melhor internet que já tive! Rápida e estável, nunca me deixa na mão."</p>
+                        <h4 class="mt-auto fs-6 fw-bold">- João Silva</h4>
+                    </div>
+                    <div class="card-item card-modern" style="border-top: none; border-left: 5px solid var(--color-success);">
+                        <p class="fst-italic">"Atendimento excelente e a instalação foi super rápida. Recomendo demais!"</p>
+                        <h4 class="mt-auto fs-6 fw-bold">- Maria Oliveira</h4>
+                    </div>
+                    <div class="card-item card-modern" style="border-top: none; border-left: 5px solid var(--color-success);">
+                        <p class="fst-italic">"Finalmente uma internet confiável para trabalhar de casa. Vale cada centavo."</p>
+                        <h4 class="mt-auto fs-6 fw-bold">- Carlos Souza</h4>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+{% endblock %}
+
+{% block footer %}
+<footer id="contato" class="landing-footer py-5 text-center">
+    <div class="container">
+        <p class="h4 mb-3">{{ SITE_BRAND }} - Internet Fibra Ótica</p>
+        {% if SITE_CONTACT_PHONE %}
+        <p class="mb-2">Contato: {{ SITE_CONTACT_PHONE }}</p>
+        {% endif %}
+        {% if SITE_CONTACT_EMAIL %}
+        <p class="mb-4">E-mail: <a href="mailto:{{ SITE_CONTACT_EMAIL }}">{{ SITE_CONTACT_EMAIL }}</a></p>
+        {% endif %}
+        <p class="small mb-0" style="color: var(--text-muted);">
+            <a href="#" class="text-decoration-none" style="color: var(--text-muted);">Política de Privacidade</a>
+            |
+            <a href="#" class="text-decoration-none" style="color: var(--text-muted);">Termos de Uso</a>
+        </p>
+    </div>
+</footer>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=5.0"></script>
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Fecha o menu mobile ao clicar em um link de navegação
+            const menuLinks = document.querySelectorAll('.menu-link');
+            const nav = document.getElementById('main-nav');
+            
+            menuLinks.forEach(link => {
+                link.addEventListener('click', () => {
+                    if(nav && nav.classList.contains('active')) {
+                        nav.classList.remove('active');
+                    }
+                });
+            });
+        });
+    </script>
+{% endblock %}

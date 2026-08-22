@@ -1,0 +1,11 @@
+# Config do serviço Railway "scheduler" (não usar no serviço web).
+# No painel do servi scheduler: Settings → Config-as-code → /railway.scheduler.toml
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.scheduler"
+
+[deploy]
+startCommand = "python manage.py run_scheduler"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

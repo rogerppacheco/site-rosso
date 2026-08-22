@@ -1,0 +1,129 @@
+{# Modal: exportar acionamentos (pedidos de ajuda ao GC) #}
+<div class="modal fade" id="modal-export-ajuda-gc" tabindex="-1" aria-labelledby="modal-export-ajuda-gc-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-export-ajuda-gc-title">
+                    <i class="bi bi-file-earmark-excel me-1"></i> Exportar acionamentos (ajuda GC)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">Baixa planilha Excel com os pedidos de ajuda enviados ao GC no período.</p>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold" for="export-ajuda-gc-data-inicio">Data início</label>
+                        <input type="date" class="form-control form-control-sm" id="export-ajuda-gc-data-inicio">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold" for="export-ajuda-gc-data-fim">Data fim</label>
+                        <input type="date" class="form-control form-control-sm" id="export-ajuda-gc-data-fim">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold" for="export-ajuda-gc-origem">Origem</label>
+                        <select class="form-select form-select-sm" id="export-ajuda-gc-origem">
+                            <option value="">Todas (Esteira + Auditoria)</option>
+                            <option value="esteira">Somente Esteira</option>
+                            <option value="auditoria">Somente Auditoria</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="export-ajuda-gc-erro" class="text-danger small mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-baixar-export-ajuda-gc" onclick="baixarExportAcionamentosAjudaGc()">
+                    <i class="bi bi-download me-1"></i> Baixar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    let modalExportAjudaGc = null;
+
+    function ensureModalExportOnBody() {
+        const el = document.getElementById('modal-export-ajuda-gc');
+        if (!el) return null;
+        if (el.parentElement !== document.body) {
+            document.body.appendChild(el);
+            modalExportAjudaGc = null;
+        }
+        return el;
+    }
+
+    window.abrirModalExportAcionamentosAjudaGc = function (origemPadrao) {
+        const el = ensureModalExportOnBody();
+        if (!el) return;
+        if (!modalExportAjudaGc) modalExportAjudaGc = new bootstrap.Modal(el);
+        const hoje = new Date().toISOString().slice(0, 10);
+        document.getElementById('export-ajuda-gc-data-inicio').value = hoje;
+        document.getElementById('export-ajuda-gc-data-fim').value = hoje;
+        const sel = document.getElementById('export-ajuda-gc-origem');
+        if (sel) sel.value = origemPadrao || '';
+        const err = document.getElementById('export-ajuda-gc-erro');
+        if (err) { err.style.display = 'none'; err.textContent = ''; }
+        modalExportAjudaGc.show();
+    };
+
+    window.baixarExportAcionamentosAjudaGc = async function () {
+        const di = (document.getElementById('export-ajuda-gc-data-inicio').value || '').trim();
+        const df = (document.getElementById('export-ajuda-gc-data-fim').value || '').trim();
+        const origem = (document.getElementById('export-ajuda-gc-origem').value || '').trim();
+        const errEl = document.getElementById('export-ajuda-gc-erro');
+        const btn = document.getElementById('btn-baixar-export-ajuda-gc');
+        if (!di || !df) {
+            if (errEl) { errEl.textContent = 'Informe data início e fim.'; errEl.style.display = 'block'; }
+            return;
+        }
+        const qs = new URLSearchParams({ data_inicio: di, data_fim: df });
+        if (origem) qs.set('origem', origem);
+        const token = localStorage.getItem('accessToken');
+        const url = '/api/crm/pedido-ajuda-gc/exportar/?' + qs.toString();
+        const label = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Baixando…';
+        }
+        try {
+            const res = await fetch(url, {
+                headers: token ? { Authorization: 'Bearer ' + token } : {}
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(function () { return {}; });
+                throw new Error(data.detail || 'Erro ao baixar relatório.');
+            }
+            const blob = await res.blob();
+            const cd = res.headers.get('Content-Disposition') || '';
+            let filename = 'acionamentos_ajuda_gc_' + di + '_' + df + '.xlsx';
+            const m = /filename="?([^";]+)"?/i.exec(cd);
+            if (m && m[1]) filename = m[1];
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            if (modalExportAjudaGc) modalExportAjudaGc.hide();
+        } catch (e) {
+            if (errEl) {
+                errEl.textContent = e.message || 'Falha ao exportar.';
+                errEl.style.display = 'block';
+            } else {
+                alert(e.message || 'Falha ao exportar.');
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = label;
+            }
+        }
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ensureModalExportOnBody);
+    } else {
+        ensureModalExportOnBody();
+    }
+})();
+</script>

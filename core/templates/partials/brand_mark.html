@@ -1,0 +1,6 @@
+{% load static %}
+{% if SITE_TEXT_LOGO %}
+<span class="brand-text-logo">{{ SITE_BRAND }}</span>
+{% else %}
+<img src="{% static 'logo.png' %}" alt="{{ SITE_BRAND }}" class="logo logo-img">
+{% endif %}

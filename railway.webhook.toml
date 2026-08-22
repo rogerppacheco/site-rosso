@@ -1,0 +1,9 @@
+# Serviço Railway dedicado webhooks WhatsApp. Não usar no serviço web.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.webhook"
+
+[deploy]
+startCommand = "/app/scripts/start_webhook.sh"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

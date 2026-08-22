@@ -1,0 +1,22 @@
+# Evita upload/build gigante no Railway (railway up / Docker COPY)
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.github/
+.vscode/
+.cursor/
+*.sql
+*.dump
+backups/
+downloads/
+media/
+site-record.git/
+.env
+.playwright_state.json
+.playwright_whatsapp_profile/
+.playwright_whatsapp_state.json
+.playwright_google_profile/
+node_modules/
+*.zip

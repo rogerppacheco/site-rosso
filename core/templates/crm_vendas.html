@@ -1,0 +1,2989 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}CRM de Vendas - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<link href="https://cdn.datatables.net/fixedheader/3.3.2/css/fixedHeader.bootstrap5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+input[type="text"]:not(#input-email), textarea { text-transform: uppercase; }
+        #input-email { text-transform: none; }
+        .filter-bar { background: var(--bg-card); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+        .filter-item { flex: 1; min-width: 140px; }
+        .contador-instaladas { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; color: var(--text-secondary); }
+        .contador-instaladas strong { color: var(--accent-primary); }
+        .status-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 12px; font-weight: 600; letter-spacing: 0.5px; display: inline-block; min-width: 80px; text-align: center; }
+        
+        .btn-origem { height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: bold; transition: all 0.3s ease; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-width: 2px; }
+        .btn-origem:hover { transform: translateY(-5px); box-shadow: 0 8px 12px rgba(0,0,0,0.15); }
+        .btn-origem i { font-size: 3.5rem; margin-bottom: 15px; }
+
+        .nav-tabs .nav-link { color: var(--cor-texto-suave); font-weight: 600; border: none; border-bottom: 3px solid transparent; }
+        .nav-tabs .nav-link.active { color: var(--cor-primaria); border-bottom: 3px solid var(--cor-primaria); background: transparent; }
+        
+        .nav-pills .nav-link { color: var(--text-secondary); background-color: var(--bg-secondary); border: 1px solid var(--border-color); margin-right: 5px; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
+        .nav-pills .nav-link.active { background-color: var(--accent-primary); color: var(--text-on-accent); border-color: var(--accent-primary); }
+        .nav-pills .nav-link:hover:not(.active) { background-color: var(--bg-card); }
+        .badge-contador { font-size: 0.75rem; background-color: rgba(0,0,0,0.1); color: inherit; padding: 2px 6px; border-radius: 10px; min-width: 25px; text-align: center; }
+
+        .dash-card { border-radius: 12px; border: none; color: white; padding: 20px; height: 100%; position: relative; overflow: hidden; transition: transform 0.2s; cursor: pointer; }
+        .dash-card:hover { transform: translateY(-3px); }
+        .dash-card h3 { font-size: 2.5rem; font-weight: bold; margin: 0; }
+        .dash-card p { font-size: 0.9rem; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .dash-card .icon-bg { position: absolute; right: -10px; bottom: -10px; font-size: 5rem; opacity: 0.2; transform: rotate(-15deg); }
+        .bg-gradient-primary { background: linear-gradient(45deg, #4e73df, #224abe); }
+        .bg-gradient-success { background: linear-gradient(45deg, #1cc88a, #13855c); }
+        .bg-gradient-info { background: linear-gradient(45deg, #36b9cc, #258391); }
+        .bg-gradient-warning { background: linear-gradient(45deg, #f6c23e, #dda20a); color: #fff; }
+
+        /* Card diretoria: contraste legível no gradiente azul */
+        .receita-operadora-card .receita-operadora-label {
+            font-size: 0.78rem;
+            letter-spacing: 0.06em;
+            color: rgba(255, 255, 255, 0.92);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        }
+        .receita-operadora-card .receita-operadora-valor {
+            color: #fff !important;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+            font-size: clamp(1.35rem, 4vw, 1.85rem);
+        }
+        .receita-operadora-card .receita-operadora-proj {
+            color: rgba(255, 255, 255, 0.98);
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+        
+        thead input { width: 100%; padding: 3px; box-sizing: border-box; font-size: 0.85rem; border: 1px solid #ccc; border-radius: 4px; }
+        
+        .input-loading { background: url('https://i.gifer.com/ZZ5H.gif') no-repeat right 10px center; background-size: 20px; }
+
+        @media (max-width: 576px) { .header-controls { flex-direction: column; align-items: flex-start; gap: 10px; } }
+
+        /* Record Vendas: layout útil em telas pequenas */
+        main.area-interna-section.crm-vendas-page {
+            align-items: flex-start !important;
+            justify-content: flex-start !important;
+            width: 100%;
+            padding-left: clamp(0.65rem, 2vw, 1.25rem);
+            padding-right: clamp(0.65rem, 2vw, 1.25rem);
+        }
+        main.crm-vendas-page .system-container {
+            width: 100%;
+            max-width: min(1700px, 100%) !important;
+            min-width: 0;
+            padding: 0.9rem 1rem !important;
+        }
+        .crm-vendas-toolbar-acoes {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.35rem;
+            justify-content: flex-end;
+        }
+        .crm-vendas-toolbar-acoes .btn {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            padding: 0.4rem 0.65rem;
+            border-radius: 8px;
+            box-shadow: none;
+        }
+        .crm-vendas-scroll-top {
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 12px;
+            margin-bottom: 4px;
+            scrollbar-width: thin;
+        }
+        .crm-vendas-scroll-top::-webkit-scrollbar { height: 6px; }
+        .crm-vendas-scroll-top-inner { height: 1px; }
+        .crm-vendas-table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .crm-painel-filtros-shell {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-card);
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+        }
+        .crm-painel-filtros-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            padding: 0.4rem 0.6rem;
+            background: var(--bg-secondary);
+        }
+        .crm-vendas-page .bg-white { background-color: var(--bg-card) !important; }
+        .crm-vendas-page .text-dark { color: var(--text-primary) !important; }
+        .crm-painel-filtros-corpo .filter-bar {
+            padding: 0.65rem !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+        }
+        .crm-painel-filtros-corpo .filter-item {
+            min-width: min(140px, 100%);
+        }
+        @media (max-width: 767.98px) {
+            .crm-vendas-scroll-top { display: none !important; }
+            #abas-status.nav-pills {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                gap: 0.35rem;
+                padding-bottom: 4px;
+                margin-bottom: 0.5rem !important;
+            }
+            #abas-status.nav-pills .nav-item { flex: 0 0 auto; }
+            #abas-status.nav-pills .nav-link {
+                font-size: 0.78rem;
+                padding: 0.35rem 0.55rem;
+                white-space: nowrap;
+            }
+            .contador-instaladas {
+                padding: 0.45rem 0.65rem !important;
+                font-size: 0.78rem !important;
+            }
+        }
+        
+        /* Correção para modal não aparecer */
+        #modal-origem-venda {
+            z-index: 1055 !important;
+        }
+        
+        #modal-origem-venda.show {
+            display: block !important;
+        }
+        
+        #modal-origem-venda .modal-dialog {
+            z-index: 1056 !important;
+        }
+        
+        .modal-backdrop {
+            z-index: 1050 !important;
+        }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="area-interna-section crm-vendas-page">
+        <div class="card-modern system-container" style="max-width: 1700px;"> 
+            <div class="d-flex justify-content-between align-items-start align-items-md-center mb-3 mb-md-4 flex-wrap gap-3 header-controls">
+                <div class="flex-shrink-0">
+                    <h1 style="font-size: 1.75rem; margin: 0;">Vendas</h1>
+                    <p class="text-muted mb-0 small">Gerencie vendas e acompanhe o status.</p>
+                </div>
+                <div class="crm-vendas-toolbar-acoes ms-md-auto">
+                    <button type="button" id="btn-exportar-excel-filtro" class="btn btn-sm btn-outline-success d-none" onclick="exportarExcelFiltrado()" title="Exportar vendas do filtro (vendas do mês + instaladas no mês)">
+                        <i class="bi bi-file-earmark-spreadsheet"></i><span class="d-none d-md-inline ms-1">Excel filtro</span>
+                    </button>
+                    <button type="button" id="btn-exportar-excel" class="btn btn-sm btn-success d-none" onclick="exportarExcelDiretoria()" title="Exportar todas as vendas ativas (base completa, ignora filtros)">
+                        <i class="bi bi-file-earmark-excel-fill"></i><span class="d-none d-md-inline ms-1">Baixar Base</span>
+                    </button>
+                    <button type="button" id="btn-classificar-mei-historico" class="btn btn-sm btn-outline-primary d-none" onclick="classificarMeiHistorico()" title="Classificar MEI/NMEI de todos os cadastros com CNPJ ainda sem classificação">
+                        <i class="bi bi-building-check"></i><span class="d-none d-md-inline ms-1">Classificar CNPJs</span>
+                    </button>
+                    <button type="button" id="btn-corrigir-razao-cnpj" class="btn btn-sm btn-outline-secondary d-none" onclick="corrigirRazaoSocialHistorico()" title="Atualizar razão social dos clientes CNPJ conforme a Receita Federal">
+                        <i class="bi bi-building"></i><span class="d-none d-md-inline ms-1">Corrigir razões CNPJ</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-success" onclick="abrirModalBoasVindas()" title="Enviar mensagem de boas-vindas para clientes instalados">
+                        <i class="bi bi-chat-heart"></i><span class="d-none d-md-inline ms-1">Boas Vindas</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="abrirModalOrigem()" title="Registrar nova venda">
+                        <i class="bi bi-plus-lg"></i><span class="d-none d-sm-inline ms-1">Nova Venda</span>
+                    </button>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs mb-3 flex-nowrap overflow-auto" id="abas-navegacao" style="gap: 0.25rem;">
+                <li class="nav-item flex-shrink-0"><a class="nav-link active" href="#" data-view="minhas_vendas" onclick="alterarAba('minhas_vendas', this); return false;">Minhas Vendas</a></li>
+                <li class="nav-item d-none flex-shrink-0" id="aba-equipe"><a class="nav-link" href="#" data-view="equipe" onclick="alterarAba('equipe', this); return false;">Visão de Equipe</a></li>
+                <li class="nav-item flex-shrink-0"><a class="nav-link" href="#" data-view="dashboard" onclick="alterarAba('dashboard', this); return false;">Dashboard</a></li>
+            </ul>
+
+            <div id="conteudo-lista">
+                <div class="mb-3">
+                    <ul class="nav nav-pills" id="abas-status">
+                        <li class="nav-item"><a class="nav-link active" href="#" onclick="filtrarPorStatus('', this)"><i class="bi bi-collection"></i> Todos <span id="count-todos" class="badge-contador">0</span></a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filtrarPorStatus('PENDENC', this)"><i class="bi bi-hourglass-split"></i> Pendentes <span id="count-pendentes" class="badge-contador">0</span></a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filtrarPorStatus('AGENDADO', this)"><i class="bi bi-calendar-event"></i> Agendados <span id="count-agendados" class="badge-contador">0</span></a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filtrarPorStatus('INSTALADA', this)"><i class="bi bi-check-circle-fill"></i> Instalados <span id="count-instalados" class="badge-contador">0</span></a></li>
+                        <li class="nav-item"><a class="nav-link" href="#" onclick="filtrarPorStatus('CANCELAD', this)"><i class="bi bi-x-circle-fill"></i> Cancelados <span id="count-cancelados" class="badge-contador">0</span></a></li>
+                    </ul>
+                </div>
+
+                <div id="crm-vendas-filtros-wrap" class="d-none">
+                    <div class="crm-painel-filtros-shell shadow-sm" id="crm-vendas-filtros-shell">
+                        <div class="crm-painel-filtros-bar">
+                            <span class="small text-secondary fw-semibold text-uppercase" style="font-size: 0.68rem; letter-spacing: 0.06em;">Filtros</span>
+                            <div class="d-flex align-items-center gap-2 ms-auto">
+                                <div id="wrap-toggle-wpp-crm" class="d-none form-check form-switch mb-0" title="Só Diretoria/Admin: silencia WhatsApp ao corrigir/reemitir">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="toggle-wpp-crm" checked onchange="toggleEnvioWhatsappCrm(this.checked)">
+                                    <label class="form-check-label small fw-semibold" for="toggle-wpp-crm">
+                                        <i class="bi bi-whatsapp text-success"></i> WhatsApp: <span id="label-wpp-crm">ON</span>
+                                    </label>
+                                </div>
+                                <button type="button" id="btn-toggle-crm-filtros" class="btn btn-sm btn-outline-secondary" onclick="toggleCrmVendasFiltros()" aria-expanded="false" title="Mostrar ou ocultar filtros">
+                                    <i class="bi bi-chevron-down" id="crm-filtros-chevron"></i><span class="ms-1" id="crm-filtros-toggle-label">Mostrar filtros</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="crm-vendas-filtros-corpo" class="crm-painel-filtros-corpo" style="display: none;">
+                            <div class="filter-bar mb-0 shadow-sm" id="barra-filtros">
+                                <div class="filter-item">
+                                    <label class="form-label small fw-bold text-muted mb-0">Buscar Global</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-white py-1"><i class="bi bi-search"></i></span>
+                                        <input type="text" id="filtro-busca" class="form-control form-control-sm" placeholder="CPF, nome, O.S. ou telefone..." title="Com 2+ caracteres busca em toda a base (ignora Início/Fim)">
+                                        <span id="busca-geral-hint" class="input-group-text d-none text-bg-info py-1" title="Resultados de toda a base">Busca geral</span>
+                                    </div>
+                                </div>
+
+                                <div class="filter-item"><label class="form-label small fw-bold text-muted mb-0">Início</label><input type="date" id="filtro-inicio" class="form-control form-control-sm"></div>
+                                <div class="filter-item"><label class="form-label small fw-bold text-muted mb-0">Fim</label><input type="date" id="filtro-fim" class="form-control form-control-sm"></div>
+                                <div class="filter-item d-none" id="container-filtro-vendedor">
+                                    <label class="form-label small fw-bold text-muted mb-0">Vendedor</label>
+                                    <select id="filtro-vendedor" class="form-select form-select-sm"><option value="">Todos</option></select>
+                                </div>
+                                <div class="filter-item d-none" id="filtro-dash-vendedor-ativo-wrap">
+                                    <label class="form-label small fw-bold text-muted mb-0">Conta vendedor</label>
+                                    <select id="filtro-vendedor-ativo-dash" class="form-select form-select-sm" title="Ativo = usuário ativo no sistema">
+                                        <option value="todos" selected>Todos (ativos e inativos)</option>
+                                        <option value="ativos">Só ativos</option>
+                                        <option value="inativos">Só inativos</option>
+                                    </select>
+                                </div>
+                                <div class="filter-item" style="flex: 0 0 auto;"><button type="button" onclick="aplicarFiltros()" class="btn btn-sm btn-primary px-3"><i class="bi bi-filter"></i> Filtrar</button></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="aviso-filtro-bloqueado" class="alert alert-light border mb-3 d-none text-center text-muted">
+                    <i class="bi bi-calendar-check"></i> Exibindo vendas do mês atual.
+                </div>
+                <div class="contador-instaladas mb-3">
+                    <span class="me-3">Total pelos filtros principais: <strong id="contador-filtros-principais">0</strong></span>
+                    <span>Total apos filtros do cabecalho: <strong id="contador-filtros-cabecalho">0</strong></span>
+                </div>
+
+                <div class="card border-0 shadow-none">
+                    <div class="crm-vendas-scroll-top" id="crm-vendas-scroll-top" aria-hidden="true">
+                        <div class="crm-vendas-scroll-top-inner" id="crm-vendas-scroll-top-inner"></div>
+                    </div>
+                    <div class="table-responsive crm-vendas-table-scroll" id="crm-vendas-scroll-main">
+                        <table id="tabela-vendas" class="table table-hover align-middle mb-0" style="width:100%">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">ID</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Plano</th><th>O.S.</th><th>Agendamento</th><th>Auditoria</th><th>Status Esteira</th><th>Motivo Pendência</th><th class="text-end pe-3">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-vendas-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="conteudo-dashboard" style="display: none;">
+                <div class="alert alert-info py-2 small mb-4"><i class="bi bi-info-circle"></i> Os dados abaixo refletem o período selecionado no filtro acima.</div>
+                <div class="row mb-4" id="row-diretoria" style="display:none;">
+                    <div class="col-12">
+                        <div class="card border-0 shadow-sm receita-operadora-card" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: #fff; cursor: pointer;" onclick="abrirModalMix()">
+                            <div class="card-body d-flex justify-content-between align-items-center">
+                                <div class="min-w-0">
+                                    <h6 class="text-uppercase mb-2 mb-md-1 fw-semibold text-white receita-operadora-label">Receita Operadora (Instaladas)</h6>
+                                    <div class="d-flex align-items-baseline flex-wrap gap-2">
+                                        <h2 class="mb-0 fw-bold text-white receita-operadora-valor" id="dir-fat-real">R$ 0,00</h2>
+                                        <small class="receita-operadora-proj px-2 py-1 rounded">Proj: <span id="dir-fat-proj">R$ 0,00</span></small>
+                                    </div>
+                                </div>
+                                <div class="text-end flex-shrink-0 ps-2"><i class="bi bi-pie-chart-fill fs-1 text-white opacity-50"></i><div class="small mt-1 text-white opacity-75">Clique para ver Mix</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="dash-card bg-gradient-primary" onclick="abrirDetalheDashboard('TOTAL_REGISTRADAS', 'Vendas Registradas')">
+                            <div class="icon-bg"><i class="bi bi-cart-check"></i></div><p>Vendas Registradas (Mês)</p><h3 id="dash-total">0</h3><small id="dash-meta-info" class="text-white-50"></small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="dash-card bg-gradient-info" onclick="abrirDetalheDashboard('TOTAL_INSTALADAS', 'Vendas Instaladas')">
+                            <div class="icon-bg"><i class="bi bi-check-circle"></i></div><p>Vendas Instaladas (Mês)</p><h3 id="dash-instaladas">0</h3><small id="dash-aproveitamento" class="text-white-50 fw-bold"></small>
+                        </div>
+                    </div>
+                    <div class="col-md-4" id="card-comissao-wrapper">
+                        <div class="dash-card bg-gradient-success" style="cursor: default; transform: none;">
+                            <div class="icon-bg"><i class="bi bi-cash-coin"></i></div><p>Comissão Estimada</p><h3 id="dash-comissao">R$ 0,00</h3><small class="text-white-50" id="resumo-projecao-comissao">Baseada nas instalações</small>
+                        </div>
+                    </div>
+                </div>
+                <h5 class="mt-5 mb-3 text-muted">Detalhe por Status</h5>
+                <div class="row g-3" id="dash-status-container"></div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal fade" id="modalDetalheDashboard" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold" id="tituloDetalheDashboard">Detalhes</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="listaDetalheDashboard"></div></div></div></div></div>
+    <div class="modal fade" id="modalMix" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title fw-bold"><i class="bi bi-graph-up"></i> Detalhamento de Vendas (Mix)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="row"><div class="col-md-6 border-end"><h6 class="text-center fw-bold mb-3 text-primary">Mix de Velocidade/Plano</h6><div class="table-responsive"><table class="table table-sm table-striped"><thead class="table-light"><tr><th>Plano</th><th class="text-end">Qtd</th><th class="text-end">%</th></tr></thead><tbody id="tbody-mix-velocidade"></tbody></table></div></div><div class="col-md-6"><h6 class="text-center fw-bold mb-3 text-success">Mix Forma de Pagamento</h6><div class="table-responsive"><table class="table table-sm table-striped"><thead class="table-light"><tr><th>Forma Pagto</th><th class="text-end">Qtd</th><th class="text-end">%</th></tr></thead><tbody id="tbody-mix-pagamento"></tbody></table></div></div></div></div></div></div></div>
+
+    <div class="modal fade" id="modal-origem-venda" tabindex="-1" style="z-index: 1055;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 bg-transparent">
+                <div class="modal-body p-0">
+                    <div class="card border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+                        <div class="card-header bg-white border-0 pt-4 pb-2 text-center">
+                            <h4 class="fw-bold text-dark mb-1">Nova Venda</h4>
+                            <p class="text-muted small mb-0">Selecione a origem do cadastro</p>
+                            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="card-body p-5">
+                            <div id="opcoes-origem">
+                                <div class="row g-4">
+                                    <div class="col-6">
+                                        <button onclick="selecionarOrigem('APP')" class="btn btn-outline-primary w-100 btn-origem">
+                                            <i class="bi bi-phone"></i>
+                                            <span>Via APP</span>
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button onclick="selecionarOrigem('SEM_APP')" class="btn btn-outline-secondary w-100 btn-origem">
+                                            <i class="bi bi-journal-x"></i>
+                                            <span>Sem APP</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="opcoes-fixo" style="display: none;">
+                                <p class="text-muted small mb-3 text-center">A venda terá telefone fixo?</p>
+                                <div class="row g-4">
+                                    <div class="col-6">
+                                        <button onclick="selecionarFixo(true)" class="btn btn-outline-success w-100">
+                                            <i class="bi bi-check-circle"></i>
+                                            <span>Sim, tem fixo</span>
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button onclick="selecionarFixo(false)" class="btn btn-outline-danger w-100">
+                                            <i class="bi bi-x-circle"></i>
+                                            <span>Não tem fixo</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="opcoes-gerada-os" style="display: none;">
+                                <p class="text-muted small mb-3 text-center">Gerada O.S automática?</p>
+                                <div class="row g-4">
+                                    <div class="col-6">
+                                        <button onclick="selecionarGeradaOs(true)" class="btn btn-outline-success w-100">
+                                            <i class="bi bi-check-circle"></i>
+                                            <span>Sim</span>
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button onclick="selecionarGeradaOs(false)" class="btn btn-outline-danger w-100">
+                                            <i class="bi bi-x-circle"></i>
+                                            <span>Não</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal fade" id="modal-aviso-cliente" tabindex="-1" style="z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-warning">
+                <div class="modal-header bg-warning text-dark"><h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle-fill"></i> Atenção: Cliente Recorrente</h5><button type="button" class="btn-close" onclick="fecharModalAviso()"></button></div>
+                <div class="modal-body"><div class="alert alert-light border text-center mb-3"><h4 class="fw-bold text-warning" id="aviso-qtd-vendas" style="font-size: 2.5rem;">0</h4><span class="text-muted text-uppercase small fw-bold">Vendas Ativas Encontradas</span></div><p class="text-center mb-3">O cliente <strong id="aviso-nome-cliente"></strong> já possui histórico em nossa base.</p><div class="alert alert-danger" role="alert"><div class="d-flex align-items-center mb-2"><i class="bi bi-shield-lock-fill fs-3 me-3"></i><div><strong>Aviso de Segurança:</strong><br>Esta venda passará por uma <u>auditoria mais apurada</u> devido à duplicidade de CPF/CNPJ.</div></div><hr><p class="mb-0 fw-bold text-center small text-uppercase"><i class="bi bi-exclamation-circle"></i> Essa venda poderá gerar uma recompra ou uma venda indevida!</p></div><p class="small text-muted text-center mt-3">Deseja continuar com este CPF ou informar um novo?</p></div>
+                <div class="modal-footer justify-content-center"><button type="button" class="btn btn-outline-secondary px-4" onclick="fecharModalAviso()">Informar Outro CPF</button><button type="button" class="btn btn-warning px-4 fw-bold" onclick="confirmarClienteExistente()">Sim, Continuar Venda</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-boas-vindas" tabindex="-1" style="z-index: 1055;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-success">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-chat-heart"></i> Boas Vindas</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">A mensagem será enviada para clientes com status <strong>Instalada</strong> na data em que o pedido foi instalado (telefone1).</p>
+                    <p class="alert alert-light border small mb-0"><i class="bi bi-info-circle"></i> O envio é feito em lotes, com intervalo <strong>aleatório</strong> entre cada mensagem (padrão diferente a cada vez) para evitar bloqueio do WhatsApp.</p>
+                    <form id="form-boas-vindas">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Data em que o pedido foi instalado *</label>
+                            <input type="date" class="form-control" id="boas-vindas-data" required>
+                        </div>
+                    </form>
+                    <div id="boas-vindas-resultado" class="alert mt-2" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-success" id="btn-enviar-boas-vindas" onclick="enviarBoasVindas()">
+                        <i class="bi bi-send"></i> Enviar mensagem
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-reemissao" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog">
+            <div class="modal-content border-warning">
+                <div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="bi bi-arrow-repeat"></i> Reemissão de Venda</h5><button type="button" class="btn-close btn-close-white" onclick="cancelarReemissao()"></button></div>
+                <div class="modal-body">
+                    <div class="alert alert-warning small">
+                        Ao confirmar, a venda será marcada como <strong>Reemissão</strong>, o status será alterado para <strong>AGENDADO</strong> e aparecerá na esteira.
+                    </div>
+                    <form id="form-reemissao">
+                        <div class="mb-3"><label class="form-label fw-bold">Número da O.S. *</label><input type="text" class="form-control" id="reemissao-os" required><div id="reemissao-os-feedback" class="invalid-feedback">O.S. já existe!</div></div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3"><label class="form-label fw-bold">Data Agendada *</label><input type="date" class="form-control" id="reemissao-data" required></div>
+                            <div class="col-md-6 mb-3"><label class="form-label fw-bold">Turno *</label><select class="form-select" id="reemissao-turno" required><option value="">Selecione...</option><option value="MANHA">Manhã</option><option value="TARDE">Tarde</option></select></div>
+                        </div>
+                        <div class="mb-3"><label class="form-label">Observação</label><textarea class="form-control" id="reemissao-observacao" rows="2" oninput="this.value = this.value.toUpperCase()" placeholder="Digite a observação..."></textarea></div>
+                        <div class="form-check form-switch d-none" id="container-wpp-modal-reemissao">
+                            <input class="form-check-input" type="checkbox" id="checkbox-wpp-modal-reemissao" checked onchange="syncEnvioWhatsappCrm(this.checked)">
+                            <label class="form-check-label fw-bold" for="checkbox-wpp-modal-reemissao">
+                                <i class="bi bi-whatsapp text-success"></i> Enviar WhatsApp nesta reemissão
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="cancelarReemissao()">Cancelar</button><button type="button" class="btn btn-warning" onclick="salvarReemissao()">Confirmar Reemissão</button></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-cep-nao-encontrado" tabindex="-1" style="z-index: 2000;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold text-danger" id="modal-cep-titulo"><i class="bi bi-geo-alt-fill"></i> CEP Não Encontrado</h5>
+                    <button type="button" class="btn-close" onclick="acaoCepManual(false)"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <p class="mb-3" id="modal-cep-mensagem">O CEP informado não retornou nenhum endereço na base dos Correios.</p>
+                    <p class="text-muted small" id="modal-cep-submensagem">Deseja preencher o endereço manualmente?</p>
+                </div>
+                <div class="modal-footer justify-content-center" id="modal-cep-botoes">
+                    <button type="button" class="btn btn-outline-secondary" onclick="acaoCepManual(false)">Não, corrigir CEP</button>
+                    <button type="button" class="btn btn-primary fw-bold" onclick="acaoCepManual(true)">Sim, preencher manual</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-nova-venda" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title fw-bold" id="titulo-modal-venda">Registrar Venda</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <form id="form-nova-venda">
+                        <input type="hidden" name="forma_entrada" id="input-forma-entrada"><input type="hidden" id="id-venda-edicao">
+                        <input type="hidden" name="tem_fixo" id="input-tem-fixo" value="false">
+                        <input type="hidden" name="gerada_os_automatica" id="input-gerada-os-automatica" value="false"> 
+                        <h6 class="text-primary border-bottom pb-2 mb-3">Dados do Cliente</h6>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6 position-relative">
+                                <label>CPF/CNPJ <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="input-cpf" name="cliente_cpf_cnpj" required placeholder="Apenas números" autocomplete="off" onblur="validarCpfCnpjInput(this)" oninput="this.value = this.value.replace(/\D/g, '')">
+                                <div id="feedback-cpf" class="form-text mt-1" style="font-size: 0.85rem; min-height: 1.2em;"></div>
+                                <div class="invalid-feedback">CPF/CNPJ Inválido.</div>
+                            </div>
+                            <div class="col-12 col-md-6"><label>Nome Completo <span class="text-danger">*</span></label><input type="text" class="form-control" id="input-nome" name="cliente_nome_razao_social" required oninput="this.value = this.value.toUpperCase()"></div>
+                            
+                            <div class="col-12 col-md-6" id="div-nome-mae"><label>Nome da Mãe</label><input type="text" class="form-control" id="input-nome-mae" name="nome_mae" oninput="this.value = this.value.toUpperCase()"></div>
+                            <div class="col-12 col-md-6" id="div-data-nascimento">
+                                <label>Data Nascimento</label>
+                                <input type="date" class="form-control date-paste-enabled" id="input-data-nascimento" name="data_nascimento">
+                            </div>
+                            <div class="col-12 col-md-6" id="div-email">
+                                <label>Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="input-email" name="cliente_email" 
+                                       required onblur="verificarEmail(this)">
+                                <div id="feedback-email" class="form-text mt-1" style="font-size: 0.8rem; min-height: 1.2em;"></div>
+                            </div>
+                            
+                            <div class="col-12 col-md-6">
+                                <div class="row g-2">
+                                    <div class="col-6"><label>Telefone 1 (WhatsApp) <span class="text-danger">*</span></label><input type="text" class="form-control" id="input-telefone" name="telefone1" required onblur="validarTelefone(this, 'feedback-whatsapp', true)" oninput="validarTelefonesDiferentes()" placeholder="(00) 00000-0000" maxlength="15"><div id="feedback-whatsapp" class="form-text mt-1" style="font-size: 0.8rem; min-height: 1.2em;"></div></div>
+                                    <div class="col-6"><label>Telefone 2 <span class="text-danger">*</span></label><input type="text" class="form-control" id="input-telefone2" name="telefone2" required onblur="validarTelefone(this, 'feedback-telefone2', false)" oninput="validarTelefonesDiferentes()" placeholder="(00) 00000-0000" maxlength="15"><div id="feedback-telefone2" class="form-text mt-1" style="font-size: 0.8rem; min-height: 1.2em;"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="area-representante" class="row g-3 mt-2" style="display: none; background-color: var(--bg-secondary); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);"><div class="col-12"><h6 class="text-secondary border-bottom pb-2 mb-0" style="font-size: 0.9rem;">Representante Legal (Obrigatório para CNPJ)</h6></div><div class="col-12 col-md-6"><label>CPF do Representante <span class="text-danger">*</span></label><input type="text" class="form-control" id="input-cpf-rep" name="cpf_representante_legal" oninput="this.value = this.value.replace(/\D/g, '')" onblur="validarCpfInput(this)"><div id="feedback-cpf-rep" class="form-text mt-1" style="font-size: 0.85rem; min-height: 1.2em;"></div></div><div class="col-12 col-md-6"><label>Nome do Representante</label><input type="text" class="form-control" id="input-nome-rep" name="nome_representante_legal" readonly oninput="this.value = this.value.toUpperCase()"></div></div>
+                        
+                        <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">Dados da Venda</h6>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6"><label>Plano <span class="text-danger">*</span></label><select class="form-select" name="plano" id="select-plano" required></select></div>
+                            <div class="col-12 col-md-6"><label>Forma de Pagamento <span class="text-danger">*</span></label><select class="form-select" name="forma_pagamento" id="select-pagamento" required></select></div>
+                            <div class="col-12 col-md-6 d-none" id="container-status-gestao"><label class="fw-bold text-secondary">Status Tratamento</label><select class="form-select" name="status_tratamento" id="select-status-tratamento"></select></div>
+                            <div class="col-12 col-md-6 d-none" id="container-status-esteira"><label class="fw-bold text-success">Status Esteira</label><select class="form-select border-success" name="status_esteira" id="select-status-esteira"></select></div>
+                            <div class="col-12 col-md-6 d-none" id="container-ordem-servico"><label class="fw-bold text-secondary">O.S</label><input type="text" class="form-control" name="ordem_servico" id="input-ordem-servico" placeholder="08907507 ou 4-212051254235"></div>
+                            <div class="col-12 col-md-6 d-none" id="container-vendedor-modal"><label class="fw-bold text-secondary">Vendedor (Responsável)</label><select class="form-select" name="vendedor" id="select-vendedor-modal"></select></div>
+                            <div class="col-12 col-md-6 d-none" id="container-data-criacao-local">
+                                <label class="fw-bold text-secondary">Data Criação (Local)</label>
+                                <input type="date" class="form-control" name="data_criacao" id="input-data-criacao-local">
+                            </div>
+                            <div class="col-12 col-md-6 d-none" id="container-data-abertura-os">
+                                <label class="fw-bold text-secondary">Data Abertura (OS)</label>
+                                <input type="datetime-local" class="form-control" name="data_abertura" id="input-data-abertura-os" step="60">
+                                <small class="text-muted">Data e hora de abertura da O.S.</small>
+                            </div>
+                            <div class="col-12 d-none" id="container-gerada-os-auto">
+                                <label class="fw-bold text-secondary">Gerada O.S automática?</label>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" id="gerada-os-sim" value="true" onchange="document.getElementById('input-gerada-os-automatica').value='true'">
+                                    <label class="form-check-label" for="gerada-os-sim">Sim</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" id="gerada-os-nao" value="false" checked onchange="document.getElementById('input-gerada-os-automatica').value='false'">
+                                    <label class="form-check-label" for="gerada-os-nao">Não</label>
+                                </div>
+                            </div>
+                            <div class="col-12 d-none" id="container-reemissao-modal">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="checkbox-reemissao" name="reemissao">
+                                    <label class="form-check-label fw-bold text-warning" for="checkbox-reemissao">Reemissão</label>
+                                </div>
+                            </div>
+                            <div class="col-12 d-none" id="container-wpp-modal-venda">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="checkbox-wpp-modal-venda" checked onchange="syncEnvioWhatsappCrm(this.checked)">
+                                    <label class="form-check-label fw-bold" for="checkbox-wpp-modal-venda">
+                                        <i class="bi bi-whatsapp text-success"></i> Enviar WhatsApp (atualização / reemissão)
+                                    </label>
+                                    <div class="form-text">Desligue para corrigir sem notificar o vendedor. Só Diretoria/Admin.</div>
+                                </div>
+                            </div>
+                            <div class="col-12"><label>Observações</label><textarea class="form-control" name="observacoes" id="input-observacoes" rows="2" oninput="this.value = this.value.toUpperCase()"></textarea></div>
+                        </div>
+                        
+                        <h6 class="text-primary border-bottom pb-2 mb-3 mt-4">Endereço de Instalação</h6>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4"><label>CEP <span class="text-danger">*</span></label><input type="text" class="form-control" name="cep" id="nova-cep" required></div>
+                            <div class="col-12 col-md-8"><label>Logradouro <span class="text-danger">*</span></label><input type="text" class="form-control" name="logradouro" id="nova-logradouro" oninput="this.value = this.value.toUpperCase()" required></div>
+                            <div class="col-6 col-md-2"><label>Número <span class="text-danger">*</span></label><input type="text" class="form-control" name="numero_residencia" id="nova-numero" oninput="this.value = this.value.toUpperCase()" required></div>
+                            <div class="col-6 col-md-3"><label>Complemento</label><input type="text" class="form-control" name="complemento" id="nova-complemento" oninput="this.value = this.value.toUpperCase()"></div>
+                            <div class="col-6 col-md-3"><label>Bairro <span class="text-danger">*</span></label><input type="text" class="form-control" name="bairro" id="nova-bairro" oninput="this.value = this.value.toUpperCase()" required></div>
+                            <div class="col-6 col-md-2"><label>Cidade <span class="text-danger">*</span></label><input type="text" class="form-control" name="cidade" id="nova-cidade" oninput="this.value = this.value.toUpperCase()" required></div>
+                            <div class="col-6 col-md-2"><label>UF <span class="text-danger">*</span></label><input type="text" class="form-control" name="estado" id="nova-estado" maxlength="2" style="text-transform: uppercase;" required></div>
+                            <div class="col-12"><label>Ponto de Referência <span class="text-danger">*</span></label><input type="text" class="form-control" name="ponto_referencia" id="nova-referencia" required oninput="this.value = this.value.toUpperCase()"></div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" form="form-nova-venda" id="btn-salvar-venda" class="btn btn-primary">Salvar</button></div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/fixedheader/3.3.2/js/dataTables.fixedHeader.min.js"></script>
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script src="{% static 'js/validators.js' %}"></script>
+<script>
+        const apiUrl = '';
+
+        function isoParaDatetimeLocal(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return '';
+            const p = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+        }
+
+        function podeEditarDataAberturaOs() {
+            return ['Admin', 'Diretoria', 'BackOffice'].includes(userProfile);
+        }
+
+        async function apiFetch(endpoint, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const token = localStorage.getItem('accessToken');
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            try {
+                const response = await fetch(`${apiUrl}/api${endpoint}`, { ...options, headers });
+                if (response.status === 401) { logout(); return null; }
+                if (!response.ok) { const errorText = await response.text(); try { return Promise.reject(JSON.parse(errorText)); } catch(e) { throw new Error(errorText); } }
+                return response.status === 204 ? null : await response.json();
+            } catch (e) { throw e; }
+        }
+
+        const token = localStorage.getItem('accessToken');
+        if(!token) window.location.href = '/';
+
+        function aplicarMascaraOs(valor) {
+            let v = String(valor || '').replace(/[^\d-]/g, '');
+            const semHifen = v.replace(/-/g, '');
+            if (v.includes('-')) {
+                const partes = v.split('-');
+                const primeiro = (partes[0] || '').replace(/\D/g, '').slice(0, 1);
+                const resto = (partes.slice(1).join('') || '').replace(/\D/g, '').slice(0, 12);
+                return primeiro + (primeiro ? '-' : '') + resto;
+            }
+            if (semHifen.length <= 8) return semHifen;
+            const primeiro = semHifen.slice(0, 1);
+            const resto = semHifen.slice(1, 13);
+            return primeiro + '-' + resto;
+        }
+
+        let modalOrigem, modalNovaVenda, modalAviso, modalDetalhe, modalMix, modalCep, modalReemissao;
+        let vendaReemissaoId = null;
+        let clienteTemp = null, debounceTimer, debounceRepTimer, viewAtual = 'minhas_vendas', userProfile = null;
+        let envioWhatsappAtivo = true;
+        const podeSilenciarWhatsapp = () => ['Diretoria', 'Admin'].includes(userProfile);
+
+        function syncEnvioWhatsappCrm(ativo) {
+            envioWhatsappAtivo = !!ativo;
+            const toggle = document.getElementById('toggle-wpp-crm');
+            const label = document.getElementById('label-wpp-crm');
+            const ckVenda = document.getElementById('checkbox-wpp-modal-venda');
+            const ckReem = document.getElementById('checkbox-wpp-modal-reemissao');
+            if (toggle && toggle.checked !== envioWhatsappAtivo) toggle.checked = envioWhatsappAtivo;
+            if (ckVenda && ckVenda.checked !== envioWhatsappAtivo) ckVenda.checked = envioWhatsappAtivo;
+            if (ckReem && ckReem.checked !== envioWhatsappAtivo) ckReem.checked = envioWhatsappAtivo;
+            if (label) {
+                label.textContent = envioWhatsappAtivo ? 'ON' : 'OFF';
+                label.classList.toggle('text-danger', !envioWhatsappAtivo);
+                label.classList.toggle('text-success', envioWhatsappAtivo);
+            }
+            if (toggle) {
+                toggle.title = envioWhatsappAtivo
+                    ? 'WhatsApp ON: envia atualização/reemissão'
+                    : 'WhatsApp OFF: corrige sem notificar o vendedor';
+            }
+        }
+        function toggleEnvioWhatsappCrm(ativo) {
+            syncEnvioWhatsappCrm(ativo);
+        }
+        function atualizarVisibilidadeToggleWpp() {
+            const show = podeSilenciarWhatsapp();
+            const wrap = document.getElementById('wrap-toggle-wpp-crm');
+            const boxVenda = document.getElementById('container-wpp-modal-venda');
+            const boxReem = document.getElementById('container-wpp-modal-reemissao');
+            if (wrap) wrap.classList.toggle('d-none', !show);
+            if (boxVenda) boxVenda.classList.toggle('d-none', !show);
+            if (boxReem) boxReem.classList.toggle('d-none', !show);
+            if (!show) syncEnvioWhatsappCrm(true);
+            else syncEnvioWhatsappCrm(envioWhatsappAtivo);
+        }
+        let crmVendasScrollSyncing = false;
+
+        function toggleCrmVendasFiltros() {
+            const corpo = document.getElementById('crm-vendas-filtros-corpo');
+            const btn = document.getElementById('btn-toggle-crm-filtros');
+            const chevron = document.getElementById('crm-filtros-chevron');
+            const label = document.getElementById('crm-filtros-toggle-label');
+            if (!corpo) return;
+            const oculto = corpo.style.display === 'none' || window.getComputedStyle(corpo).display === 'none';
+            const abrir = oculto;
+            corpo.style.display = abrir ? '' : 'none';
+            if (chevron) {
+                chevron.classList.remove('bi-chevron-down', 'bi-chevron-up');
+                chevron.classList.add(abrir ? 'bi-chevron-up' : 'bi-chevron-down');
+            }
+            if (label) label.textContent = abrir ? 'Ocultar filtros' : 'Mostrar filtros';
+            if (btn) btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+            try { sessionStorage.setItem('crm-vendas-filtros-aberto', abrir ? '1' : '0'); } catch (e) {}
+        }
+
+        function restaurarEstadoPainelFiltros() {
+            const wrap = document.getElementById('crm-vendas-filtros-wrap');
+            const corpo = document.getElementById('crm-vendas-filtros-corpo');
+            if (!wrap || !corpo || wrap.classList.contains('d-none')) return;
+            let aberto = false;
+            try { aberto = sessionStorage.getItem('crm-vendas-filtros-aberto') === '1'; } catch (e) {}
+            corpo.style.display = aberto ? '' : 'none';
+            const chevron = document.getElementById('crm-filtros-chevron');
+            const label = document.getElementById('crm-filtros-toggle-label');
+            const btn = document.getElementById('btn-toggle-crm-filtros');
+            if (chevron) {
+                chevron.classList.remove('bi-chevron-down', 'bi-chevron-up');
+                chevron.classList.add(aberto ? 'bi-chevron-up' : 'bi-chevron-down');
+            }
+            if (label) label.textContent = aberto ? 'Ocultar filtros' : 'Mostrar filtros';
+            if (btn) btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        }
+
+        function syncCrmVendasScrollbars() {
+            const inner = document.getElementById('crm-vendas-scroll-top-inner');
+            const table = document.getElementById('tabela-vendas');
+            if (!inner || !table) return;
+            inner.style.width = table.scrollWidth + 'px';
+        }
+
+        function bindCrmVendasScrollSync() {
+            const top = document.getElementById('crm-vendas-scroll-top');
+            const main = document.getElementById('crm-vendas-scroll-main');
+            if (!top || !main) return;
+            top.addEventListener('scroll', () => {
+                if (crmVendasScrollSyncing) return;
+                crmVendasScrollSyncing = true;
+                main.scrollLeft = top.scrollLeft;
+                crmVendasScrollSyncing = false;
+            }, { passive: true });
+            main.addEventListener('scroll', () => {
+                if (crmVendasScrollSyncing) return;
+                crmVendasScrollSyncing = true;
+                top.scrollLeft = main.scrollLeft;
+                crmVendasScrollSyncing = false;
+            }, { passive: true });
+        }
+
+        function aplicarAbaInicialPorPerfil() {
+            const perfisEquipeDefault = ['Diretoria', 'Admin', 'BackOffice'];
+            if (!perfisEquipeDefault.includes(userProfile)) return;
+            const liEquipe = document.getElementById('aba-equipe');
+            const linkEquipe = liEquipe ? liEquipe.querySelector('.nav-link[data-view="equipe"]') : null;
+            if (!linkEquipe || liEquipe.classList.contains('d-none')) return;
+            document.querySelectorAll('#abas-navegacao .nav-link').forEach(l => l.classList.remove('active'));
+            linkEquipe.classList.add('active');
+            viewAtual = 'geral';
+            const cv = document.getElementById('container-filtro-vendedor');
+            if (cv) cv.classList.remove('d-none');
+        }
+        let dadosMixCache = null;
+        let vendedoresCache = [];
+        let dashboardDataCache = {}; 
+        let statusEsteiraAtual = ''; 
+        let origemCadastroAtual = ''; 
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const modalOrigemEl = document.getElementById('modal-origem-venda');
+            if (modalOrigemEl) {
+                modalOrigem = new bootstrap.Modal(modalOrigemEl);
+                
+                // Event listeners para limpar backdrop quando o modal for fechado
+                modalOrigemEl.addEventListener('hidden.bs.modal', function () {
+                    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                    document.body.classList.remove('modal-open');
+                    document.body.style.paddingRight = '';
+                    document.body.style.overflow = '';
+                    // Reset do modal de origem
+                    document.getElementById('opcoes-origem').style.display = 'block';
+                    document.getElementById('opcoes-fixo').style.display = 'none';
+                });
+                
+                // Reset ao abrir o modal
+                modalOrigemEl.addEventListener('show.bs.modal', function () {
+                    document.getElementById('opcoes-origem').style.display = 'block';
+                    document.getElementById('opcoes-fixo').style.display = 'none';
+                    document.getElementById('opcoes-gerada-os').style.display = 'none';
+                    origemCadastroAtual = '';
+                    document.getElementById('input-forma-entrada').value = '';
+                    document.getElementById('input-tem-fixo').value = 'false';
+                    document.getElementById('input-gerada-os-automatica').value = 'false';
+                });
+            }
+            
+            modalNovaVenda = new bootstrap.Modal(document.getElementById('modal-nova-venda'));
+            modalAviso = new bootstrap.Modal(document.getElementById('modal-aviso-cliente'));
+            modalDetalhe = new bootstrap.Modal(document.getElementById('modalDetalheDashboard'));
+            modalMix = new bootstrap.Modal(document.getElementById('modalMix'));
+            modalCep = new bootstrap.Modal(document.getElementById('modal-cep-nao-encontrado'));
+            modalReemissao = new bootstrap.Modal(document.getElementById('modal-reemissao'));
+            
+            document.getElementById('modal-nova-venda')?.addEventListener('show.bs.modal', atualizarVisibilidadeGeradaOs);
+            document.getElementById('select-vendedor-modal')?.addEventListener('change', atualizarVisibilidadeGeradaOs);
+            
+            const hoje = new Date();
+            document.getElementById('filtro-inicio').valueAsDate = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            document.getElementById('filtro-fim').valueAsDate = hoje;
+
+            configurarPerfil();
+            aplicarAbaInicialPorPerfil();
+            restaurarEstadoPainelFiltros();
+            await carregarAuxiliares();
+
+            if (['Supervisor', 'Diretoria', 'BackOffice', 'Admin'].includes(userProfile)) {
+                await carregarVendedores();
+            }
+
+            bindCrmVendasScrollSync();
+            window.addEventListener('resize', () => { requestAnimationFrame(syncCrmVendasScrollbars); });
+
+            aplicarFiltros();
+
+            document.getElementById('form-nova-venda').addEventListener('submit', salvarVenda);
+            document.getElementById('nova-cep').addEventListener('blur', buscarCepNovaVenda);
+            
+            const inputCpf = document.getElementById('input-cpf');
+            inputCpf.addEventListener('input', function(e) { 
+                e.target.value = e.target.value.replace(/\D/g, ''); 
+                e.target.classList.remove('is-invalid'); 
+                const doc = e.target.value.replace(/\D/g, '');
+                if (doc.length === 14) {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => validarCpfCnpjInput(e.target), 250);
+                }
+            });
+            inputCpf.addEventListener('blur', validarCpfCnpjInput);
+            
+            // Máscara para telefones
+            const inputTelefone1 = document.getElementById('input-telefone');
+            const inputTelefone2 = document.getElementById('input-telefone2');
+            
+            function aplicarMascaraTelefone(input) {
+                input.addEventListener('input', function(e) {
+                    let valor = e.target.value.replace(/\D/g, '');
+                    if (valor.length <= 11) {
+                        if (valor.length <= 2) {
+                            e.target.value = valor ? `(${valor}` : '';
+                        } else if (valor.length <= 7) {
+                            e.target.value = `(${valor.substring(0, 2)}) ${valor.substring(2)}`;
+                        } else {
+                            e.target.value = `(${valor.substring(0, 2)}) ${valor.substring(2, 7)}-${valor.substring(7, 11)}`;
+                        }
+                    }
+                });
+            }
+            
+            if (inputTelefone1) aplicarMascaraTelefone(inputTelefone1);
+            if (inputTelefone2) aplicarMascaraTelefone(inputTelefone2);
+
+            document.getElementById('input-cpf-rep').addEventListener('input', function(e) { 
+                clearTimeout(debounceRepTimer); 
+                if(e.target.value.replace(/\D/g, '').length >= 11) 
+                    debounceRepTimer = setTimeout(() => buscarRepresentante(e.target.value.replace(/\D/g, '')), 600); 
+            });
+            
+            document.querySelectorAll('.uppercase-input, input[type="text"]:not(#input-email)').forEach(input => { 
+                input.addEventListener('input', function() { this.value = this.value.toUpperCase(); }); 
+            });
+
+            document.querySelectorAll('.date-paste-enabled').forEach(input => {
+                input.addEventListener('paste', (event) => {
+                    const paste = (event.clipboardData || window.clipboardData).getData('text');
+                    if (paste) {
+                        let clean = paste.replace(/\D/g, '');
+                        if (clean.length === 8) {
+                            event.preventDefault();
+                            const dia = clean.substring(0, 2);
+                            const mes = clean.substring(2, 4);
+                            const ano = clean.substring(4, 8);
+                            if (parseInt(mes) <= 12 && parseInt(dia) <= 31) {
+                                input.value = `${ano}-${mes}-${dia}`;
+                            }
+                        }
+                    }
+                });
+            });
+
+            const inputOs = document.getElementById('input-ordem-servico');
+            if (inputOs) {
+                inputOs.addEventListener('input', function() {
+                    this.value = aplicarMascaraOs(this.value);
+                });
+                inputOs.addEventListener('blur', function() {
+                    this.value = aplicarMascaraOs(this.value);
+                });
+            }
+        });
+
+        // ===== VALIDAÇÃO DE CPF/CNPJ =====
+        function validarCpfInput(input) {
+            if (!input || !input.classList) return;
+            const resultado = validarCPF(input.value);
+            const feedback = document.getElementById('feedback-cpf-rep');
+            if (!input.value) {
+                input.classList.remove('is-valid', 'is-invalid');
+                feedback && (feedback.textContent = '');
+            } else if (resultado.valido) {
+                input.classList.add('is-valid');
+                input.classList.remove('is-invalid');
+                feedback && (feedback.textContent = 'CPF válido ✓', feedback.className = 'form-text text-success mt-1');
+            } else {
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                feedback && (feedback.textContent = resultado.erro, feedback.className = 'form-text text-danger mt-1');
+            }
+        }
+
+        function validarCpfCnpjInput(input) {
+            if (!input || !input.classList) return;
+            const resultado = validarCPFouCNPJ(input.value);
+            const feedback = document.getElementById('feedback-cpf');
+            if (!input.value) {
+                input.classList.remove('is-valid', 'is-invalid');
+                feedback && (feedback.textContent = '');
+                return;
+            }
+            if (resultado.valido) {
+                input.classList.add('is-valid');
+                input.classList.remove('is-invalid');
+                feedback && (feedback.textContent = `${resultado.tipo} válido ✓`, feedback.className = 'form-text text-success mt-1');
+                // Prosseguir com a busca de cliente
+                verificarCpfOnBlur(input);
+            } else {
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                feedback && (feedback.textContent = resultado.erro, feedback.className = 'form-text text-danger mt-1');
+            }
+        }
+
+        async function consultarDadosCnpjReceita(cnpjLimpo) {
+            if (!cnpjLimpo || cnpjLimpo.length !== 14) return null;
+            const q = encodeURIComponent(cnpjLimpo);
+            const endpoints = [
+                `/crm/vendas/consultar-cnpj/?cnpj=${q}`,
+                `/crm/clientes/dados-cnpj/?cnpj=${q}`,
+            ];
+            let ultimoErro = null;
+            for (const url of endpoints) {
+                try {
+                    const dados = await apiFetch(url);
+                    if (dados && (dados.razao_social || dados.erro)) return dados;
+                } catch (e) {
+                    ultimoErro = e;
+                    console.warn('Consulta CNPJ Receita falhou em', url, e);
+                }
+            }
+            return ultimoErro ? { erro: ultimoErro.detail || ultimoErro.erro || 'Não foi possível consultar o CNPJ.' } : null;
+        }
+
+        async function verificarCpfOnBlur(input) {
+            const cpf = input.value.replace(/\D/g, '');
+            if (cpf.length === 0) return;
+            verificarRegraCNPJ(cpf);
+            let razaoSocialReceita = null;
+            const feedbackCpf = document.getElementById('feedback-cpf');
+            if (cpf.length === 14) {
+                const inputNome = document.getElementById('input-nome');
+                if (inputNome) {
+                    inputNome.value = 'CONSULTANDO RECEITA...';
+                    inputNome.readOnly = true;
+                }
+                const dadosCnpj = await consultarDadosCnpjReceita(cpf);
+                if (dadosCnpj && dadosCnpj.razao_social) {
+                    razaoSocialReceita = dadosCnpj.razao_social;
+                    if (inputNome) {
+                        inputNome.value = razaoSocialReceita;
+                        inputNome.readOnly = false;
+                    }
+                    if (feedbackCpf) {
+                        let msg = 'Razão social preenchida conforme a Receita Federal.';
+                        if (dadosCnpj.classificacao_mei) {
+                            msg += ` (${dadosCnpj.classificacao_mei === 'MEI' ? 'MEI' : 'NMEI'})`;
+                        }
+                        feedbackCpf.textContent = msg;
+                        feedbackCpf.className = 'form-text text-success mt-1';
+                    }
+                } else {
+                    if (inputNome) {
+                        inputNome.value = '';
+                        inputNome.readOnly = false;
+                    }
+                    if (feedbackCpf) {
+                        const msgErro = (dadosCnpj && dadosCnpj.erro)
+                            || (dadosCnpj && dadosCnpj.detail)
+                            || 'Não foi possível obter a razão social. Tente novamente em alguns segundos.';
+                        feedbackCpf.textContent = msgErro;
+                        feedbackCpf.className = 'form-text text-warning mt-1';
+                    }
+                }
+            }
+            if (cpf.length === 11) { 
+                let valido = true;
+                if (/^(\d)\1{10}$/.test(cpf)) valido = false;
+                else {
+                    let soma = 0, resto;
+                    for (let i = 1; i <= 9; i++) soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
+                    resto = (soma * 10) % 11;
+                    if (resto === 10 || resto === 11) resto = 0;
+                    if (resto !== parseInt(cpf.substring(9, 10))) valido = false;
+                    soma = 0;
+                    for (let i = 1; i <= 10; i++) soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
+                    resto = (soma * 10) % 11;
+                    if (resto === 10 || resto === 11) resto = 0;
+                    if (resto !== parseInt(cpf.substring(10, 11))) valido = false;
+                }
+                if (!valido) { input.classList.add('is-invalid'); return; } 
+                else { input.classList.add('is-valid'); }
+            }
+            if (cpf.length >= 11) {
+                input.classList.add('input-loading'); 
+                try {
+                    const res = await apiFetch(`/crm/clientes/?search=${cpf}`);
+                    let cliente = null;
+                    if (Array.isArray(res)) {
+                        cliente = res.find(c => c.cpf_cnpj && c.cpf_cnpj.replace(/\D/g, '') === cpf);
+                    } else if (res && Array.isArray(res.results)) {
+                        cliente = res.results.find(c => c.cpf_cnpj && c.cpf_cnpj.replace(/\D/g, '') === cpf);
+                    }
+                    if (cliente) {
+                        preencherFormularioCliente(cliente, true);
+                        if (razaoSocialReceita) {
+                            const inputNome = document.getElementById('input-nome');
+                            if (inputNome) inputNome.value = razaoSocialReceita;
+                        }
+                        if (cliente.vendas_count > 0) { abrirModalAvisoCliente(cliente); }
+                    } else {
+                        // Cliente ainda não existe na base: mantém razão social consultada na Receita.
+                        alternarBloqueioCampos(false);
+                        limparCamposCliente();
+                        if (razaoSocialReceita) {
+                            const inputNome = document.getElementById('input-nome');
+                            if (inputNome) inputNome.value = razaoSocialReceita;
+                        }
+                    }
+                } catch(e) { console.error(e); alternarBloqueioCampos(false); 
+                } finally { input.classList.remove('input-loading'); }
+            }
+        }
+
+        function abrirModalAvisoCliente(cliente) {
+            document.getElementById('aviso-nome-cliente').textContent = cliente.nome_razao_social;
+            document.getElementById('aviso-qtd-vendas').textContent = cliente.vendas_count;
+            clienteTemp = cliente; 
+            modalAviso.show();
+        }
+
+        function fecharModalAviso() {
+            modalAviso.hide();
+            document.getElementById('input-cpf').value = '';
+            document.getElementById('input-cpf').focus();
+            limparCamposCliente();
+        }
+
+        function confirmarClienteExistente() { modalAviso.hide(); }
+
+        function isEmailFormatoValido(email) {
+            if (!email || !String(email).trim()) return false;
+            const emailLimpo = String(email).trim();
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}$/;
+            return emailRegex.test(emailLimpo);
+        }
+
+        function podeEditarDadosClienteSemApp() {
+            return origemCadastroAtual === 'SEM_APP' && ['Admin', 'Diretoria', 'BackOffice'].includes(userProfile);
+        }
+
+
+        // Bloqueia apenas CPF e Nome, mantendo telefones editáveis
+        function alternarBloqueioCampos(bloquear) {
+            const idsBloquear = ['input-nome', 'input-cpf'];
+            idsBloquear.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.readOnly = bloquear;
+            });
+            // Telefones continuam editáveis
+        }
+
+        function limparCamposCliente() {
+            const ids = ['input-nome', 'input-email', 'input-telefone', 'input-telefone2', 'input-nome-mae', 'input-data-nascimento'];
+            ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        }
+
+        const CEP_MODAL_TEXTOS = {
+            not_found: {
+                titulo: 'CEP Não Encontrado',
+                mensagem: 'O CEP informado não retornou nenhum endereço na base dos Correios.',
+                sub: 'Deseja preencher o endereço manualmente?',
+                manual: true,
+            },
+            unavailable: {
+                titulo: 'Consulta de CEP indisponível',
+                mensagem: 'Não foi possível consultar o CEP no momento (serviço externo indisponível ou sem resposta).',
+                sub: 'Você pode tentar de novo em instantes ou preencher o endereço manualmente.',
+                manual: true,
+            },
+            unauthorized: {
+                titulo: 'Sessão expirada',
+                mensagem: 'Sua sessão expirou. Atualize a página e faça login novamente para consultar o CEP.',
+                sub: '',
+                manual: false,
+            },
+        };
+
+        function limparCamposEnderecoNovaVenda() {
+            ['nova-logradouro', 'nova-bairro', 'nova-cidade', 'nova-estado'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+        }
+
+        function mostrarModalCep(tipo, mensagemCustom) {
+            const cfg = CEP_MODAL_TEXTOS[tipo] || CEP_MODAL_TEXTOS.unavailable;
+            const tituloEl = document.getElementById('modal-cep-titulo');
+            const msgEl = document.getElementById('modal-cep-mensagem');
+            const subEl = document.getElementById('modal-cep-submensagem');
+            const botoesEl = document.getElementById('modal-cep-botoes');
+            if (tituloEl) tituloEl.innerHTML = `<i class="bi bi-geo-alt-fill"></i> ${cfg.titulo}`;
+            if (msgEl) msgEl.textContent = mensagemCustom || cfg.mensagem;
+            if (subEl) {
+                subEl.textContent = cfg.sub || '';
+                subEl.style.display = cfg.sub ? '' : 'none';
+            }
+            if (botoesEl) botoesEl.style.display = cfg.manual ? '' : 'none';
+            modalCep.show();
+        }
+
+        async function buscarCepNovaVenda(e) { 
+            if(origemCadastroAtual === 'APP') return;
+            const cep = e.target.value.replace(/\D/g, ''); 
+            if (cep.length !== 8) return; 
+            const fields = ['nova-logradouro', 'nova-bairro', 'nova-cidade', 'nova-estado'];
+            fields.forEach(id => document.getElementById(id).value = '...');
+            let d = {};
+            try {
+                const token = localStorage.getItem('accessToken');
+                const headers = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                const res = await fetch(`/api/crm/viacep/${cep}/`, { headers });
+                try { d = await res.json(); } catch (_) {}
+                if (res.status === 401) {
+                    limparCamposEnderecoNovaVenda();
+                    logout();
+                    return;
+                }
+                if (res.status === 403) {
+                    limparCamposEnderecoNovaVenda();
+                    mostrarModalCep('unauthorized', d.message || d.detail || d.error);
+                    return;
+                }
+                if (!res.ok) {
+                    limparCamposEnderecoNovaVenda();
+                    const tipo = d.code === 'not_found' ? 'not_found' : 'unavailable';
+                    mostrarModalCep(tipo, d.message || d.error);
+                    return;
+                }
+                const erroCep = d.erro === true || d.erro === 'true';
+                if (!erroCep) { 
+                    document.getElementById('nova-logradouro').value = (d.logradouro || '').toUpperCase(); 
+                    document.getElementById('nova-bairro').value = (d.bairro || '').toUpperCase(); 
+                    document.getElementById('nova-cidade').value = (d.localidade || '').toUpperCase(); 
+                    document.getElementById('nova-estado').value = (d.uf || '').toUpperCase(); 
+                    document.getElementById('nova-numero').focus();
+                } else {
+                    limparCamposEnderecoNovaVenda();
+                    mostrarModalCep('not_found', d.message);
+                }
+            } catch(err) {
+                limparCamposEnderecoNovaVenda();
+                mostrarModalCep('unavailable');
+            } 
+        }
+
+        function acaoCepManual(manual) {
+            modalCep.hide();
+            const ids = ['nova-logradouro', 'nova-bairro', 'nova-cidade', 'nova-estado'];
+            if (manual) {
+                ids.forEach(id => document.getElementById(id).value = '');
+                setTimeout(() => document.getElementById('nova-logradouro').focus(), 300);
+            } else {
+                ids.forEach(id => document.getElementById(id).value = '');
+                document.getElementById('nova-cep').value = '';
+                setTimeout(() => document.getElementById('nova-cep').focus(), 300);
+            }
+        }
+
+        function aplicarFiltros() {
+            const tab = document.querySelector('#abas-navegacao .nav-link.active');
+            const dv = tab ? tab.getAttribute('data-view') : '';
+            if (dv === 'dashboard') carregarDashboard();
+            else carregarVendas();
+        }
+
+        function filtrarPorStatus(status, element) {
+            document.querySelectorAll('#abas-status .nav-link').forEach(l => l.classList.remove('active'));
+            element.classList.add('active'); 
+            statusEsteiraAtual = status; 
+            // Sempre refaz consulta na API para aplicar regra correta no backend
+            // (especialmente INSTALADA com data efetiva e status exato).
+            carregarVendas(true);
+        }
+
+        async function carregarVendedores() {
+            try {
+                const vendedores = await apiFetch('/crm/lista-vendedores/');
+                vendedoresCache = vendedores || [];
+                const selectFiltro = document.getElementById('filtro-vendedor');
+                const selectModal = document.getElementById('select-vendedor-modal'); 
+                selectFiltro.innerHTML = '<option value="">Todos</option>';
+                selectModal.innerHTML = '<option value="">Selecione...</option>';
+                if(vendedores) {
+                    vendedores.forEach(v => {
+                        const opt = `<option value="${v.id}">${v.username}</option>`;
+                        selectFiltro.innerHTML += opt; selectModal.innerHTML += opt; 
+                    });
+                }
+            } catch(e) { console.error('Erro ao carregar vendedores', e); }
+        }
+
+        function atualizarVisibilidadeGeradaOs() {
+            const container = document.getElementById('container-gerada-os-auto');
+            if (!container) return;
+            const idEdicao = document.getElementById('id-venda-edicao')?.value;
+            // No create, o valor vem do modal-origem; no edit, mostramos o container se o vendedor tiver permissão
+            if (!idEdicao) {
+                container.classList.add('d-none');
+                return;
+            }
+            let mostrar = false;
+            try {
+                const selVend = document.getElementById('select-vendedor-modal');
+                const vid = selVend ? selVend.value : '';
+                const v = vendedoresCache.find(x => String(x.id) === String(vid));
+                mostrar = !!(v && v.autorizar_venda_automatica);
+                if (!mostrar && selVend && !vid) {
+                    const payload = jwt_decode(localStorage.getItem('accessToken') || '');
+                    mostrar = !!payload.autorizar_venda_automatica;
+                }
+            } catch(e) {}
+            container.classList.toggle('d-none', !mostrar);
+            if (!mostrar) {
+                const radioNao = document.getElementById('gerada-os-nao');
+                if (radioNao) radioNao.checked = true;
+                document.getElementById('input-gerada-os-automatica').value = 'false';
+            }
+        }
+
+        // =========================================================================
+        // FUNÇÃO CARREGAR VENDAS (CORRIGIDA: Lógica de Status Fechado)
+        // =========================================================================
+        function consultorMesFiltroValido(iniStr, fimStr) {
+            if (!['Vendedor', 'Supervisor'].includes(userProfile)) return true;
+            if (!iniStr || !fimStr) return true;
+            const a = new Date(iniStr + 'T12:00:00');
+            const b = new Date(fimStr + 'T12:00:00');
+            if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return false;
+            if (a.getDate() !== 1) return false;
+            const ultimo = new Date(a.getFullYear(), a.getMonth() + 1, 0);
+            if (b.getFullYear() !== ultimo.getFullYear() || b.getMonth() !== ultimo.getMonth() || b.getDate() !== ultimo.getDate()) return false;
+            const hoje = new Date();
+            const ym = (d) => d.getFullYear() * 12 + d.getMonth();
+            const yma = ym(a);
+            if (yma === ym(hoje)) return true;
+            const ant = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+            return yma === ym(ant);
+        }
+
+        function garantirFiltroMesConsultor() {
+            if (!['Vendedor', 'Supervisor'].includes(userProfile)) return;
+            const inicio = document.getElementById('filtro-inicio').value;
+            const fim = document.getElementById('filtro-fim').value;
+            if (!inicio || !fim) return;
+            if (consultorMesFiltroValido(inicio, fim)) return;
+            alert('Para seu perfil, use apenas o mês atual ou o mês anterior completo (do dia 1 ao último dia do mês).');
+            const h = new Date();
+            document.getElementById('filtro-inicio').valueAsDate = new Date(h.getFullYear(), h.getMonth(), 1);
+            document.getElementById('filtro-fim').valueAsDate = new Date(h.getFullYear(), h.getMonth() + 1, 0);
+        }
+
+        async function carregarVendas(silent = false) {
+            garantirFiltroMesConsultor();
+            document.getElementById('contador-filtros-principais').textContent = '0';
+            document.getElementById('contador-filtros-cabecalho').textContent = '0';
+            // Destruição segura do DataTable
+            if ($.fn.DataTable.isDataTable('#tabela-vendas')) {
+                $('#tabela-vendas').DataTable().destroy();
+            }
+
+            const tbody = document.getElementById('tabela-vendas-body');
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center">Carregando...</td></tr>';
+            $('#tabela-vendas thead tr.filters').remove();
+
+            // Parâmetros
+            const inicio = document.getElementById('filtro-inicio').value;
+            const fim = document.getElementById('filtro-fim').value;
+            const vendedor = document.getElementById('filtro-vendedor').value;
+            const busca = (document.getElementById('filtro-busca').value || '').trim();
+            const buscaGeral = busca.length >= 2;
+            const hintBusca = document.getElementById('busca-geral-hint');
+            if (hintBusca) hintBusca.classList.toggle('d-none', !buscaGeral);
+            const tabLista = document.querySelector('#abas-navegacao .nav-link.active');
+            const tabView = tabLista ? tabLista.getAttribute('data-view') : 'minhas_vendas';
+            const viewAtual = tabView === 'minhas_vendas' ? 'minhas_vendas' : 'geral';
+            
+            let url = `/crm/vendas/?view=${viewAtual}`;
+            // Busca geral: não envia período — varre a base toda
+            if (!buscaGeral) {
+                if (inicio) url += `&data_inicio=${inicio}`;
+                if (fim) url += `&data_fim=${fim}`;
+            }
+            if (busca) url += `&search=${encodeURIComponent(busca)}`;
+            if (viewAtual === 'geral' && vendedor) url += `&consultor_id=${vendedor}`;
+            if (statusEsteiraAtual) url += `&status=${encodeURIComponent(statusEsteiraAtual)}`;
+
+            try {
+                // Busca todas as páginas de vendas automaticamente
+                let vendas = [];
+                let nextUrl = url + '&page_size=1000';
+                let primeiraResposta = null;
+                while (nextUrl) {
+                    const res = await apiFetch(nextUrl);
+                    if (!primeiraResposta) primeiraResposta = res;
+                    if (res && res.results) {
+                        vendas = vendas.concat(res.results);
+                        // Extrai apenas o endpoint relativo para próxima página
+                        if (res.next) {
+                            const next = res.next;
+                            const idx = next.indexOf('/api/');
+                            nextUrl = idx !== -1 ? next.substring(idx + 4) : null;
+                        } else {
+                            nextUrl = null;
+                        }
+                    } else if (Array.isArray(res)) {
+                        vendas = vendas.concat(res);
+                        nextUrl = null;
+                    } else {
+                        nextUrl = null;
+                    }
+                }
+
+                // Carrega listas de status
+                const [statusEsteiraRes, statusTratRes] = await Promise.all([
+                    apiFetch('/crm/status/?tipo=Esteira&page_size=1000'),
+                    apiFetch('/crm/status/?tipo=Tratamento&page_size=1000')
+                ]);
+
+                const listaStatusEsteira = Array.isArray(statusEsteiraRes) ? statusEsteiraRes : (statusEsteiraRes?.results || []);
+                const listaStatusTrat = Array.isArray(statusTratRes) ? statusTratRes : (statusTratRes?.results || []);
+
+                // === CÁLCULO DE CONTADORES ===
+                let counts = { total: 0, pendente: 0, agendado: 0, instalada: 0, cancelado: 0 };
+                if (vendas.length > 0) {
+                    counts.total = vendas.length;
+                    vendas.forEach(v => {
+                        let stNome = v.status_esteira_nome || '';
+                        if (!stNome && v.status_esteira) {
+                             const s = listaStatusEsteira.find(x => x.id == v.status_esteira || x.id == v.status_esteira.id);
+                             if(s) stNome = s.nome;
+                        }
+                        const stUpper = String(stNome).toUpperCase();
+
+                        if (stUpper === 'INSTALADA') counts.instalada++;
+                        else if (stUpper.includes('CANCELAD')) counts.cancelado++;
+                        else if (stUpper.includes('AGENDADO')) counts.agendado++;
+                        else if (stUpper.includes('PENDEN') || stUpper.includes('PENDÊN')) counts.pendente++;
+                    });
+                }
+
+                // Atualiza Badges
+                document.getElementById('count-todos').textContent = `${counts.total}`;
+                document.getElementById('count-pendentes').textContent = `${counts.pendente}`;
+                document.getElementById('count-agendados').textContent = `${counts.agendado}`;
+                document.getElementById('count-instalados').textContent = `${counts.instalada}`;
+                document.getElementById('count-cancelados').textContent = `${counts.cancelado}`;
+                document.getElementById('contador-filtros-principais').textContent = `${counts.total}`;
+                if (hintBusca) {
+                    hintBusca.classList.toggle('d-none', !buscaGeral);
+                    hintBusca.textContent = buscaGeral
+                        ? `Busca geral · ${counts.total}`
+                        : 'Busca geral';
+                }
+
+                if (vendas.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Nenhuma venda encontrada.</td></tr>';
+                    return;
+                }
+
+                const dadosFormatados = vendas.map(v => {
+                    // --- 1. RESOLUÇÃO STATUS TRATAMENTO E ESTADO (CRÍTICO) ---
+                    let statusTratamentoNome = '-';
+                    let statusTratamentoEstado = ''; // Vazio, Aberto ou Fechado
+                    
+                    // Tenta encontrar o objeto na lista completa para pegar o .estado
+                    let objTrat = null;
+
+                    // Busca por ID
+                    if (v.status_tratamento) {
+                        const idBusca = (typeof v.status_tratamento === 'object') ? v.status_tratamento.id : v.status_tratamento;
+                        objTrat = listaStatusTrat.find(s => s.id == idBusca);
+                    }
+                    
+                    // Se não achou por ID, tenta pelo Nome (caso o backend mande o nome)
+                    if (!objTrat && v.status_tratamento_nome) {
+                        objTrat = listaStatusTrat.find(s => s.nome.toUpperCase() === v.status_tratamento_nome.toUpperCase());
+                    }
+
+                    if (objTrat) {
+                        statusTratamentoNome = objTrat.nome;
+                        statusTratamentoEstado = objTrat.estado || ''; 
+                    } else {
+                        // Fallback se não achar na lista
+                        statusTratamentoNome = v.status_tratamento_nome || v.status_tratamento || v.status_comissionamento || '-';
+                    }
+
+                    // --- 2. RESOLUÇÃO STATUS ESTEIRA ---
+                    let statusNome = 'Aguardando';
+                    let badgeClass = 'bg-secondary text-white';
+                    
+                    // Tenta achar o nome da esteira
+                    if (v.status_esteira_nome) {
+                        statusNome = v.status_esteira_nome;
+                    } else if (v.status_esteira) {
+                        const idBusca = (typeof v.status_esteira === 'object') ? v.status_esteira.id : v.status_esteira;
+                        const sEncontrado = listaStatusEsteira.find(s => s.id == idBusca);
+                        if (sEncontrado) statusNome = sEncontrado.nome;
+                    }
+
+                    // --- 3. REGRA DE NEGÓCIO DA AUDITORIA (CORRIGIDA) ---
+                    const stTratUpper = String(statusTratamentoNome).toUpperCase();
+                    const estadoTratUpper = String(statusTratamentoEstado).toUpperCase();
+
+                    if (statusNome === 'Aguardando') {
+                        // REGRA MESTRA: Se o tratamento está FECHADO (Duplicidade, Cancelado, Reprovado Final), a esteira morre.
+                        if (estadoTratUpper === 'FECHADO') {
+                            statusNome = '-';
+                            badgeClass = 'bg-light text-muted border';
+                        } 
+                        // REGRA SECUNDÁRIA: Se Reprovado mas Aberto -> Pendência
+                        else if (stTratUpper.includes('REPROVAD')) {
+                            statusNome = 'Pendência Auditoria';
+                            badgeClass = 'bg-danger text-white';
+                        } 
+                        // REGRA TERCIÁRIA: Pendente
+                        else if (stTratUpper.includes('PENDENTE')) {
+                            statusNome = 'Em Análise';
+                            badgeClass = 'bg-warning text-dark';
+                        }
+                    }
+
+                    // --- 4. CORES DA ESTEIRA ---
+                    const statusNomeStr = String(statusNome);
+                    const stEsteiraUpper = statusNomeStr.toUpperCase();
+                    
+                    // Só aplica cores padrão se não foi alterado pela regra de auditoria (exceto se virou "-")
+                    if (statusNome !== '-' && statusNome !== 'Pendência Auditoria' && statusNome !== 'Em Análise') { 
+                        if (stEsteiraUpper === 'INSTALADA') badgeClass = 'bg-success text-white';
+                        else if (stEsteiraUpper.includes('CANCELADA')) badgeClass = 'bg-danger text-white';
+                        else if (stEsteiraUpper.includes('AGENDADO')) badgeClass = 'bg-info text-dark';
+                        else if (stEsteiraUpper.includes('PENDÊNCIA') || stEsteiraUpper.includes('PENDENCIA')) badgeClass = 'bg-warning text-dark';
+                    }
+                    
+                    const badgeEsteira = `<span class="status-badge ${badgeClass}">${statusNomeStr}</span>`;
+
+                    // Cores Tratamento
+                    let badgeTratamentoClass = 'bg-light text-muted border';
+                    if (stTratUpper.includes('APROVAD') || stTratUpper.includes('OK')) badgeTratamentoClass = 'bg-success text-white';
+                    else if (stTratUpper.includes('REPROVAD') || stTratUpper.includes('DUPLICIDADE')) badgeTratamentoClass = 'bg-danger text-white';
+                    else if (stTratUpper.includes('PENDENTE')) badgeTratamentoClass = 'bg-warning text-dark';
+                    else if (stTratUpper.includes('AUDITADA')) badgeTratamentoClass = 'bg-primary text-white';
+                    const badgeTratamento = `<span class="status-badge ${badgeTratamentoClass}">${statusTratamentoNome}</span>`;
+
+                    // Demais dados
+                    const dataFormatada = v.data_criacao ? new Date(v.data_criacao).toLocaleDateString('pt-BR') : '-';
+                    const clienteNome = v.cliente ? (v.cliente.nome_razao_social || v.cliente.nome || v.cliente_nome) : (v.cliente_nome_razao_social || 'N/A');
+                    const clienteDisplay = `<div class="fw-bold">${clienteNome}</div><div class="small text-muted">${v.cliente_cpf_cnpj || ''}</div>`;
+                    
+                    let nomeVendedor = 'N/A';
+                    if (v.vendedor_nome) nomeVendedor = v.vendedor_nome;
+                    else if (v.vendedor) nomeVendedor = (v.vendedor.username || v.vendedor.first_name || v.vendedor);
+
+                    const planoNome = v.plano ? (v.plano.nome || v.plano_nome) : (v.plano_nome || 'N/A');
+                    
+                    let motivoPendencia = '-';
+                    if (v.motivo_pendencia_nome) motivoPendencia = v.motivo_pendencia_nome;
+                    else if (v.motivo_pendencia) {
+                         motivoPendencia = (typeof v.motivo_pendencia === 'object') ? v.motivo_pendencia.nome : v.motivo_pendencia;
+                    }
+
+                    const osDisplay = v.ordem_servico ? `<span class="fw-bold text-dark">#${v.ordem_servico}</span>` : '<span class="text-muted">-</span>';
+                    
+                    let agendamentoDisplay = '<span class="text-muted">-</span>';
+                    if(v.data_agendamento) {
+                        const parts = v.data_agendamento.split('-');
+                        const turno = v.periodo_agendamento || '';
+                        agendamentoDisplay = `<span>${parts[2]}/${parts[1]}</span> <span class="badge bg-light text-dark border ms-1">${turno}</span>`;
+                    }
+
+                    // Verificar status para mostrar botão de reemissão
+                    const isCancelada = stEsteiraUpper.includes('CANCELAD') || stTratUpper.includes('CANCELAD');
+                    const isPendenciada = stEsteiraUpper.includes('PENDEN') || stEsteiraUpper.includes('PENDÊN') || stTratUpper.includes('PENDENTE');
+                    const isInstalada = stEsteiraUpper.includes('INSTALAD');
+                    
+                    // Botão de reemissão aparece para canceladas, pendenciadas e instaladas
+                    const btnReemissao = (isCancelada || isPendenciada || isInstalada) ? 
+                        `<button onclick="abrirModalReemissao(${v.id})" class="btn btn-icon btn-icon-warning" title="Reemissão" aria-label="Reemissão"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></button>` : '';
+                    
+                    const botoes = `
+                        <div class="btn-icon-group justify-content-end">
+                        ${btnReemissao}
+                        <button onclick="reenviarWhatsApp(${v.id})" class="btn btn-icon btn-icon-success" title="Reenviar Aprovação" aria-label="Reenviar aprovação"><i class="bi bi-whatsapp" aria-hidden="true"></i></button>
+                        <button onclick="editarVenda(${v.id})" class="btn btn-icon btn-icon-primary" title="Editar" aria-label="Editar venda"><i class="bi bi-pencil" aria-hidden="true"></i></button>
+                        <button onclick="excluirVenda(${v.id})" class="btn btn-icon btn-icon-danger" title="Excluir" aria-label="Excluir venda"><i class="bi bi-trash" aria-hidden="true"></i></button>
+                        </div>
+                    `;
+
+                    return [
+                        `<span class="ps-3 fw-bold">#${v.id}</span>`,
+                        dataFormatada,
+                        clienteDisplay,
+                        nomeVendedor,
+                        planoNome,
+                        osDisplay,
+                        agendamentoDisplay,
+                        badgeTratamento,
+                        badgeEsteira,
+                        `<span class="text-danger small fw-bold">${motivoPendencia}</span>`,
+                        `<div class="text-end pe-3">${botoes}</div>`
+                    ];
+                });
+
+                iniciarDataTable(dadosFormatados);
+
+                if(statusEsteiraAtual) {
+                    const table = $('#tabela-vendas').DataTable();
+                    table.column(8).search(statusEsteiraAtual, true, false).draw();
+                }
+
+            } catch (error) { 
+                console.error(error); 
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Erro ao carregar vendas.</td></tr>'; 
+            }
+        }
+
+        function iniciarDataTable(dataSet) {
+            $('#tabela-vendas thead tr.filters').remove();
+            $('#tabela-vendas thead tr').clone(true).addClass('filters').appendTo('#tabela-vendas thead');
+            
+            const table = $('#tabela-vendas').DataTable({
+                destroy: true, 
+                data: dataSet, 
+                deferRender: true,
+                orderCellsTop: true,
+                fixedHeader: true,
+                paging: true,
+                pageLength: 25,
+                language: { url: "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json" },
+                columnDefs: [
+                    { orderable: false, targets: 10 }, 
+                    { className: "align-middle", targets: "_all" }
+                ],
+                initComplete: function () {
+                    var api = this.api();
+                    api.columns().eq(0).each(function (colIdx) {
+                        if (colIdx == 10) { $('.filters th').eq($(api.column(colIdx).header()).index()).html(''); return; }
+                        var cell = $('.filters th').eq($(api.column(colIdx).header()).index());
+                        var title = $(cell).text();
+                        $(cell).html('<input type="text" placeholder="🔍 ' + title + '" />');
+                        $('input', $('.filters th').eq($(api.column(colIdx).header()).index())).off('keyup change').on('keyup change', function (e) { 
+                            e.stopPropagation(); 
+                            var regexr = '({search})'; 
+                            api.column(colIdx).search(this.value != '' ? regexr.replace('{search}', '(((' + this.value + ')))') : '', this.value != '', this.value == '').draw(); 
+                        });
+                    });
+                }
+            });
+
+            const atualizarContadorCabecalho = () => {
+                const totalAplicado = table.rows({ filter: 'applied' }).count();
+                document.getElementById('contador-filtros-cabecalho').textContent = `${totalAplicado}`;
+            };
+            table.on('draw.dt', function () {
+                atualizarContadorCabecalho();
+                requestAnimationFrame(syncCrmVendasScrollbars);
+            });
+            atualizarContadorCabecalho();
+            requestAnimationFrame(syncCrmVendasScrollbars);
+        }
+
+        async function reenviarWhatsApp(id) {
+            if(!confirm("Deseja reenviar a mensagem de aprovação para o vendedor responsável?")) return;
+            try { const res = await apiFetch(`/crm/vendas/${id}/reenviar-whatsapp-aprovacao/`, { method: 'POST' }); alert(res.detail || "Enviado!"); } catch(e) { alert("Erro ao enviar: " + (e.detail || e)); }
+        }
+
+        function abrirModalBoasVindas() {
+            document.getElementById('boas-vindas-data').value = '';
+            document.getElementById('boas-vindas-resultado').style.display = 'none';
+            const modal = new bootstrap.Modal(document.getElementById('modal-boas-vindas'));
+            modal.show();
+        }
+
+        async function enviarBoasVindas() {
+            const dataStr = document.getElementById('boas-vindas-data').value;
+            if (!dataStr) { alert('Selecione a data em que o pedido foi instalado.'); return; }
+            const btn = document.getElementById('btn-enviar-boas-vindas');
+            const resultado = document.getElementById('boas-vindas-resultado');
+            btn.disabled = true;
+            resultado.style.display = 'none';
+            let offset = 0;
+            let totalEnviados = 0;
+            var WHATSAPP_PAUSA_LOTE_MIN = 60, WHATSAPP_PAUSA_LOTE_MAX = 120;
+            function esperaAleatoriaMinSec() {
+                var min = WHATSAPP_PAUSA_LOTE_MIN || 60, max = WHATSAPP_PAUSA_LOTE_MAX || 120;
+                return (Math.floor(Math.random() * (max - min + 1)) + min) * 1000;
+            }
+
+            function exibirMsg(tipo, html) {
+                resultado.style.display = 'block';
+                resultado.className = 'alert mt-2 alert-' + tipo;
+                resultado.innerHTML = html;
+            }
+
+            try {
+                while (true) {
+                    const body = { data: dataStr, offset: offset, limite: 5 };
+                    const res = await apiFetch('/crm/vendas/enviar-boas-vindas/', {
+                        method: 'POST',
+                        body: JSON.stringify(body)
+                    });
+                    totalEnviados += res.enviados || 0;
+                    const totalNaData = res.total_na_data || 0;
+                    const restantes = res.restantes || 0;
+                    const erros = (res.erros || []).length;
+
+                    if (restantes > 0 && res.proximo_offset != null) {
+                        var esperaMs = res.pause_antes_proximo_seg != null
+                            ? (res.pause_antes_proximo_seg * 1000)
+                            : esperaAleatoriaMinSec();
+                        exibirMsg('info', 'Enviados <strong>' + totalEnviados + '</strong> de ' + totalNaData + '. Aguarde ~' + Math.round(esperaMs / 1000) + 's (pausa entre lotes) para o próximo lote...' + (erros ? ' <span class="text-danger">(' + erros + ' erros)</span>' : ''));
+                        offset = res.proximo_offset;
+                        await new Promise(r => setTimeout(r, esperaMs));
+                    } else {
+                        exibirMsg((res.erros && res.erros.length > 0) ? 'warning' : 'success',
+                            'Enviados: <strong>' + totalEnviados + '</strong> de ' + totalNaData + (res.erros && res.erros.length ? '. Erros: ' + res.erros.slice(0, 5).join('; ') : ''));
+                        break;
+                    }
+                }
+            } catch (e) {
+                let msgErro = 'Erro ao enviar.';
+                if (typeof e === 'string') msgErro = e;
+                else if (e && e.message) msgErro = e.message;
+                else if (e && e.detail) msgErro = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail);
+                else if (e && typeof e === 'object') msgErro = e.detail || e.erro || JSON.stringify(e);
+                exibirMsg('danger', 'Erro: ' + msgErro);
+                if (totalEnviados > 0) resultado.innerHTML += '<br><small>Enviados até o momento: ' + totalEnviados + '</small>';
+            }
+            btn.disabled = false;
+        }
+
+        function verificarRegraCNPJ(valor) {
+            if(!valor) return;
+            const clean = valor.replace(/\D/g, '');
+            const area = document.getElementById('area-representante');
+            const input = document.getElementById('input-cpf-rep');
+            
+            // LÓGICA DE EXIBIÇÃO:
+            // O estilo 'display: flex' aqui se sobrepõe ao container pai ser ocultado
+            // caso o elemento esteja em um container visível, ou se for manipulado diretamente.
+            if (clean.length > 11) { 
+                area.style.display = 'flex'; 
+                input.setAttribute('required', 'required'); 
+            } else { 
+                area.style.display = 'none'; 
+                input.removeAttribute('required'); 
+            }
+        }
+
+        function abrirModalOrigem() {
+            console.log('[DEBUG] abrirModalOrigem chamado');
+            
+            // Limpar qualquer backdrop preso
+            document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.paddingRight = '';
+            document.body.style.overflow = '';
+            
+            // Resetar formulário
+            const formNovaVenda = document.getElementById('form-nova-venda');
+            if (formNovaVenda) formNovaVenda.reset();
+            
+            const idVendaEdicao = document.getElementById('id-venda-edicao');
+            if (idVendaEdicao) idVendaEdicao.value = '';
+            
+            const tituloModal = document.getElementById('titulo-modal-venda');
+            if (tituloModal) tituloModal.innerHTML = 'Registrar Venda';
+            
+            const feedbackWhatsapp = document.getElementById('feedback-whatsapp');
+            if (feedbackWhatsapp) feedbackWhatsapp.innerHTML = '';
+            
+            const inputTelefone = document.getElementById('input-telefone');
+            if (inputTelefone) inputTelefone.classList.remove('is-valid', 'is-invalid');
+            
+            const btnSalvar = document.getElementById('btn-salvar-venda');
+            if (btnSalvar) btnSalvar.disabled = false;
+            
+            const containerEsteira = document.getElementById('container-status-esteira');
+            if (containerEsteira) containerEsteira.classList.add('d-none');
+            
+            const containerVendedor = document.getElementById('container-vendedor-modal');
+            if (containerVendedor) containerVendedor.classList.add('d-none');
+            
+            const containerGestao = document.getElementById('container-status-gestao');
+            if (containerGestao) containerGestao.classList.add('d-none');
+            const containerOs = document.getElementById('container-ordem-servico');
+            if (containerOs) containerOs.classList.add('d-none');
+            const inputOs = document.getElementById('input-ordem-servico');
+            if (inputOs) inputOs.value = '';
+            const containerReemissao = document.getElementById('container-reemissao-modal');
+            if (containerReemissao) containerReemissao.classList.add('d-none');
+            const checkboxReemissao = document.getElementById('checkbox-reemissao');
+            if (checkboxReemissao) checkboxReemissao.checked = false;
+            
+            ['input-nome', 'input-email', 'input-telefone', 'input-telefone2', 'input-nome-mae', 'input-data-nascimento'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) { el.readOnly = false; el.value = ''; }
+            });
+            
+            const areaRep = document.getElementById('area-representante');
+            if(areaRep) areaRep.style.display = 'none';
+            
+            // Verificar se o modal existe e está inicializado
+            const modalElement = document.getElementById('modal-origem-venda');
+            if (!modalElement) {
+                console.error('[ERRO] Modal modal-origem-venda não encontrado no DOM');
+                alert('Erro: Modal não encontrado. Recarregue a página.');
+                return;
+            }
+            
+            // Verificar se modalOrigem foi inicializado
+            if (!modalOrigem) {
+                console.warn('[AVISO] modalOrigem não inicializado, tentando criar agora...');
+                try {
+                    modalOrigem = new bootstrap.Modal(modalElement);
+                } catch (e) {
+                    console.error('[ERRO] Não foi possível criar instância do modal:', e);
+                    alert('Erro ao abrir modal. Recarregue a página.');
+                    return;
+                }
+            }
+            
+            console.log('[DEBUG] Tentando abrir modal...');
+            try {
+                modalOrigem.show();
+                console.log('[DEBUG] modalOrigem.show() executado');
+            } catch (e) {
+                console.error('[ERRO] Erro ao abrir modal:', e);
+                // Fallback: tentar abrir manualmente
+                modalElement.classList.add('show');
+                modalElement.style.display = 'block';
+                document.body.classList.add('modal-open');
+                const backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                backdrop.style.zIndex = '1050';
+                document.body.appendChild(backdrop);
+            }
+        }
+
+        function selecionarOrigem(tipo) {
+            origemCadastroAtual = tipo; 
+            document.getElementById('input-forma-entrada').value = tipo;
+            
+            // Mostra pergunta sobre fixo
+            document.getElementById('opcoes-origem').style.display = 'none';
+            document.getElementById('opcoes-fixo').style.display = 'block';
+        }
+        
+        function selecionarFixo(temFixo) {
+            document.getElementById('input-tem-fixo').value = temFixo ? 'true' : 'false';
+            
+            const badge = document.getElementById('badge-origem');
+            if(badge) {
+                const tipo = origemCadastroAtual;
+                badge.textContent = (tipo === 'APP') ? 'Via APP' : 'Sem APP';
+                badge.className = (tipo === 'APP') ? 'badge bg-primary ms-2' : 'badge bg-secondary ms-2';
+            }
+
+            let mostrarGeradaOs = false;
+            try {
+                const payload = jwt_decode(localStorage.getItem('accessToken') || '');
+                mostrarGeradaOs = !!payload.autorizar_venda_automatica;
+            } catch(e) {}
+
+            if (mostrarGeradaOs) {
+                document.getElementById('opcoes-fixo').style.display = 'none';
+                document.getElementById('opcoes-gerada-os').style.display = 'block';
+            } else {
+                document.getElementById('input-gerada-os-automatica').value = 'false';
+                abrirFormularioVenda();
+            }
+        }
+
+        function selecionarGeradaOs(valor) {
+            document.getElementById('input-gerada-os-automatica').value = valor ? 'true' : 'false';
+            abrirFormularioVenda();
+        }
+
+        function abrirFormularioVenda() {
+            const containerDadosVenda = document.querySelector('form h6:nth-of-type(2)').nextElementSibling; 
+            const containerEndereco = document.querySelector('form h6:nth-of-type(3)').nextElementSibling; 
+            const headerDadosVenda = document.querySelector('form h6:nth-of-type(2)');
+            const headerEndereco = document.querySelector('form h6:nth-of-type(3)');
+
+            const divNomeMae = document.getElementById('div-nome-mae');
+            const divDataNasc = document.getElementById('div-data-nascimento');
+            const divEmail = document.getElementById('div-email');
+
+            const camposOpcionaisNoApp = [
+                'select-plano', 'select-pagamento', 
+                'nova-cep', 'nova-logradouro', 'nova-numero', 'nova-bairro', 'nova-cidade', 'nova-estado', 'nova-referencia',
+                'input-nome-mae', 'input-data-nascimento', 'input-email' 
+            ];
+
+            if (origemCadastroAtual === 'APP') {
+                const ehGestaoVendedor = ['Admin', 'Diretoria', 'BackOffice'].includes(userProfile);
+                // Para gestão (Diretoria/BackOffice/Admin) no fluxo APP: mostrar seção "Dados da Venda" para atribuir Vendedor (Responsável)
+                if (ehGestaoVendedor) {
+                    if(containerDadosVenda) containerDadosVenda.style.display = 'flex';
+                    if(headerDadosVenda) headerDadosVenda.style.display = 'block';
+                } else {
+                    if(containerDadosVenda) containerDadosVenda.style.display = 'none';
+                    if(headerDadosVenda) headerDadosVenda.style.display = 'none';
+                }
+                if(containerEndereco) containerEndereco.style.display = 'none';
+                if(headerEndereco) headerEndereco.style.display = 'none';
+
+                if(divNomeMae) divNomeMae.style.display = 'none';
+                if(divDataNasc) divDataNasc.style.display = 'none';
+                if(divEmail) divEmail.style.display = 'none';
+
+                camposOpcionaisNoApp.forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) el.removeAttribute('required');
+                });
+
+            } else {
+                if(containerDadosVenda) containerDadosVenda.style.display = 'flex';
+                if(containerEndereco) containerEndereco.style.display = 'flex';
+                if(headerDadosVenda) headerDadosVenda.style.display = 'block';
+                if(headerEndereco) headerEndereco.style.display = 'block';
+
+                if(divNomeMae) divNomeMae.style.display = 'block';
+                if(divDataNasc) divDataNasc.style.display = 'block';
+                if(divEmail) divEmail.style.display = 'block';
+
+                camposOpcionaisNoApp.forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) el.setAttribute('required', 'required');
+                });
+                const inputEmail = document.getElementById('input-email');
+                if (inputEmail) inputEmail.removeAttribute('required');
+            }
+
+            // Para Diretoria/BackOffice/Admin: exibir lista de vendedores para atribuir responsável (tanto Via APP quanto Sem APP)
+            const areaStatus = document.getElementById('container-status-esteira');
+            const areaVendedor = document.getElementById('container-vendedor-modal');
+            const areaTrat = document.getElementById('container-status-gestao');
+            const areaOs = document.getElementById('container-ordem-servico');
+            const colPlano = document.getElementById('select-plano')?.closest('.col-12');
+            const colPagamento = document.getElementById('select-pagamento')?.closest('.col-12');
+            const colObs = document.getElementById('input-observacoes')?.closest('.col-12');
+            const containerGeradaOs = document.getElementById('container-gerada-os-auto');
+            if (areaStatus && areaVendedor && areaTrat) {
+                if (['Admin', 'Diretoria', 'BackOffice'].includes(userProfile)) {
+                    areaVendedor.classList.remove('d-none');
+                    const selVendedor = document.getElementById('select-vendedor-modal');
+                    if (selVendedor) selVendedor.value = '';
+                    if (origemCadastroAtual === 'APP') {
+                        // Via APP: em "Dados da Venda" mostrar só Vendedor (Responsável)
+                        areaStatus.classList.add('d-none');
+                        areaTrat.classList.add('d-none');
+                        if (areaOs) areaOs.classList.add('d-none');
+                        if (colPlano) colPlano.style.display = 'none';
+                        if (colPagamento) colPagamento.style.display = 'none';
+                        if (colObs) colObs.style.display = 'none';
+                        if (containerGeradaOs) containerGeradaOs.classList.add('d-none');
+                    } else {
+                        areaStatus.classList.remove('d-none');
+                        areaTrat.classList.remove('d-none');
+                        if (areaOs) areaOs.classList.add('d-none');
+                        if (colPlano) colPlano.style.display = '';
+                        if (colPagamento) colPagamento.style.display = '';
+                        if (colObs) colObs.style.display = '';
+                    }
+                } else {
+                    areaStatus.classList.add('d-none');
+                    areaVendedor.classList.add('d-none');
+                    areaTrat.classList.add('d-none');
+                    if (areaOs) areaOs.classList.add('d-none');
+                }
+            }
+
+            modalOrigem.hide();
+            modalNovaVenda.show();
+        }
+
+        function configurarPerfil() {
+            try {
+                const payload = jwt_decode(token);
+                userProfile = payload.user_role || payload.perfil || 'Vendedor'; 
+                const perfisGestao = ['Supervisor', 'Diretoria', 'BackOffice', 'Admin'];
+                if (perfisGestao.includes(userProfile)) { document.getElementById('aba-equipe').classList.remove('d-none'); }
+                const mostraBarraFiltros = ['Diretoria', 'Admin', 'BackOffice', 'Vendedor', 'Supervisor'].includes(userProfile);
+                const wrapFiltros = document.getElementById('crm-vendas-filtros-wrap');
+                const aviso = document.getElementById('aviso-filtro-bloqueado');
+                if (wrapFiltros) wrapFiltros.classList.toggle('d-none', !mostraBarraFiltros);
+                if (aviso) {
+                    if (mostraBarraFiltros) {
+                        aviso.classList.add('d-none');
+                    } else {
+                        aviso.classList.remove('d-none');
+                    }
+                }
+                if (['Vendedor', 'Supervisor'].includes(userProfile) && aviso) {
+                    aviso.classList.remove('d-none');
+                    aviso.innerHTML = '<i class="bi bi-calendar-check"></i> Filtro de datas: apenas <strong>mês civil completo</strong> (dia 1 ao último dia), <strong>mês atual</strong> ou <strong>mês anterior</strong>.';
+                }
+                if (['Diretoria', 'Admin', 'BackOffice'].includes(userProfile)) {
+                    document.getElementById('btn-exportar-excel').classList.remove('d-none');
+                    document.getElementById('btn-exportar-excel-filtro').classList.remove('d-none');
+                    const wAtivo = document.getElementById('filtro-dash-vendedor-ativo-wrap');
+                    if (wAtivo) wAtivo.classList.remove('d-none');
+                }
+                if (['Diretoria', 'Admin'].includes(userProfile)) {
+                    const btnMei = document.getElementById('btn-classificar-mei-historico');
+                    if (btnMei) btnMei.classList.remove('d-none');
+                    const btnRazao = document.getElementById('btn-corrigir-razao-cnpj');
+                    if (btnRazao) btnRazao.classList.remove('d-none');
+                }
+                atualizarVisibilidadeToggleWpp();
+            } catch(e) {}
+        }
+
+        async function alterarAba(tipo, elemento) {
+            document.querySelectorAll('#abas-navegacao .nav-link').forEach(l => l.classList.remove('active'));
+            elemento.classList.add('active');
+            const divLista = document.getElementById('conteudo-lista');
+            const divDash = document.getElementById('conteudo-dashboard');
+            if (tipo === 'dashboard') {
+                divLista.style.display = 'none';
+                divDash.style.display = 'block';
+                carregarDashboard();
+            } else {
+                divDash.style.display = 'none';
+                divLista.style.display = 'block';
+                viewAtual = (tipo === 'minhas_vendas') ? 'minhas_vendas' : 'geral';
+                document.getElementById('container-filtro-vendedor').classList.toggle('d-none', viewAtual === 'minhas_vendas');
+                if (viewAtual === 'geral') await carregarVendedores();
+                carregarVendas();
+            }
+        }
+
+        async function carregarDashboard() {
+            garantirFiltroMesConsultor();
+            const inicio = document.getElementById('filtro-inicio').value;
+            const fim = document.getElementById('filtro-fim').value;
+            const consultorId = document.getElementById('filtro-vendedor').value;
+            const vaDash = document.getElementById('filtro-vendedor-ativo-dash');
+            let url = `/crm/dashboard-resumo/?data_inicio=${inicio}&data_fim=${fim}`;
+            if (consultorId) url += `&consultor_id=${consultorId}`;
+            if (vaDash && vaDash.value) url += `&vendedor_ativo=${encodeURIComponent(vaDash.value)}`;
+            try {
+                const d = await apiFetch(url);
+                dashboardDataCache = d.detalhes_listas || {};
+                let htmlVendas = d.total_vendas;
+                if (d.projecao_vendas > 0) { htmlVendas += `<div style="font-size: 1rem; opacity: 0.8; font-weight: normal; margin-top: 5px;"><i class="bi bi-graph-up-arrow"></i> Proj: ${Math.round(d.projecao_vendas)}</div>`; }
+                document.getElementById('dash-total').innerHTML = htmlVendas;
+                document.getElementById('dash-meta-info').innerHTML = `Meta: ${d.meta} | Atingido: <strong>${d.percentual_meta}%</strong>`;
+                let htmlInstaladas = d.total_instaladas || 0;
+                if (d.projecao_instaladas > 0) { htmlInstaladas += `<div style="font-size: 1rem; opacity: 0.8; font-weight: normal; margin-top: 5px;"><i class="bi bi-graph-up-arrow"></i> Proj: ${Math.round(d.projecao_instaladas)}</div>`; }
+                document.getElementById('dash-instaladas').innerHTML = htmlInstaladas;
+                document.getElementById('dash-aproveitamento').textContent = `Aproveitamento: ${d.percentual_aproveitamento}%`;
+                const cardComissao = document.getElementById('card-comissao-wrapper');
+                if (d.exibir_comissao && cardComissao) {
+                    cardComissao.style.display = 'block';
+                    let htmlComissao = d.comissao_estimada.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+                    if (d.projecao_comissao > 0) { htmlComissao += `<div style="font-size: 1rem; opacity: 0.8; font-weight: normal; margin-top: 5px;"><i class="bi bi-graph-up-arrow"></i> Proj: ${d.projecao_comissao.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</div>`; }
+                    document.getElementById('dash-comissao').innerHTML = htmlComissao;
+                } else if(cardComissao) { cardComissao.style.display = 'none'; }
+                const container = document.getElementById('dash-status-container');
+                container.innerHTML = '';
+                for (const [status, count] of Object.entries(d.status_detalhado)) { container.innerHTML += `<div class="col-6 col-md-3"><div class="p-3 border rounded bg-white shadow-sm text-center" onclick="abrirDetalheDashboard('${status}', '${status}')" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'"><h5 class="fw-bold text-secondary">${count}</h5><small class="text-muted fw-bold text-uppercase">${status}</small></div></div>`; }
+                const rowDiretoria = document.getElementById('row-diretoria');
+                if (d.diretoria_data) {
+                    rowDiretoria.style.display = 'flex';
+                    document.getElementById('dir-fat-real').textContent = d.diretoria_data.faturamento_real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    document.getElementById('dir-fat-proj').textContent = d.diretoria_data.faturamento_projetado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    dadosMixCache = d.diretoria_data;
+                } else { rowDiretoria.style.display = 'none'; }
+            } catch(e) {}
+        }
+
+        function abrirModalMix() {
+            if (!dadosMixCache) return;
+            const preencherTabela = (tbodyId, dadosObj) => {
+                const tbody = document.getElementById(tbodyId);
+                tbody.innerHTML = '';
+                const lista = Object.entries(dadosObj).sort((a, b) => b[1] - a[1]);
+                const total = lista.reduce((acc, curr) => acc + curr[1], 0);
+                lista.forEach(([nome, qtd]) => { const pct = total > 0 ? ((qtd / total) * 100).toFixed(1) : 0; tbody.innerHTML += `<tr><td>${nome}</td><td class="text-end fw-bold">${qtd}</td><td class="text-end text-muted small">${pct}%</td></tr>`; });
+                tbody.innerHTML += `<tr class="table-active fw-bold"><td>TOTAL</td><td class="text-end">${total}</td><td class="text-end">100%</td></tr>`;
+            };
+            preencherTabela('tbody-mix-velocidade', dadosMixCache.mix_velocidade);
+            preencherTabela('tbody-mix-pagamento', dadosMixCache.mix_pagamento);
+            modalMix.show();
+        }
+
+        function abrirDetalheDashboard(chaveLista, titulo) {
+            document.getElementById('tituloDetalheDashboard').textContent = titulo;
+            const listaEl = document.getElementById('listaDetalheDashboard');
+            listaEl.innerHTML = '';
+            const itens = dashboardDataCache[chaveLista] || [];
+            if (itens.length === 0) { listaEl.innerHTML = '<div class="text-center p-4 text-muted">Nenhuma venda encontrada.</div>'; } 
+            else {
+                itens.forEach(item => {
+                    let badgeClass = 'bg-secondary';
+                    if (String(item.status || '').toUpperCase() === 'INSTALADA') badgeClass = 'bg-success';
+                    else if (item.status.includes('CANCELADA')) badgeClass = 'bg-danger';
+                    else if (item.status.includes('AGENDADO')) badgeClass = 'bg-info text-dark';
+                    const dataFormatada = item.data_iso ? new Date(item.data_iso).toLocaleDateString('pt-BR') : '-';
+                    listaEl.innerHTML += `<a href="#" class="list-group-item list-group-item-action py-3"><div class="d-flex w-100 justify-content-between align-items-center"><div><h6 class="mb-1 fw-bold text-primary">#${item.id} - ${item.cliente}</h6><small class="text-muted">Vendedor: ${item.vendedor} | Data: ${dataFormatada}</small></div><span class="badge ${badgeClass}">${item.status}</span></div></a>`;
+                });
+            }
+            modalDetalhe.show();
+        }
+
+        function montarParamsExportVendasFiltrado() {
+            const inicio = document.getElementById('filtro-inicio').value;
+            const fim = document.getElementById('filtro-fim').value;
+            const vendedor = document.getElementById('filtro-vendedor').value;
+            const busca = (document.getElementById('filtro-busca').value || '').trim();
+            const buscaGeral = busca.length >= 2;
+            const tabLista = document.querySelector('#abas-navegacao .nav-link.active');
+            const tabView = tabLista ? tabLista.getAttribute('data-view') : 'minhas_vendas';
+            const view = tabView === 'minhas_vendas' ? 'minhas_vendas' : 'geral';
+            const params = new URLSearchParams();
+            params.set('view', view);
+            if (!buscaGeral) {
+                if (inicio) params.set('data_inicio', inicio);
+                if (fim) params.set('data_fim', fim);
+            }
+            if (busca) params.set('search', busca);
+            if (view === 'geral' && vendedor) params.set('consultor_id', vendedor);
+            if (statusEsteiraAtual) params.set('status', statusEsteiraAtual);
+            return params.toString();
+        }
+
+        function exportarExcelFiltrado() {
+            const inicio = document.getElementById('filtro-inicio').value;
+            const fim = document.getElementById('filtro-fim').value;
+            if (!inicio || !fim) {
+                alert('Informe data início e fim para exportar o filtro.');
+                return;
+            }
+            const msg = `Exportar Excel com o filtro da tela?\n\nPeríodo: ${inicio} a ${fim}\n`
+                + 'Inclui: vendas criadas no mês + instaladas no mês (data efetiva, venda pode ser de outro mês).';
+            if (!confirm(msg)) return;
+            const btn = document.getElementById('btn-exportar-excel-filtro');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando...';
+            btn.disabled = true;
+            fetch(`${apiUrl}/api/crm/vendas/exportar-excel/?${montarParamsExportVendasFiltrado()}`, {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') },
+            })
+            .then(response => {
+                if (response.status === 403) throw new Error('Acesso negado. Apenas Diretoria, Admin ou BackOffice.');
+                if (!response.ok) throw new Error('Erro ao gerar arquivo.');
+                const cd = response.headers.get('Content-Disposition');
+                const m = cd && /filename="([^"]+)"/.exec(cd);
+                const filename = (m && m[1]) ? m[1] : `Base_Vendas_Filtrada_${inicio}_${fim}.xlsx`;
+                return response.blob().then(blob => ({ blob, filename }));
+            })
+            .then(({ blob, filename }) => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(err => { alert(err.message); })
+            .finally(() => { btn.innerHTML = originalText; btn.disabled = false; });
+        }
+
+        let classificarMeiHistoricoEmAndamento = false;
+
+        async function classificarMeiHistorico() {
+            if (classificarMeiHistoricoEmAndamento) return;
+            if (!['Diretoria', 'Admin'].includes(userProfile)) {
+                alert('Acesso negado. Apenas Diretoria ou Admin.');
+                return;
+            }
+            const reclassificarTodos = confirm(
+                'Deseja RECLASSIFICAR todos os CNPJs já classificados?\n\n' +
+                'Clique OK = sim, reclassificar todos (corrige classificações antigas).\n' +
+                'Clique Cancelar = só os que ainda estão sem MEI/NMEI.'
+            );
+            if (!confirm(
+                (reclassificarTodos
+                    ? 'Serão reconsultados TODOS os clientes com CNPJ (14 dígitos) na BrasilAPI.\n\n'
+                    : 'Serão classificados os CNPJs (14 dígitos) que ainda não têm MEI/NMEI.\n\n') +
+                'CPF não será consultado. Pode levar vários minutos.\n\n' +
+                'Continuar?'
+            )) return;
+
+            const btn = document.getElementById('btn-classificar-mei-historico');
+            const textoOriginal = btn ? btn.innerHTML : '';
+            classificarMeiHistoricoEmAndamento = true;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Classificando...';
+            }
+
+            let totalMei = 0;
+            let totalNmei = 0;
+            let totalErros = 0;
+            let totalVendas = 0;
+            let totalProcessados = 0;
+            let totalPendentesInicial = null;
+            let restantesFinais = null;
+            let numeroLote = 0;
+            let offsetLote = 0;
+
+            try {
+                while (true) {
+                    const r = await apiFetch(
+                        '/crm/vendas/classificar-mei-historico/?limite=20',
+                        {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                limite: 20,
+                                offset: offsetLote,
+                                primeiro_lote: numeroLote === 0,
+                                forcar_todos: reclassificarTodos,
+                            }),
+                        }
+                    );
+                    numeroLote += 1;
+                    if (!r) break;
+                    if (totalPendentesInicial === null) {
+                        totalPendentesInicial = r.total_pendentes || 0;
+                    }
+                    totalMei += r.mei || 0;
+                    totalNmei += r.nmei || 0;
+                    totalErros += r.erros || 0;
+                    totalVendas += r.vendas_atualizadas || 0;
+                    totalProcessados += r.processados_lote || 0;
+                    restantesFinais = r.restantes ?? restantesFinais;
+                    offsetLote = (r.proximo_offset != null) ? r.proximo_offset : offsetLote;
+                    if (btn && totalPendentesInicial > 0) {
+                        const feitos = reclassificarTodos
+                            ? (r.proximo_offset ?? offsetLote)
+                            : (totalPendentesInicial - (r.restantes ?? 0));
+                        const pct = Math.min(100, Math.round((feitos / totalPendentesInicial) * 100));
+                        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${pct}% (${feitos}/${totalPendentesInicial})`;
+                    }
+                    if (r.concluido || (r.processados_lote || 0) === 0) break;
+                }
+                const classificados = totalMei + totalNmei;
+                let msg =
+                    'Classificação concluída!\n\n' +
+                    `Pendentes no início: ${totalPendentesInicial ?? '?'}\n` +
+                    `CNPJs classificados (MEI + NMEI): ${classificados}\n` +
+                    `  • MEI: ${totalMei}\n` +
+                    `  • NMEI: ${totalNmei}\n` +
+                    `Vendas atualizadas: ${totalVendas}\n`;
+                if (restantesFinais === 0) {
+                    msg += 'Nenhum CNPJ pendente restante.\n';
+                } else if (restantesFinais != null) {
+                    msg += `Ainda pendentes: ${restantesFinais} (rode novamente se necessário).\n`;
+                }
+                if (totalErros) msg += `Erros: ${totalErros}\n`;
+                if (totalProcessados > classificados + totalErros) {
+                    msg += `\nNota: ${totalProcessados} lotes contabilizados; use MEI+NMEI como total de clientes classificados.`;
+                }
+                alert(msg);
+                aplicarFiltros();
+            } catch (e) {
+                let msg = 'Erro ao classificar CNPJs.';
+                if (e && e.detail) msg = e.detail;
+                alert(msg);
+            } finally {
+                classificarMeiHistoricoEmAndamento = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = textoOriginal;
+                }
+            }
+        }
+
+        let corrigirRazaoSocialEmAndamento = false;
+
+        async function corrigirRazaoSocialHistorico() {
+            if (corrigirRazaoSocialEmAndamento) return;
+            if (!['Diretoria', 'Admin'].includes(userProfile)) {
+                alert('Acesso negado. Apenas Diretoria ou Admin.');
+                return;
+            }
+            const revisarTodos = confirm(
+                'Corrigir razão social dos CNPJs na base?\n\n' +
+                'OK = revisar TODOS os CNPJs (mesmo os que já parecem corretos).\n' +
+                'Cancelar = só os nomes diferentes da Receita Federal.'
+            );
+            if (!confirm(
+                (revisarTodos
+                    ? 'Serão consultados TODOS os clientes com CNPJ na BrasilAPI.\n\n'
+                    : 'Serão corrigidos apenas os nomes que diferem da Receita Federal.\n\n') +
+                'Pode levar vários minutos. Continuar?'
+            )) return;
+
+            const btn = document.getElementById('btn-corrigir-razao-cnpj');
+            const textoOriginal = btn ? btn.innerHTML : '';
+            corrigirRazaoSocialEmAndamento = true;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Corrigindo...';
+            }
+
+            let totalAtualizados = 0;
+            let totalIguais = 0;
+            let totalErros = 0;
+            let totalCnpj = null;
+            let offsetLote = 0;
+            let numeroLote = 0;
+
+            try {
+                while (true) {
+                    const r = await apiFetch(
+                        '/crm/vendas/corrigir-razao-social-cnpj/?limite=20',
+                        {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                limite: 20,
+                                offset: offsetLote,
+                                forcar_todos: revisarTodos,
+                            }),
+                        }
+                    );
+                    numeroLote += 1;
+                    if (!r) break;
+                    if (totalCnpj === null) totalCnpj = r.total_cnpj || 0;
+                    totalAtualizados += r.atualizados || 0;
+                    totalIguais += r.iguais || 0;
+                    totalErros += r.erros || 0;
+                    offsetLote = r.proximo_offset ?? offsetLote;
+                    if (btn && revisarTodos && totalCnpj > 0) {
+                        const feitos = r.proximo_offset ?? offsetLote;
+                        const pct = Math.min(100, Math.round((feitos / totalCnpj) * 100));
+                        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${pct}% (${feitos}/${totalCnpj})`;
+                    } else if (btn && !revisarTodos && r.restantes != null) {
+                        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Restam ~${r.restantes}`;
+                    }
+                    if (r.concluido || (r.processados_lote || 0) === 0) break;
+                }
+                alert(
+                    'Correção de razão social concluída!\n\n' +
+                    `CNPJs na base: ${totalCnpj ?? '?'}\n` +
+                    `Nomes atualizados: ${totalAtualizados}\n` +
+                    `Já corretos (lote): ${totalIguais}\n` +
+                    (totalErros ? `Erros: ${totalErros}\n` : '')
+                );
+                aplicarFiltros();
+            } catch (e) {
+                alert((e && e.detail) ? e.detail : 'Erro ao corrigir razões sociais.');
+            } finally {
+                corrigirRazaoSocialEmAndamento = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = textoOriginal;
+                }
+            }
+        }
+
+        function exportarExcelDiretoria() {
+            if(!confirm("Deseja baixar a BASE COMPLETA de vendas em Excel?\n\nTodas as vendas ativas — ignora os filtros da tela.")) return;
+            const btn = document.getElementById('btn-exportar-excel');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando...'; btn.disabled = true;
+            fetch(`${apiUrl}/api/crm/vendas/exportar-excel/?base_completa=1`, { method: 'GET', headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') } })
+            .then(response => {
+                if (response.status === 403) throw new Error("Acesso negado. Apenas Diretoria, Admin ou BackOffice.");
+                if (!response.ok) throw new Error("Erro ao gerar arquivo.");
+                const cd = response.headers.get('Content-Disposition');
+                const m = cd && /filename="([^"]+)"/.exec(cd);
+                const filename = (m && m[1]) ? m[1] : `Base_Vendas_Completa_${new Date().toISOString().slice(0,10)}.xlsx`;
+                return response.blob().then(blob => ({ blob, filename }));
+            })
+            .then(({ blob, filename }) => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(err => { alert(err.message); })
+            .finally(() => { btn.innerHTML = originalText; btn.disabled = false; });
+        }
+
+        function preencherFormularioCliente(cliente, lock = false) { 
+            document.getElementById('input-cpf').value = cliente.cpf_cnpj; 
+            const permitirEdicaoDadosPreenchidos = podeEditarDadosClienteSemApp();
+            
+            const preencherCampoInteligente = (id, valor) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.value = valor || '';
+                // Telefones nunca ficam readOnly
+                if (id === 'input-telefone' || id === 'input-telefone2') {
+                    el.readOnly = false;
+                    return;
+                }
+                if (lock && !permitirEdicaoDadosPreenchidos) {
+                    if (valor && String(valor).trim() !== '') {
+                        el.readOnly = true;
+                    } else {
+                        el.readOnly = false; 
+                    }
+                } else {
+                    el.readOnly = false;
+                }
+            };
+
+            preencherCampoInteligente('input-nome', cliente.nome_razao_social);
+            preencherCampoInteligente('input-email', cliente.email);
+            preencherCampoInteligente('input-telefone', cliente.telefone1);
+            preencherCampoInteligente('input-telefone2', cliente.telefone2);
+            preencherCampoInteligente('input-nome-mae', cliente.nome_mae);
+            preencherCampoInteligente('input-data-nascimento', cliente.data_nascimento);
+            
+            verificarRegraCNPJ(cliente.cpf_cnpj);
+        }
+
+        // ===============================================
+        // Lógica de Busca e Preenchimento de Representante
+        // ===============================================
+        function setRepNomeEditavel(inputNome, editavel) {
+            inputNome.readOnly = !editavel;
+            inputNome.classList.toggle('input-editable-theme', editavel);
+        }
+
+        async function buscarRepresentante(cpf) { 
+            const inputNome = document.getElementById('input-nome-rep');
+            
+            inputNome.value = "BUSCANDO...";
+            setRepNomeEditavel(inputNome, false);
+
+            try { 
+                const res = await apiFetch(`/crm/clientes/?search=${cpf}`); 
+                let encontrado = false;
+
+                if(res && res.length > 0) { 
+                    const rep = res.find(cli => cli.cpf_cnpj.replace(/\D/g, '') === cpf.replace(/\D/g, '')); 
+                    
+                    if (rep) {
+                        inputNome.value = rep.nome_razao_social;
+                        setRepNomeEditavel(inputNome, false);
+                        encontrado = true;
+                    } 
+                } 
+
+                if (!encontrado) {
+                    inputNome.value = ""; 
+                    setRepNomeEditavel(inputNome, true);
+                    inputNome.focus(); 
+                }
+
+            } catch(e) {
+                console.error("Erro ao buscar representante:", e);
+                inputNome.value = "";
+                setRepNomeEditavel(inputNome, true);
+            } 
+        }
+
+        async function carregarAuxiliares() {
+            // debug removido
+            try {
+                const [planos, formas, statusEst, statusTrat] = await Promise.all([
+                    apiFetch('/crm/planos/?page_size=1000'),
+                    apiFetch('/crm/formas-pagamento/?page_size=1000'),
+                    apiFetch('/crm/status/?tipo=Esteira&page_size=1000'),
+                    apiFetch('/crm/status/?tipo=Tratamento&page_size=1000')
+                ]);
+                // debug removido
+
+                const planosArr = planos?.results || planos;
+                const formasArr = formas?.results || formas;
+                const statusEstArr = statusEst?.results || statusEst;
+                const statusTratArr = statusTrat?.results || statusTrat;
+
+                const selPlano = document.getElementById('select-plano');
+                selPlano.innerHTML = '<option value="">Selecione...</option>';
+                if(planosArr && Array.isArray(planosArr)) planosArr.forEach(p => selPlano.innerHTML += `<option value="${p.id}">${p.nome} - R$${p.valor}</option>`);
+                // debug removido
+
+                const selPag = document.getElementById('select-pagamento');
+                selPag.innerHTML = '<option value="">Selecione...</option>';
+                if(formasArr && Array.isArray(formasArr)) formasArr.forEach(f => selPag.innerHTML += `<option value="${f.id}">${f.nome}</option>`);
+                // debug removido
+
+                const selEst = document.getElementById('select-status-esteira');
+                selEst.innerHTML = '<option value="">Selecione...</option>';
+                if(statusEstArr && Array.isArray(statusEstArr)) statusEstArr.forEach(s => selEst.innerHTML += `<option value="${s.id}">${s.nome}</option>`);
+                // debug removido
+
+                const selTrat = document.getElementById('select-status-tratamento');
+                selTrat.innerHTML = '<option value="">Selecione...</option>';
+                if(statusTratArr && Array.isArray(statusTratArr)) statusTratArr.forEach(s => selTrat.innerHTML += `<option value="${s.id}">${s.nome}</option>`);
+                // debug removido
+            } catch(e) {
+                console.error('[ERRO carregarAuxiliares]', e);
+            }
+        }
+
+        async function editarVenda(id) {
+            try {
+                await carregarAuxiliares();
+                const venda = await apiFetch(`/crm/vendas/${id}/`);
+                // debug removido
+                document.getElementById('titulo-modal-venda').textContent = `Editar Venda #${id}`;
+                document.getElementById('id-venda-edicao').value = id;
+                document.getElementById('input-forma-entrada').value = venda.forma_entrada || 'SEM_APP';
+                document.getElementById('input-tem-fixo').value = venda.tem_fixo ? 'true' : 'false';
+
+
+                // Exibe todos os campos apenas dentro do modal de edição, sem afetar abas globais
+                const modal = document.getElementById('modal-nova-venda');
+                if (modal) {
+                    const dadosVenda = modal.querySelector('form h6:nth-of-type(2)').nextElementSibling;
+                    const endereco = modal.querySelector('form h6:nth-of-type(3)').nextElementSibling;
+                    const h6Dados = modal.querySelector('form h6:nth-of-type(2)');
+                    const h6Endereco = modal.querySelector('form h6:nth-of-type(3)');
+                    if (dadosVenda) dadosVenda.style.display = 'flex';
+                    if (endereco) endereco.style.display = 'flex';
+                    if (h6Dados) h6Dados.style.display = 'block';
+                    if (h6Endereco) h6Endereco.style.display = 'block';
+                    const divNomeMae = modal.querySelector('#div-nome-mae');
+                    const divDataNasc = modal.querySelector('#div-data-nascimento');
+                    const divEmail = modal.querySelector('#div-email');
+                    if(divNomeMae) divNomeMae.style.display = 'block';
+                    if(divDataNasc) divDataNasc.style.display = 'block';
+                    if(divEmail) divEmail.style.display = 'block';
+                }
+
+                // Preenche campos
+                document.getElementById('input-cpf').value = venda.cliente_cpf_cnpj || '';
+                document.getElementById('input-nome').value = venda.cliente_nome_razao_social || '';
+                document.getElementById('input-email').value = venda.cliente_email || '';
+                document.getElementById('input-nome-mae').value = venda.nome_mae || '';
+                document.getElementById('input-data-nascimento').value = venda.data_nascimento || '';
+                document.getElementById('input-telefone').value = venda.telefone1 || '';
+                document.getElementById('input-telefone2').value = venda.telefone2 || '';
+                const inputDataCriacaoLocal = document.getElementById('input-data-criacao-local');
+                if (inputDataCriacaoLocal) {
+                    inputDataCriacaoLocal.value = venda.data_criacao ? String(venda.data_criacao).slice(0, 10) : '';
+                }
+                const inputDataAberturaOs = document.getElementById('input-data-abertura-os');
+                if (inputDataAberturaOs) {
+                    inputDataAberturaOs.value = isoParaDatetimeLocal(venda.data_abertura);
+                }
+                verificarRegraCNPJ(venda.cliente_cpf_cnpj);
+                document.getElementById('input-cpf-rep').value = venda.cpf_representante_legal || '';
+                document.getElementById('input-nome-rep').value = venda.nome_representante_legal || '';
+                document.getElementById('input-ordem-servico').value = venda.ordem_servico || '';
+                const checkboxReemissao = document.getElementById('checkbox-reemissao');
+                if (checkboxReemissao) {
+                    checkboxReemissao.checked = !!venda.reemissao;
+                }
+
+
+                // Preenche selects somente após as opções estarem disponíveis
+                function preencherSelectQuandoPronto(selectId, valor) {
+                    const tentativasMax = 20;
+                    let tentativas = 0;
+                    function tentar() {
+                        const select = document.getElementById(selectId);
+                        if (select && select.options.length > 1) {
+                            select.value = valor || '';
+                        } else if (tentativas < tentativasMax) {
+                            tentativas++;
+                            setTimeout(tentar, 50);
+                        }
+                    }
+                    tentar();
+                }
+                preencherSelectQuandoPronto('select-plano', venda.plano?.id || venda.plano || '');
+                preencherSelectQuandoPronto('select-pagamento', venda.forma_pagamento?.id || venda.forma_pagamento || '');
+                preencherSelectQuandoPronto('select-status-esteira', venda.status_esteira?.id || venda.status_esteira || '');
+                preencherSelectQuandoPronto('select-status-tratamento', venda.status_tratamento?.id || venda.status_tratamento || '');
+                preencherSelectQuandoPronto('select-vendedor-modal', venda.vendedor?.id || venda.vendedor || '');
+
+                // Gerada O.S automática (edição)
+                const divGeradaOs = document.getElementById('container-gerada-os-auto');
+                const vendedorTemPermissao = venda.vendedor_detalhes?.autorizar_venda_automatica || vendedoresCache.find(x => String(x.id) === String(venda.vendedor?.id || venda.vendedor))?.autorizar_venda_automatica;
+                const inputGeradaOs = document.getElementById('input-gerada-os-automatica');
+                if (divGeradaOs && inputGeradaOs) {
+                    divGeradaOs.classList.toggle('d-none', !vendedorTemPermissao);
+                    const isSim = venda.gerada_os_automatica === true || venda.gerada_os_automatica === 'true';
+                    inputGeradaOs.value = isSim ? 'true' : 'false';
+                    if (vendedorTemPermissao) {
+                        document.getElementById('gerada-os-sim').checked = isSim;
+                        document.getElementById('gerada-os-nao').checked = !isSim;
+                    }
+                }
+
+                let obs = venda.observacoes;
+                if (obs === undefined || obs === null || obs === 'NONE' || obs === 'None') obs = '';
+                document.getElementById('input-observacoes').value = obs;
+                document.getElementById('nova-cep').value = venda.cep || '';
+                document.getElementById('nova-logradouro').value = venda.logradouro || '';
+                document.getElementById('nova-numero').value = venda.numero_residencia || '';
+                document.getElementById('nova-complemento').value = venda.complemento || '';
+                document.getElementById('nova-bairro').value = venda.bairro || '';
+                document.getElementById('nova-cidade').value = venda.cidade || '';
+                document.getElementById('nova-estado').value = venda.estado || '';
+                document.getElementById('nova-referencia').value = venda.ponto_referencia || '';
+
+                // Remove d-none dos containers de status/vendedor se perfil permitir
+                const areaStatus = document.getElementById('container-status-esteira');
+                const areaVendedor = document.getElementById('container-vendedor-modal');
+                const areaTrat = document.getElementById('container-status-gestao');
+                const areaOs = document.getElementById('container-ordem-servico');
+                const areaReemissao = document.getElementById('container-reemissao-modal');
+                const areaDataCriacao = document.getElementById('container-data-criacao-local');
+                const areaDataAbertura = document.getElementById('container-data-abertura-os');
+                const podeEditarDataCriacao = ['Admin', 'Diretoria'].includes(userProfile);
+                const podeEditarDataAbertura = podeEditarDataAberturaOs();
+                
+                if(['Admin', 'Diretoria', 'BackOffice'].includes(userProfile)) {
+                    areaStatus.classList.remove('d-none');
+                    areaVendedor.classList.remove('d-none'); 
+                    areaTrat.classList.remove('d-none');
+                    areaOs.classList.remove('d-none');
+                    if (areaReemissao) areaReemissao.classList.remove('d-none');
+                    if (areaDataCriacao) areaDataCriacao.classList.toggle('d-none', !podeEditarDataCriacao);
+                    if (areaDataAbertura) areaDataAbertura.classList.toggle('d-none', !podeEditarDataAbertura);
+                } else {
+                    areaStatus.classList.add('d-none'); 
+                    areaVendedor.classList.add('d-none'); 
+                    areaTrat.classList.add('d-none');
+                    areaOs.classList.remove('d-none');
+                    if (areaReemissao) areaReemissao.classList.remove('d-none');
+                    if (areaDataCriacao) areaDataCriacao.classList.add('d-none');
+                    if (areaDataAbertura) areaDataAbertura.classList.add('d-none');
+                }
+
+                // Adiciona debug simples nos selects
+                // debug dos selects removido
+                
+                document.getElementById('feedback-whatsapp').innerHTML = '';
+                document.getElementById('input-telefone').classList.remove('is-valid', 'is-invalid');
+                document.getElementById('btn-salvar-venda').disabled = false;
+                
+                alternarBloqueioCampos(false); 
+                
+                // Garante que todos os campos obrigatórios fiquem visíveis ao editar
+                document.querySelector('form h6:nth-of-type(2)').nextElementSibling.style.display = 'flex'; // Dados da Venda
+                document.querySelector('form h6:nth-of-type(3)').nextElementSibling.style.display = 'flex'; // Endereço
+                document.querySelector('form h6:nth-of-type(2)').style.display = 'block';
+                document.querySelector('form h6:nth-of-type(3)').style.display = 'block';
+                // Campos opcionais
+                const divNomeMae = document.getElementById('div-nome-mae');
+                const divDataNasc = document.getElementById('div-data-nascimento');
+                const divEmail = document.getElementById('div-email');
+                if(divNomeMae) divNomeMae.style.display = 'block';
+                if(divDataNasc) divDataNasc.style.display = 'block';
+                if(divEmail) divEmail.style.display = 'block';
+                syncEnvioWhatsappCrm();
+                modalNovaVenda.show();
+            } catch (e) { console.error(e); alert("Erro ao carregar dados para edição."); }
+        }
+
+        let salvandoVendaEmAndamento = false;
+
+        async function salvarVenda(e) {
+            e.preventDefault();
+            if (salvandoVendaEmAndamento) return;
+            
+            // Validar que os telefones não sejam iguais
+            if (!validarTelefonesDiferentes()) {
+                alert("Atenção: O Telefone 2 não pode ser igual ao Telefone 1. Por favor, corrija antes de salvar.");
+                return;
+            }
+            
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const idEdicao = document.getElementById('id-venda-edicao').value;
+            const method = idEdicao ? 'PUT' : 'POST';
+            const url = idEdicao ? `/crm/vendas/${idEdicao}/` : '/crm/vendas/';
+
+            const osValidaFormato = (valor) => /^(\d{8}|\d-\d{12})$/.test((valor || '').trim());
+            const textoSelecionado = (idSelect) => {
+                const sel = document.getElementById(idSelect);
+                if (!sel || sel.selectedIndex < 0) return '';
+                return (sel.options[sel.selectedIndex].text || '').toUpperCase();
+            };
+            data.ordem_servico = (data.ordem_servico || '').trim();
+            if (!data.data_criacao) delete data.data_criacao;
+            else data.data_criacao = `${data.data_criacao}T00:00:00`;
+            if (!podeEditarDataAberturaOs()) {
+                delete data.data_abertura;
+            } else if (!data.data_abertura) {
+                if (idEdicao) data.data_abertura = null;
+                else delete data.data_abertura;
+            } else if (data.data_abertura.length === 16) {
+                data.data_abertura = `${data.data_abertura}:00`;
+            }
+            if (data.ordem_servico && !osValidaFormato(data.ordem_servico)) {
+                alert('Formato de O.S inválido. Use 8 dígitos (08907507) ou X-12DÍGITOS (4-212051254235).');
+                return;
+            }
+            const statusEsteiraSelecionado = textoSelecionado('select-status-esteira');
+            const statusTratamentoSelecionado = textoSelecionado('select-status-tratamento');
+            const exigeOs = idEdicao && (statusEsteiraSelecionado.includes('INSTALADA') || statusTratamentoSelecionado === 'CADASTRADA');
+            if (exigeOs && !osValidaFormato(data.ordem_servico)) {
+                alert('Para salvar como INSTALADA/CADASTRADA é obrigatório informar O.S válida.');
+                return;
+            }
+            
+            // CORREÇÃO: Converter checkbox de reemissão para boolean
+            const checkboxReemissao = document.getElementById('checkbox-reemissao');
+            if (checkboxReemissao) {
+                data.reemissao = checkboxReemissao.checked;
+            } else {
+                data.reemissao = false;
+            }
+
+            // Diretoria/Admin podem silenciar WhatsApp ao corrigir
+            if (idEdicao && podeSilenciarWhatsapp()) {
+                const ckWpp = document.getElementById('checkbox-wpp-modal-venda');
+                if (ckWpp) syncEnvioWhatsappCrm(ckWpp.checked);
+                data.enviar_whatsapp = envioWhatsappAtivo;
+            }
+            
+            // Converter tem_fixo para boolean
+            data.tem_fixo = data.tem_fixo === 'true' || data.tem_fixo === true;
+            // Converter gerada_os_automatica para boolean
+            data.gerada_os_automatica = data.gerada_os_automatica === 'true' || data.gerada_os_automatica === true;
+            
+            if (origemCadastroAtual === 'SEM_APP') {
+                if(!data.plano || !data.forma_pagamento || !data.cep || !data.logradouro) {
+                    alert("Por favor, preencha todos os campos obrigatórios.");
+                    return;
+                }
+            }
+
+            const emailDigitado = (data.cliente_email || '').trim();
+            if (origemCadastroAtual === 'APP') {
+                // No fluxo VIA APP o e-mail não é obrigatório nesta etapa.
+                data.cliente_email = '';
+            } else {
+                if (!isEmailFormatoValido(emailDigitado)) {
+                    const inputEmail = document.getElementById('input-email');
+                    const feedbackEmail = document.getElementById('feedback-email');
+                    if (inputEmail) {
+                        inputEmail.classList.add('is-invalid');
+                        inputEmail.classList.remove('is-valid');
+                        inputEmail.focus();
+                    }
+                    if (feedbackEmail) {
+                        feedbackEmail.innerHTML = '<span class="text-danger fw-bold small"><i class="bi bi-x-circle"></i> Informe um e-mail válido no formato nome@dominio.com.</span>';
+                    }
+                    alert("No fluxo Sem App, o e-mail é obrigatório e deve estar no formato nome@dominio.com.");
+                    return;
+                }
+                data.cliente_email = emailDigitado;
+            }
+
+            if (data.data_nascimento === "") data.data_nascimento = null;
+            if (data.plano === "") data.plano = null;
+            if (data.forma_pagamento === "") data.forma_pagamento = null;
+            if (data.vendedor === "") data.vendedor = null;
+            if (data.ordem_servico === "") data.ordem_servico = null;
+
+            const btnSalvar = document.getElementById('btn-salvar-venda');
+            const textoOriginalBotao = btnSalvar ? btnSalvar.innerHTML : '';
+            salvandoVendaEmAndamento = true;
+            if (btnSalvar) {
+                btnSalvar.disabled = true;
+                btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando...';
+            }
+
+            try {
+                const resposta = await apiFetch(url, { method: method, body: JSON.stringify(data) });
+                modalNovaVenda.hide(); form.reset(); document.getElementById('id-venda-edicao').value = '';
+                document.getElementById('titulo-modal-venda').innerHTML = 'Registrar Venda';
+                aplicarFiltros();
+                let msgSucesso = idEdicao ? 'Venda atualizada!' : 'Venda registrada!';
+                if (!idEdicao && resposta && resposta.classificacao_mei) {
+                    const rotulo = resposta.classificacao_mei_descricao || resposta.classificacao_mei;
+                    msgSucesso += `\n\nClassificação CNPJ: ${rotulo}`;
+                }
+                alert(msgSucesso);
+            } catch (error) { 
+                let msg = "Erro ao salvar.";
+                if (error && typeof error === 'object') {
+                    const detalhes = [];
+                    for (const [key, value] of Object.entries(error)) detalhes.push(`${key}: ${Array.isArray(value)?value.join(', '):value}`);
+                    if (detalhes.length) msg = "Verifique os erros:\n\n" + detalhes.join('\n');
+                    else if (error.detail) msg = error.detail;
+                }
+                alert(msg);
+            } finally {
+                salvandoVendaEmAndamento = false;
+                if (btnSalvar) {
+                    btnSalvar.disabled = false;
+                    btnSalvar.innerHTML = textoOriginalBotao || 'Salvar';
+                }
+            }
+        }
+
+        async function excluirVenda(id) { if(!confirm('Tem certeza?')) return; try { await apiFetch(`/crm/vendas/${id}/`, { method: 'DELETE' }); carregarVendas(); } catch(e) { alert('Erro ao excluir.'); } }
+        
+        // Funções para Reemissão
+        async function abrirModalReemissao(id) {
+            vendaReemissaoId = id;
+            document.getElementById('form-reemissao').reset();
+            document.getElementById('reemissao-os-feedback').textContent = '';
+            document.getElementById('reemissao-os').classList.remove('is-invalid');
+            syncEnvioWhatsappCrm(envioWhatsappAtivo);
+            atualizarVisibilidadeToggleWpp();
+            modalReemissao.show();
+        }
+        
+        function cancelarReemissao() {
+            modalReemissao.hide();
+            vendaReemissaoId = null;
+        }
+        
+        async function salvarReemissao() {
+            const os = document.getElementById('reemissao-os').value.trim();
+            const data = document.getElementById('reemissao-data').value;
+            const turno = document.getElementById('reemissao-turno').value;
+            const observacao = document.getElementById('reemissao-observacao').value || '';
+            
+            if (!os || !data || !turno) {
+                alert("Preencha todos os campos obrigatórios.");
+                return;
+            }
+            
+            // Validar O.S. única
+            try {
+                const res = await apiFetch(`/crm/vendas/?ordem_servico=${os}`);
+                const lista = Array.isArray(res) ? res : (res.results || []);
+                if (lista.some(v => v.id !== vendaReemissaoId)) {
+                    document.getElementById('reemissao-os').classList.add('is-invalid');
+                    document.getElementById('reemissao-os-feedback').textContent = 'O.S. já existe!';
+                    return;
+                }
+            } catch (e) {
+                alert("Erro ao validar O.S.");
+                return;
+            }
+            
+            try {
+                // Duplicar venda (criar nova venda)
+                const ckWppReem = document.getElementById('checkbox-wpp-modal-reemissao');
+                if (ckWppReem && podeSilenciarWhatsapp()) syncEnvioWhatsappCrm(ckWppReem.checked);
+                const resultado = await apiFetch('/crm/duplicar-venda/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        id_venda: vendaReemissaoId,
+                        nova_os: os,
+                        nova_data_agendamento: data,
+                        novo_turno: turno,
+                        nova_observacao: observacao,
+                        enviar_whatsapp: podeSilenciarWhatsapp() ? envioWhatsappAtivo : true,
+                    })
+                });
+                
+                modalReemissao.hide();
+                aplicarFiltros();
+                alert('Reemissão criada com sucesso! Uma nova venda foi criada com status AGENDADO e aparecerá na esteira.');
+            } catch (error) {
+                alert('Erro ao criar reemissão: ' + (error.detail || error.message || error));
+            }
+        }
+        
+        function logout() { localStorage.removeItem('accessToken'); window.location.href = '/'; }
+        
+        function validarTelefonesDiferentes() {
+            const telefone1Input = document.getElementById('input-telefone');
+            const telefone2Input = document.getElementById('input-telefone2');
+            const feedbackTel2 = document.getElementById('feedback-telefone2');
+            
+            if (!telefone1Input || !telefone2Input || !feedbackTel2) return;
+            
+            const tel1 = telefone1Input.value.replace(/\D/g, '');
+            const tel2 = telefone2Input.value.replace(/\D/g, '');
+            
+            // Só valida se ambos tiverem conteúdo
+            if (tel1.length >= 10 && tel2.length >= 10) {
+                if (tel1 === tel2) {
+                    telefone2Input.classList.add('is-invalid');
+                    telefone2Input.classList.remove('is-valid');
+                    feedbackTel2.innerHTML = '<span class="text-danger fw-bold small"><i class="bi bi-exclamation-triangle"></i> Telefone 2 não pode ser igual ao Telefone 1!</span>';
+                    return false;
+                } else {
+                    telefone2Input.classList.remove('is-invalid');
+                    telefone2Input.classList.add('is-valid');
+                    feedbackTel2.innerHTML = '<span class="text-success small"><i class="bi bi-check-circle"></i> Telefone válido</span>';
+                    return true;
+                }
+            } else {
+                // Limpa validação se não houver dados suficientes
+                telefone2Input.classList.remove('is-invalid', 'is-valid');
+                feedbackTel2.innerHTML = '';
+                return true;
+            }
+        }
+        
+        async function verificarEmail(input) {
+            const email = input.value.trim();
+            const feedbackDiv = document.getElementById('feedback-email');
+            
+            // Validação básica de formato
+            if (!email) {
+                if (feedbackDiv) feedbackDiv.innerHTML = '';
+                input.classList.remove('is-valid', 'is-invalid');
+                return;
+            }
+            if (!isEmailFormatoValido(email)) {
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                if (feedbackDiv) {
+                    feedbackDiv.innerHTML = '<span class="text-danger fw-bold small"><i class="bi bi-x-circle"></i> Informe um e-mail válido no formato nome@dominio.com.</span>';
+                }
+                return;
+            }
+            
+            // Mostra loading enquanto valida
+            if (feedbackDiv) {
+                feedbackDiv.innerHTML = '<span class="text-warning spinner-border spinner-border-sm"></span> <span class="text-warning small">Verificando e-mail...</span>';
+            }
+            
+            try {
+                const data = await apiFetch(`/crm/verificar-email/${encodeURIComponent(email)}/`, { method: 'GET' });
+                
+                if (data && data.valido) {
+                    input.classList.add('is-valid');
+                    input.classList.remove('is-invalid');
+                    if (feedbackDiv) {
+                        feedbackDiv.innerHTML = '<span class="text-success fw-bold small"><i class="bi bi-check-circle"></i> E-mail válido!</span>';
+                    }
+                } else {
+                    input.classList.add('is-invalid');
+                    input.classList.remove('is-valid');
+                    const mensagem = data?.mensagem || 'E-mail inválido';
+                    if (feedbackDiv) {
+                        feedbackDiv.innerHTML = `<span class="text-danger fw-bold small"><i class="bi bi-x-circle"></i> ${mensagem}</span>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao verificar e-mail:', error);
+                // Em caso de erro de rede, não bloqueia o usuário
+                input.classList.remove('is-valid', 'is-invalid');
+                if (feedbackDiv) {
+                    feedbackDiv.innerHTML = '<span class="text-warning small">Não foi possível verificar (offline).</span>';
+                }
+            }
+        }
+        
+        function validarTelefone(input, feedbackId, isWhatsApp) {
+            const telefone = input.value.replace(/\D/g, '');
+            const feedbackDiv = document.getElementById(feedbackId);
+            
+            // Validação básica: deve ter 11 dígitos
+            if (telefone.length !== 11) {
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                if(feedbackDiv) {
+                    feedbackDiv.innerHTML = '<span class="text-danger fw-bold small"><i class="bi bi-x-circle"></i> O telefone deve ter 11 dígitos (DDD + número).</span>';
+                }
+                return false;
+            }
+            
+            // Extrai DDD (2 primeiros dígitos)
+            const ddd = telefone.substring(0, 2);
+            
+            // DDDs válidos no Brasil (lista oficial)
+            const dddValidos = [11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 52, 53, 54, 61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 73, 74, 75, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 98, 99];
+            const dddNum = parseInt(ddd);
+            
+            if (!dddValidos.includes(dddNum)) {
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                if(feedbackDiv) {
+                    feedbackDiv.innerHTML = '<span class="text-danger fw-bold small"><i class="bi bi-x-circle"></i> DDD inválido. Informe um DDD válido do Brasil (não aceita código 55).</span>';
+                }
+                return false;
+            }
+            
+            // Formata o telefone se ainda não estiver formatado
+            const telefoneFormatado = `(${ddd}) ${telefone.substring(2, 7)}-${telefone.substring(7)}`;
+            if (input.value !== telefoneFormatado) {
+                input.value = telefoneFormatado;
+            }
+            
+            // Se for WhatsApp, verifica também
+            if (isWhatsApp) {
+                verificarWhatsApp(input);
+            } else {
+                input.classList.add('is-valid');
+                input.classList.remove('is-invalid');
+                if(feedbackDiv) {
+                    feedbackDiv.innerHTML = '<span class="text-success fw-bold small"><i class="bi bi-check-circle"></i> Telefone válido!</span>';
+                }
+            }
+            
+            return true;
+        }
+        
+        async function verificarWhatsApp(input) {
+            const telefone = input.value.replace(/\D/g, ''); 
+            const feedbackDiv = document.getElementById('feedback-whatsapp');
+            const btnSalvar = document.getElementById('btn-salvar-venda');
+            
+            if (telefone.length < 10) return;
+            
+            input.classList.remove('is-valid', 'is-invalid');
+            if(feedbackDiv) feedbackDiv.innerHTML = '<span class="text-warning spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> <span class="text-warning small">Verificando WhatsApp...</span>';
+            if(btnSalvar) btnSalvar.disabled = true; 
+            
+            try {
+                const data = await apiFetch(`/crm/verificar-zap/${telefone}/`, { method: 'GET' });
+                
+                if (data && (data.whatsapp_valido || data.exists || data.possui_whatsapp)) {
+                    // Se tem aviso, significa que não conseguiu verificar mas permite salvar
+                    if (data.aviso) {
+                        input.classList.remove('is-valid', 'is-invalid');
+                        if(feedbackDiv) feedbackDiv.innerHTML = '<span class="text-warning fw-bold small"><i class="bi bi-exclamation-triangle"></i> Não foi possível verificar WhatsApp (timeout). Você pode salvar.</span>';
+                    } else {
+                        input.classList.add('is-valid'); input.classList.remove('is-invalid');
+                        if(feedbackDiv) feedbackDiv.innerHTML = '<span class="text-success fw-bold small"><i class="bi bi-whatsapp"></i> WhatsApp Confirmado!</span>';
+                    }
+                    if(btnSalvar) btnSalvar.disabled = false; 
+                } else {
+                    // Número não encontrado no WhatsApp - mostrar aviso mas PERMITIR salvar
+                    input.classList.remove('is-valid', 'is-invalid');
+                    if(feedbackDiv) feedbackDiv.innerHTML = '<span class="text-warning fw-bold small"><i class="bi bi-exclamation-triangle"></i> WhatsApp não confirmado. Verifique o número, mas você pode salvar.</span>';
+                    if(btnSalvar) btnSalvar.disabled = false;
+                }
+            } catch (error) {
+                console.error("Erro verificação WhatsApp:", error);
+                input.classList.remove('is-valid', 'is-invalid');
+                if(feedbackDiv) feedbackDiv.innerHTML = '<span class="text-warning small">Não foi possível verificar (API Offline).</span>';
+                if(btnSalvar) btnSalvar.disabled = false;
+            }
+        }
+    </script>
+{% endblock %}

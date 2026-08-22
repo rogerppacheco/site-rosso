@@ -1,0 +1,265 @@
+{# Modal compartilhado: pedido de ajuda/socorro ao GC (abrir chamado TI) #}
+{# IMPORTANTE: o JS move este modal para document.body — evita clip por overflow:hidden da Esteira. #}
+<style>
+    /* Garante altura útil + rodapé sempre visível (header/body/footer via display:contents no form) */
+    #modal-pedido-ajuda-gc .modal-dialog {
+        max-height: calc(100dvh - 1rem);
+        margin: 0.5rem auto;
+    }
+    #modal-pedido-ajuda-gc .modal-content {
+        max-height: calc(100dvh - 1rem);
+    }
+    #modal-pedido-ajuda-gc form.pedido-ajuda-gc-form {
+        display: contents;
+    }
+    #modal-pedido-ajuda-gc .modal-footer {
+        flex-shrink: 0;
+        gap: 0.5rem;
+    }
+    #modal-pedido-ajuda-gc .modal-footer .btn {
+        min-width: 8rem;
+    }
+</style>
+<div class="modal fade" id="modal-pedido-ajuda-gc" tabindex="-1" aria-labelledby="modal-pedido-ajuda-gc-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+            <form id="form-pedido-ajuda-gc" class="pedido-ajuda-gc-form" enctype="multipart/form-data">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="modal-pedido-ajuda-gc-title">
+                        <i class="bi bi-life-preserver me-1"></i> Pedido de ajuda — Abrir chamado com TI
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="ajuda-gc-venda-id" value="">
+                    <input type="hidden" id="ajuda-gc-origem" value="">
+                    <input type="hidden" id="ajuda-gc-tipo" value="abrir_chamado_ti">
+
+                    <div class="alert alert-info small mb-3 py-2">
+                        Envia a máscara padrão ao <strong>e-mail</strong> e ao <strong>WhatsApp</strong> do GC cadastrado em Antecipar Instalação.
+                        PDV fixo: <strong>1068561</strong>.
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Nome do GC</label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-nome" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">PDV</label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-pdv" value="1068561" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Login BO <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-login-bo" required maxlength="100" placeholder="Login BO no PAP">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Login vendedor <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-login-vendedor" required maxlength="100" placeholder="Login do vendedor">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">CNPJ/CPF do cliente</label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-cpf-cnpj" maxlength="20">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Número do Pedido (O.S)</label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-numero-pedido" maxlength="50">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Contato (quem reporta)</label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-contato" maxlength="120">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Qual etapa do erro <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="ajuda-gc-etapa" required>
+                                <option value="">Selecione…</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold mb-1">Detalhar o cenário reportado <span class="text-danger">*</span></label>
+                            <textarea class="form-control form-control-sm" id="ajuda-gc-detalhe" rows="2" required maxlength="2000" placeholder="Descreva o erro com suas palavras…"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Nº do registro do atendimento</label>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-numero-registro" maxlength="80" placeholder="Ex.: protocolo da consulta de viabilidade">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold mb-1">Evidência (data/hora do erro) <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control form-control-sm" id="ajuda-gc-evidencia" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+                            <div class="form-text">JPG, PNG, WEBP ou PDF — máx. 8 MB.</div>
+                        </div>
+                    </div>
+                    <div id="ajuda-gc-erro" class="text-danger small mt-2" style="display:none;"></div>
+                    <div id="ajuda-gc-sucesso" class="text-success small mt-2" style="display:none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger" id="btn-enviar-pedido-ajuda-gc">
+                        <i class="bi bi-send me-1"></i> Enviar ao GC
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    const API = '/api/crm';
+    let modalInst = null;
+    let formBound = false;
+
+    function authHeaders(json) {
+        const h = { 'Authorization': 'Bearer ' + (localStorage.getItem('accessToken') || '') };
+        if (json) h['Content-Type'] = 'application/json';
+        return h;
+    }
+
+    function showEl(id, on) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = on ? 'block' : 'none';
+    }
+
+    function ensureModalOnBody() {
+        const el = document.getElementById('modal-pedido-ajuda-gc');
+        if (!el) return null;
+        // Esteira/Auditoria usam main com overflow:hidden — modal filho fica cortado sem Enviar.
+        if (el.parentElement !== document.body) {
+            document.body.appendChild(el);
+            modalInst = null;
+        }
+        return el;
+    }
+
+    function getModal() {
+        const el = ensureModalOnBody();
+        if (!el) return null;
+        if (!modalInst) modalInst = new bootstrap.Modal(el);
+        return modalInst;
+    }
+
+    function bindFormOnce() {
+        if (formBound) return;
+        const form = document.getElementById('form-pedido-ajuda-gc');
+        if (!form) return;
+        formBound = true;
+        form.addEventListener('submit', async function (ev) {
+            ev.preventDefault();
+            showEl('ajuda-gc-erro', false);
+            showEl('ajuda-gc-sucesso', false);
+            const btn = document.getElementById('btn-enviar-pedido-ajuda-gc');
+            const fd = new FormData();
+            fd.append('tipo', document.getElementById('ajuda-gc-tipo').value || 'abrir_chamado_ti');
+            fd.append('origem', document.getElementById('ajuda-gc-origem').value);
+            const vendaId = document.getElementById('ajuda-gc-venda-id').value;
+            if (vendaId) fd.append('venda_id', vendaId);
+            fd.append('login_bo', document.getElementById('ajuda-gc-login-bo').value.trim());
+            fd.append('login_vendedor', document.getElementById('ajuda-gc-login-vendedor').value.trim());
+            fd.append('cpf_cnpj_cliente', document.getElementById('ajuda-gc-cpf-cnpj').value.trim());
+            fd.append('numero_pedido', document.getElementById('ajuda-gc-numero-pedido').value.trim());
+            fd.append('contato', document.getElementById('ajuda-gc-contato').value.trim());
+            fd.append('etapa_erro', document.getElementById('ajuda-gc-etapa').value);
+            fd.append('detalhe_cenario', document.getElementById('ajuda-gc-detalhe').value.trim());
+            fd.append('numero_registro', document.getElementById('ajuda-gc-numero-registro').value.trim());
+            const fileInput = document.getElementById('ajuda-gc-evidencia');
+            if (!fileInput.files || !fileInput.files[0]) {
+                document.getElementById('ajuda-gc-erro').textContent = 'Anexe a evidência com data e hora do erro.';
+                showEl('ajuda-gc-erro', true);
+                return;
+            }
+            fd.append('evidencia', fileInput.files[0]);
+
+            btn.disabled = true;
+            const label = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando…';
+            try {
+                const res = await fetch(API + '/pedido-ajuda-gc/enviar/', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('accessToken') || '') },
+                    body: fd
+                });
+                const data = await res.json().catch(function () { return {}; });
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Falha ao enviar pedido de ajuda.');
+                }
+                const canais = [];
+                if (data.enviado_email) canais.push('e-mail');
+                if (data.enviado_whatsapp) canais.push('WhatsApp');
+                document.getElementById('ajuda-gc-sucesso').textContent =
+                    'Pedido enviado (' + (canais.join(' + ') || 'parcial') + ').' +
+                    ((data.erros && data.erros.length) ? ' Avisos: ' + data.erros.join('; ') : '');
+                showEl('ajuda-gc-sucesso', true);
+                setTimeout(function () { getModal().hide(); }, 1600);
+            } catch (e) {
+                document.getElementById('ajuda-gc-erro').textContent = e.message || 'Erro ao enviar.';
+                showEl('ajuda-gc-erro', true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = label;
+            }
+        });
+    }
+
+    window.abrirPedidoAjudaGc = async function (vendaId, origem) {
+        const origemNorm = (origem || '').toLowerCase();
+        if (origemNorm !== 'auditoria' && origemNorm !== 'esteira') {
+            alert('Origem inválida para pedido de ajuda.');
+            return;
+        }
+        ensureModalOnBody();
+        bindFormOnce();
+        showEl('ajuda-gc-erro', false);
+        showEl('ajuda-gc-sucesso', false);
+        const form = document.getElementById('form-pedido-ajuda-gc');
+        if (form) form.reset();
+        document.getElementById('ajuda-gc-origem').value = origemNorm;
+        document.getElementById('ajuda-gc-venda-id').value = vendaId || '';
+        document.getElementById('ajuda-gc-pdv').value = '1068561';
+        document.getElementById('ajuda-gc-tipo').value = 'abrir_chamado_ti';
+
+        try {
+            const qs = new URLSearchParams({ origem: origemNorm });
+            if (vendaId) qs.set('venda_id', String(vendaId));
+            const res = await fetch(API + '/pedido-ajuda-gc/contexto/?' + qs.toString(), {
+                headers: authHeaders(false)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Erro ao carregar contexto');
+
+            document.getElementById('ajuda-gc-nome').value = data.nome_gc || '';
+            document.getElementById('ajuda-gc-pdv').value = data.pdv || '1068561';
+            document.getElementById('ajuda-gc-login-bo').value = data.login_bo_sugerido || '';
+            document.getElementById('ajuda-gc-login-vendedor').value = '';
+            document.getElementById('ajuda-gc-cpf-cnpj').value = data.cpf_cnpj_cliente || '';
+            document.getElementById('ajuda-gc-numero-pedido').value = data.numero_pedido || '';
+            document.getElementById('ajuda-gc-contato').value = data.contato || '';
+            document.getElementById('ajuda-gc-numero-registro').value = data.numero_registro || '';
+
+            const sel = document.getElementById('ajuda-gc-etapa');
+            sel.innerHTML = '<option value="">Selecione…</option>';
+            (data.etapas || []).forEach(function (e) {
+                const opt = document.createElement('option');
+                opt.value = e.nome;
+                opt.textContent = e.nome;
+                sel.appendChild(opt);
+            });
+            if (!(data.etapas || []).length) {
+                throw new Error('Nenhuma etapa cadastrada para ' + origemNorm + '. Cadastre em Governança → Cadastros Gerais.');
+            }
+            getModal().show();
+        } catch (e) {
+            alert(e.message || 'Falha ao abrir pedido de ajuda.');
+        }
+    };
+
+    // Inicializa cedo: move para body e liga o submit (mesmo se o include estiver dentro do main).
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            ensureModalOnBody();
+            bindFormOnce();
+        });
+    } else {
+        ensureModalOnBody();
+        bindFormOnce();
+    }
+})();
+</script>

@@ -1,0 +1,1 @@
+{"query":"query($wid: String!) { workspace(workspaceId: $wid) { projects { edges { node { id name services { edges { node { id name serviceInstances { edges { node { id source { repo } } } } } } } } } } } }","variables":{"wid":"f3fca15a-0f47-421f-a909-8b956e59ea9c"}}

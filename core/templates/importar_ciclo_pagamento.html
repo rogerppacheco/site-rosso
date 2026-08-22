@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Importar Ciclo de Pagamento - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+        .import-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #28a745;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            background: var(--bg-card);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover {
+            border-color: #1e7e34;
+            background: #f0fff4;
+            transform: scale(1.02);
+        }
+
+        .upload-zone.dragging {
+            border-color: #28a745;
+            background: #e6ffed;
+        }
+
+        .upload-zone i {
+            font-size: 4rem;
+            color: #28a745;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        .btn-upload {
+            font-size: 1.1rem;
+            padding: 12px 30px;
+            margin-top: 20px;
+        }
+
+        .info-card {
+            background: var(--bg-card);
+            border-left: 4px solid #28a745;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .required-columns {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .column-tag {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 5px;
+            font-family: monospace;
+        }
+
+        .spinner-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner-content {
+            text-align: center;
+            color: white;
+        }
+
+        .spinner-border {
+            width: 4rem;
+            height: 4rem;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 2px solid #f0f0f0;
+        }
+
+        .progress-bar {
+            height: 30px;
+            font-weight: bold;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            text-align: center;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-box {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #28a745;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .importar-page .bg-white { background-color: var(--bg-card) !important; }
+        .importar-page .bg-light { background-color: var(--bg-secondary) !important; }
+        .importar-page .text-dark { color: var(--text-primary) !important; }
+        .importar-page .info-card,
+        .importar-page .upload-zone,
+        .importar-page .progress-container,
+        .importar-page .filter-card { border: 1px solid var(--border-color); color: var(--text-primary); }
+
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/importacoes/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="importar-page"><div class="import-container">
+        <div class="text-center mb-4">
+            <h2 class="fw-bold text-dark">Importar Ciclo de Pagamento</h2>
+            <p class="text-muted">Upload da planilha de fechamento financeiro - Cálculo de comissões</p>
+        </div>
+
+        <!-- Informações Importantes -->
+        <div class="info-card card-modern">
+            <h5 class="text-success mb-3"><i class="bi bi-info-circle"></i> Instruções</h5>
+            <ul class="mb-0">
+                <li>Envie o arquivo contendo as datas de fechamento e informações de comissões</li>
+                <li>O arquivo pode estar em formato <strong>Excel (.xlsx, .xls)</strong></li>
+                <li>O sistema processará automaticamente as datas de ciclo de pagamento</li>
+                <li>Após importação, os dados estarão disponíveis no módulo de comissões</li>
+            </ul>
+
+            <div class="required-columns">
+                <strong class="text-dark">Estrutura esperada:</strong><br>
+                <span class="column-tag">Data Fechamento</span>
+                <span class="column-tag">Período</span>
+                <span class="column-tag">Valores</span>
+            </div>
+        </div>
+
+        <!-- Zona de Upload -->
+        <div class="upload-zone card-modern" id="uploadZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <h4 class="text-dark">Arraste o arquivo aqui</h4>
+            <p class="text-muted">ou clique para selecionar</p>
+            <p class="text-muted mb-0"><small>Formatos aceitos: .xlsx, .xls</small></p>
+            <div id="fileInfo" class="mt-3" style="display: none;">
+                <div class="alert alert-info d-inline-block">
+                    <i class="bi bi-file-earmark-check"></i> <strong id="fileName"></strong> 
+                    <span class="ms-2">(<span id="fileSize"></span>)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button class="btn btn-success btn-upload" id="btnUpload" disabled>
+                <i class="bi bi-upload"></i> Processar Arquivo
+            </button>
+            <a href="/importacoes/" class="btn btn-outline-secondary btn-upload ms-2">
+                <i class="bi bi-arrow-left"></i> Cancelar
+            </a>
+        </div>
+
+        <!-- Barra de Progresso -->
+        <div class="progress-container card-modern" id="progressContainer">
+            <div class="progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar bg-success" id="progressBar" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">
+                <span id="progressPercent">0%</span> - <span id="progressMessage">Preparando...</span>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="resultadoImportacao" class="mt-4" style="display: none;"></div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="spinner-overlay" id="loadingOverlay">
+        <div class="spinner-content">
+            <div class="spinner-border text-light" role="status"></div>
+            <h4 class="mt-3">Processando arquivo...</h4>
+            <p>Aguarde enquanto importamos os dados financeiros</p>
+        </div>
+    </div>
+
+</main>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const btnUpload = document.getElementById('btnUpload');
+        const fileInfo = document.getElementById('fileInfo');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressMessage = document.getElementById('progressMessage');
+        let selectedFile = null;
+
+        // Eventos de drag & drop
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragging');
+        });
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragging');
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragging');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileSelect(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            const validExtensions = ['.xlsx', '.xls'];
+            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            
+            if (!validExtensions.includes(fileExtension)) {
+                alert('Formato inválido! Use .xlsx ou .xls');
+                return;
+            }
+
+            selectedFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            fileInfo.style.display = 'block';
+            btnUpload.disabled = false;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function atualizarProgresso(percent, message) {
+            progressBar.style.width = percent + '%';
+            progressPercent.textContent = percent + '%';
+            progressMessage.textContent = message;
+        }
+
+        btnUpload.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            // Mostrar apenas a barra de progresso, não o overlay escuro
+            progressContainer.style.display = 'block';
+            atualizarProgresso(10, 'Iniciando upload...');
+
+            try {
+                const token = localStorage.getItem('accessToken');
+                atualizarProgresso(30, 'Enviando arquivo...');
+                
+                const response = await fetch('/api/crm/import/ciclo-pagamento/', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                atualizarProgresso(70, 'Processando dados financeiros...');
+                const data = await response.json();
+                atualizarProgresso(90, 'Finalizando...');
+
+                if (response.ok) {
+                    atualizarProgresso(100, 'Concluído!');
+                    setTimeout(() => {
+                        mostrarResultado('success', data);
+                        progressContainer.style.display = 'none';
+                    }, 500);
+                } else {
+                    mostrarResultado('error', data);
+                    progressContainer.style.display = 'none';
+                }
+            } catch (error) {
+                progressContainer.style.display = 'none';
+                mostrarResultado('error', { error: 'Erro ao conectar com servidor' });
+            }
+        });
+
+        function mostrarResultado(tipo, data) {
+            const resultado = document.getElementById('resultadoImportacao');
+            resultado.style.display = 'block';
+            
+            if (tipo === 'success') {
+                resultado.innerHTML = `
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading"><i class="bi bi-check-circle"></i> Importação Concluída com Sucesso!</h5>
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <div class="stat-number">${data.total || 0}</div>
+                                <div class="stat-label">Total de Linhas</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-number">${data.criados || 0}</div>
+                                <div class="stat-label">Novos Registros</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-number">${data.atualizados || 0}</div>
+                                <div class="stat-label">Atualizados</div>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="d-flex gap-2 mt-3">
+                            <a href="/importacoes/" class="btn btn-success">
+                                <i class="bi bi-cloud-upload-fill"></i> Importar Outro
+                            </a>
+                            <a href="/area-interna/" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Voltar
+                            </a>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+            } else {
+                resultado.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading"><i class="bi bi-x-circle"></i> Erro na Importação</h5>
+                        <p class="mb-0">${data.error || 'Erro desconhecido'}</p>
+                        ${data.detalhes ? `<hr><small>${data.detalhes}</small>` : ''}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+            }
+
+            resultado.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function logout() {
+            localStorage.removeItem('accessToken');
+            window.location.href = '/';
+        }
+    </script>
+{% endblock %}

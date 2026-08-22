@@ -1,0 +1,1108 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Controle de Presença - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* --- LAYOUT E CENTRALIZAÇÃO --- */
+        .system-container {
+            width: 100%;
+            padding-right: 20px;
+            padding-left: 20px;
+            margin-right: auto;
+            margin-left: auto;
+            max-width: 1400px;
+        }
+
+        /* Layout de Cards */
+        .presence-card {
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            box-shadow: var(--card-shadow);
+            transition: transform 0.2s;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; 
+        }
+        .presence-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--sombra-media);
+        }
+        
+        /* Avatar Centralizado */
+        .avatar-circle {
+            width: 45px; height: 45px;
+            background-color: var(--bg-secondary);
+            color: var(--text-secondary);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 1.1rem;
+            border: 1px solid var(--border-color);
+            flex-shrink: 0;
+            text-transform: uppercase;
+        }
+        
+        /* Auditoria */
+        .audit-info {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 8px 15px;
+            line-height: 1.4;
+        }
+        .audit-line { margin-bottom: 2px; }
+        
+        /* Botões Pendentes (Grandes) */
+        .action-footer-pending {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            width: 100%;
+        }
+        .action-footer-pending .btn {
+            border-radius: 0; 
+            padding: 12px 0;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        
+        /* Botões de Registros Gravados (Edição/Exclusão) */
+        .action-footer-recorded {
+            margin-top: 0;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            width: 100%;
+        }
+        .action-footer-recorded .btn {
+            border-radius: 0;
+            padding: 8px 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+        }
+        .btn-action-edit {
+            background-color: var(--accent-primary);
+            color: var(--text-on-accent);
+        }
+        .btn-action-edit:hover {
+            filter: brightness(0.95);
+            color: var(--text-on-accent);
+        }
+        .btn-action-delete {
+            background-color: var(--color-danger);
+            color: #fff;
+        }
+        .btn-action-delete:hover {
+            filter: brightness(0.95);
+            color: #fff;
+        }
+
+        /* Estilos de Formulário */
+        .nav-tabs .nav-link.active { color: var(--accent-primary); border-bottom: 3px solid var(--accent-primary); }
+
+        /* GARANTIA DE OCULTAÇÃO NO CSS */
+        .restricted-access {
+            display: none !important;
+        }
+
+        .presenca-page .text-dark { color: var(--text-primary) !important; }
+        .presenca-page .bg-white { background-color: var(--bg-card) !important; }
+        .presenca-page .bg-light { background-color: var(--bg-secondary) !important; }
+
+        /* --- MODAL SELFIE CONFIRMAÇÃO DO DIA --- */
+        #camera-preview, #selfie-preview-img {
+            width: 100%;
+            max-height: 60vh;
+            object-fit: contain;
+            background: #000;
+            border-radius: 8px;
+        }
+        #selfie-canvas { display: none; }
+        .selfie-step { display: none; }
+        .selfie-step.active { display: block; }
+        #selfie-status { font-size: 0.9rem; color: var(--text-secondary); }
+
+        /* --- RESPONSIVIDADE --- */
+        @media (max-width: 768px) {
+            .system-container {
+                padding-left: 15px !important; 
+                padding-right: 15px !important;
+            }
+            
+            .header-controls {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+                gap: 15px;
+            }
+            .header-controls div:first-child {
+                text-align: center;
+                width: 100%;
+            }
+            
+            .action-footer-pending .btn { padding: 15px 0; }
+        }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="area-interna-section presenca-page">
+        <div class="system-container">
+            
+            <div class="d-flex justify-content-between align-items-center mb-4 header-controls">
+                <div>
+                    <h1 style="font-size: 1.8rem; margin: 0;">Controle de Presença</h1>
+                    <p class="text-muted mb-0">Gerencie a presença diária da equipe.</p>
+                </div>
+                
+                <div id="container-filtro-data" class="gap-2 restricted-access">
+                    <input type="date" id="data-presenca" class="form-control" onchange="carregarDadosIniciais()">
+                    <button class="btn btn-outline-secondary" onclick="carregarDadosIniciais()"><i class="bi bi-arrow-clockwise"></i></button>
+                </div>
+
+                <div id="display-data-hoje" class="fw-bold text-primary align-self-center">
+                    <i class="bi bi-calendar-event"></i> <span id="texto-data-fixa"></span>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs mb-4" id="tab-container">
+                <li class="nav-item">
+                    <a class="nav-link active" onclick="switchTab('minha-equipe', this)">Minha Equipe</a>
+                </li>
+                <li class="nav-item restricted-access" id="tab-todos">
+                    <a class="nav-link" onclick="switchTab('todos-usuarios', this)">Todos os Usuários</a>
+                </li>
+            </ul>
+
+            <!-- Badge "Dia confirmado com selfie" + link "Ver foto": só para Diretoria/Admin (foto não aparece para outros) -->
+            <div id="container-confirmacao-dia" class="mb-3 restricted-access" style="display: none;">
+                <div id="badge-dia-confirmado" class="d-flex align-items-center gap-2 flex-wrap" style="display: none;">
+                    <span class="badge bg-success fs-6"><i class="bi bi-check-circle-fill"></i> Dia confirmado com selfie</span>
+                    <a id="link-ver-foto" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">Ver foto</a>
+                    <button type="button" id="btn-excluir-foto" class="btn btn-sm btn-outline-danger" title="Excluir foto (apenas Diretoria/Admin)"><i class="bi bi-trash"></i> Excluir foto</button>
+                </div>
+            </div>
+            
+            <div id="grid-colaboradores" class="row g-3 justify-content-center">
+                <div class="col-12 text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2 text-muted">Carregando equipe...</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <div class="modal fade" id="modal-ausencia" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="modal-title">Registrar Ausência</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Motivo</label>
+                        <select class="form-select" id="select-motivo"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observação</label>
+                        <textarea class="form-control" id="obs-motivo" rows="2" placeholder="Detalhes opcionais..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="btn-confirmar-ausencia">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Selfie para confirmar presença do dia (câmera ao vivo, sem upload de arquivo) -->
+    <div class="modal fade" id="modal-selfie" tabindex="-1" aria-labelledby="modal-selfie-title" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modal-selfie-title"><i class="bi bi-camera-fill"></i> Tirar selfie e desbloquear lista</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar" id="modal-selfie-close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">Tire uma selfie com o time. A foto deve ser tirada agora (câmera ao vivo). Data e local serão marcados na imagem.</p>
+                    <div id="selfie-status" class="mb-2"></div>
+
+                    <!-- Etapa 1: Câmera ao vivo -->
+                    <div id="selfie-step-camera" class="selfie-step active">
+                        <video id="camera-preview" autoplay playsinline muted></video>
+                        <div class="mt-3 d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-success" id="btn-tirar-foto"><i class="bi bi-camera"></i> Tirar foto</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        </div>
+                    </div>
+
+                    <!-- Etapa 2: Preview da foto com data/local (antes de enviar) -->
+                    <div id="selfie-step-preview" class="selfie-step">
+                        <img id="selfie-preview-img" alt="Preview da selfie" />
+                        <div class="mt-3 d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-primary" id="btn-enviar-selfie"><i class="bi bi-send"></i> Confirmar e enviar</button>
+                            <button type="button" class="btn btn-outline-secondary" id="btn-tirar-outra">Tirar outra</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        </div>
+                    </div>
+
+                    <canvas id="selfie-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        const token = localStorage.getItem('accessToken');
+        if(!token) window.location.href = '/';
+
+        const decoded = jwt_decode(token);
+        // Normaliza o perfil para garantir comparação correta
+        const userRole = (decoded.user_role || decoded.perfil || 'Vendedor');
+        const isSuperuser = decoded.is_superuser || false;
+        const vendedorSolo = decoded.vendedor_solo === true;
+
+        // --- DEBUG NO CONSOLE (F12) PARA VOCÊ CONFERIR ---
+        console.log("Perfil Detectado:", userRole);
+        console.log("É Superusuário?", isSuperuser);
+
+        // Lógica de Permissão para Visualizar Botões de Edição
+        const isGestorSupremo = isSuperuser || userRole === 'Diretoria' || userRole === 'Admin';
+        // Pode confirmar presença do dia com selfie: supervisor (Minha Equipe) ou gestor
+        const podeConfirmarDia = isGestorSupremo || userRole === 'Supervisor' || vendedorSolo;
+
+        if (userRole === 'Vendedor' && !isSuperuser && !vendedorSolo) {
+            alert('Acesso restrito a gestores.');
+            window.location.href = '/area-interna/';
+        }
+        
+        const API_MOTIVOS = '/api/presenca/motivos/';
+        const API_REGISTROS = '/api/presenca/registros/';
+        const API_CONFIRMACAO_DIA = '/api/presenca/confirmacao-dia/';
+
+        let motivosDisponiveis = [];
+        let cameraStreamSelfie = null;
+        let selfieBlobCapturado = null;
+        let selfieLat = null;
+        let selfieLng = null;
+        let selfieEndereco = null;  // endereço completo (reverse geocoding)
+        let activeTab = 'minha-equipe';
+        let modalAusencia;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            modalAusencia = new bootstrap.Modal(document.getElementById('modal-ausencia'));
+
+            const hoje = new Date();
+            const inputData = document.getElementById('data-presenca');
+            inputData.valueAsDate = hoje;
+
+            // --- LÓGICA RESTRITIVA ---
+            // Se for superusuário (Roger ID 1), ele VAI entrar aqui.
+            const isDiretoriaOrAdmin = (userRole === 'Diretoria' || userRole === 'Admin' || isSuperuser);
+
+            if (isDiretoriaOrAdmin) {
+                // Remove a classe que oculta e ajusta o display
+                const filtro = document.getElementById('container-filtro-data');
+                filtro.classList.remove('restricted-access');
+                filtro.classList.add('d-flex');
+                
+                document.getElementById('display-data-hoje').style.display = 'none';
+                
+                const abaTodos = document.getElementById('tab-todos');
+                abaTodos.classList.remove('restricted-access');
+                
+                // Define aba padrão como todos
+                activeTab = 'todos-usuarios';
+                document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+                document.querySelector('#tab-todos .nav-link').classList.add('active');
+            } else {
+                // Garante que a data fixa apareça
+                document.getElementById('texto-data-fixa').textContent = hoje.toLocaleDateString('pt-BR');
+                // Garante que a aba ativa seja "Minha Equipe"
+                activeTab = 'minha-equipe';
+            }
+
+            carregarMotivos();
+            carregarDadosIniciais();
+            setupSelfieModalHandlers();
+
+            document.getElementById('btn-excluir-foto')?.addEventListener('click', async function() {
+                if (!confirm('Excluir a foto deste dia? A lista ficará bloqueada até tirar uma nova selfie.')) return;
+                const data = document.getElementById('data-presenca').value;
+                if (!data) return;
+                const btn = this;
+                btn.disabled = true;
+                try {
+                    const res = await apiClient.delete(`${API_CONFIRMACAO_DIA}?data=${data}`);
+                    document.getElementById('badge-dia-confirmado').style.display = 'none';
+                    carregarStatusConfirmacaoDia();
+                    carregarDadosIniciais();
+                    alert('Foto excluída.');
+                } catch (e) {
+                    alert('Erro ao excluir: ' + (e.message || ''));
+                }
+                btn.disabled = false;
+            });
+        });
+
+        window.switchTab = function(tabName, element) {
+            activeTab = tabName;
+            document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+            carregarDadosIniciais();
+        }
+
+        function atualizarVisibilidadeConfirmacaoDia() {
+            const container = document.getElementById('container-confirmacao-dia');
+            if (!container) return;
+            // Barra com "Dia confirmado" + "Ver foto" só para Diretoria/Admin (foto não deve aparecer para outros)
+            const isDiretoriaOrAdmin = (userRole === 'Diretoria' || userRole === 'Admin' || isSuperuser);
+            if (activeTab === 'minha-equipe' && isDiretoriaOrAdmin) {
+                container.classList.remove('restricted-access');
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        async function carregarStatusConfirmacaoDia() {
+            const data = document.getElementById('data-presenca').value;
+            if (!data) return;
+            const badgeEl = document.getElementById('badge-dia-confirmado');
+            const linkEl = document.getElementById('link-ver-foto');
+            const isDiretoriaOrAdmin = (userRole === 'Diretoria' || userRole === 'Admin' || isSuperuser);
+            try {
+                const res = await apiClient.get(`${API_CONFIRMACAO_DIA}?data=${data}`);
+                // Badge + link "Ver foto" só para Diretoria/Admin (foto não deve aparecer para outros)
+                if (res.data && res.data.confirmado && res.data.detalhe && isDiretoriaOrAdmin) {
+                    badgeEl.style.display = 'flex';
+                    if (res.data.detalhe.foto_url && linkEl) {
+                        linkEl.href = res.data.detalhe.foto_url;
+                        linkEl.style.display = 'inline-block';
+                    }
+                } else {
+                    badgeEl.style.display = 'none';
+                    if (linkEl) linkEl.style.display = 'none';
+                }
+            } catch (e) {
+                badgeEl.style.display = 'none';
+                if (linkEl) linkEl.style.display = 'none';
+            }
+        }
+
+        function pararCameraSelfie() {
+            if (cameraStreamSelfie) {
+                cameraStreamSelfie.getTracks().forEach(t => t.stop());
+                cameraStreamSelfie = null;
+            }
+        }
+
+        window.abrirModalSelfie = async function() {
+            const modal = document.getElementById('modal-selfie');
+            const video = document.getElementById('camera-preview');
+            const stepCamera = document.getElementById('selfie-step-camera');
+            const stepPreview = document.getElementById('selfie-step-preview');
+            const statusEl = document.getElementById('selfie-status');
+            selfieBlobCapturado = null;
+            selfieLat = null;
+            selfieLng = null;
+            selfieEndereco = null;
+            stepCamera.classList.add('active');
+            stepPreview.classList.remove('active');
+            document.getElementById('selfie-preview-img').src = '';
+            statusEl.textContent = 'Solicitando permissão da câmera e localização...';
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                cameraStreamSelfie = stream;
+                video.srcObject = stream;
+                statusEl.textContent = 'Câmera ativa. Obtenção de localização em segundo plano.';
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        selfieLat = pos.coords.latitude;
+                        selfieLng = pos.coords.longitude;
+                        statusEl.textContent = 'Câmera ativa. Obtendo endereço... Clique em "Tirar foto".';
+                        // Reverse geocoding para endereço completo (Nominatim exige User-Agent)
+                        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${selfieLat}&lon=${selfieLng}&format=json&addressdetails=1`, {
+                            headers: { 'Accept': 'application/json', 'User-Agent': 'PresencaRecord/1.0' }
+                        }).then(r => r.json()).then(data => {
+                            if (data) {
+                                const addr = data.address;
+                                if (addr) {
+                                    const partes = [];
+                                    if (addr.road) partes.push(addr.road + (addr.house_number ? ' ' + addr.house_number : ''));
+                                    else if (addr.pedestrian) partes.push(addr.pedestrian);
+                                    if (addr.neighbourhood && !partes.includes(addr.neighbourhood)) partes.push(addr.neighbourhood);
+                                    if (addr.suburb && !partes.includes(addr.suburb)) partes.push(addr.suburb);
+                                    const cidade = addr.city || addr.town || addr.village || addr.municipality || addr.county;
+                                    if (cidade) partes.push(cidade);
+                                    if (addr.state) partes.push(addr.state);
+                                    if (addr.postcode) partes.push(addr.postcode);
+                                    if (addr.country) partes.push(addr.country);
+                                    selfieEndereco = partes.filter(Boolean).join(', ');
+                                }
+                                if (!selfieEndereco && data.display_name) selfieEndereco = data.display_name;
+                                statusEl.textContent = selfieEndereco ? 'Câmera ativa. Endereço obtido. Clique em "Tirar foto".' : 'Câmera ativa. Local obtido. Clique em "Tirar foto".';
+                            }
+                        }).catch(() => {
+                            statusEl.textContent = 'Câmera ativa. Local obtido. Clique em "Tirar foto".';
+                        });
+                    },
+                    () => { statusEl.textContent = 'Câmera ativa. Local indisponível (opcional). Clique em "Tirar foto".'; },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            } catch (err) {
+                statusEl.textContent = 'Erro: não foi possível acessar a câmera. ' + (err.message || '');
+                return;
+            }
+
+            const modalBs = new bootstrap.Modal(modal);
+            modalBs.show();
+            modal.addEventListener('hidden.bs.modal', function onHidden() {
+                modal.removeEventListener('hidden.bs.modal', onHidden);
+                pararCameraSelfie();
+                video.srcObject = null;
+            }, { once: true });
+        };
+
+        function setupSelfieModalHandlers() {
+            const modal = document.getElementById('modal-selfie');
+            const video = document.getElementById('camera-preview');
+            const canvas = document.getElementById('selfie-canvas');
+            const ctx = canvas.getContext('2d');
+            const stepCamera = document.getElementById('selfie-step-camera');
+            const stepPreview = document.getElementById('selfie-step-preview');
+            const previewImg = document.getElementById('selfie-preview-img');
+
+            document.getElementById('btn-tirar-foto').addEventListener('click', function() {
+                if (!video.srcObject || video.readyState < 2) return;
+                const w = video.videoWidth;
+                const h = video.videoHeight;
+                canvas.width = w;
+                canvas.height = h;
+                ctx.drawImage(video, 0, 0);
+                const now = new Date();
+                const dataStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                let localStr = 'Local indisponível';
+                if (selfieEndereco) {
+                    localStr = selfieEndereco;
+                } else if (selfieLat != null && selfieLng != null) {
+                    localStr = selfieLat.toFixed(5) + ', ' + selfieLng.toFixed(5);
+                }
+                ctx.font = '600 14px Arial';
+                const maxW = w - 20;
+                const lineH = 18;
+                function wrapText(text, maxWidth) {
+                    const words = text.split(/\s+/);
+                    const lines = [];
+                    let cur = '';
+                    for (const wd of words) {
+                        const test = cur ? cur + ' ' + wd : wd;
+                        if (ctx.measureText(test).width > maxWidth && cur) {
+                            lines.push(cur);
+                            cur = wd;
+                        } else cur = test;
+                    }
+                    if (cur) lines.push(cur);
+                    return lines;
+                }
+                const localLines = wrapText('Local: ' + localStr, maxW);
+                const barH = 20 + lineH * (1 + localLines.length);
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(0, h - barH, w, barH);
+                ctx.fillStyle = '#fff';
+                ctx.fillText('Data: ' + dataStr, 10, h - barH + 16);
+                localLines.forEach((line, i) => {
+                    ctx.fillText(line, 10, h - barH + 16 + lineH * (i + 1));
+                });
+                canvas.toBlob(function(blob) {
+                    if (!blob) return;
+                    selfieBlobCapturado = blob;
+                    previewImg.src = canvas.toDataURL('image/jpeg', 0.9);
+                    stepCamera.classList.remove('active');
+                    stepPreview.classList.add('active');
+                }, 'image/jpeg', 0.9);
+            });
+
+            document.getElementById('btn-tirar-outra').addEventListener('click', function() {
+                stepPreview.classList.remove('active');
+                stepCamera.classList.add('active');
+                previewImg.src = '';
+                selfieBlobCapturado = null;
+            });
+
+            document.getElementById('btn-enviar-selfie').addEventListener('click', async function() {
+                if (!selfieBlobCapturado) return;
+                const data = document.getElementById('data-presenca').value;
+                const btn = this;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+                const formData = new FormData();
+                formData.append('foto', selfieBlobCapturado, 'selfie.jpg');
+                formData.append('data', data);
+                if (selfieLat != null) formData.append('latitude', selfieLat);
+                if (selfieLng != null) formData.append('longitude', selfieLng);
+                try {
+                    const token = localStorage.getItem('accessToken');
+                    const res = await fetch(API_CONFIRMACAO_DIA, {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        body: formData
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.detail || 'Erro ao enviar');
+                    }
+                    bootstrap.Modal.getInstance(modal).hide();
+                    pararCameraSelfie();
+                    carregarStatusConfirmacaoDia();
+                    carregarDadosIniciais(); // Desbloqueia e mostra a lista de usuários para confirmar presença
+                    alert('Presença do dia confirmada com selfie. Agora confirme quem está presente.');
+                } catch (e) {
+                    alert('Erro ao enviar: ' + (e.message || e));
+                }
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send"></i> Confirmar e enviar';
+            });
+        }
+
+        async function carregarMotivos() {
+            try {
+                const res = await apiClient.get('/api/presenca/motivos/');
+                // CORREÇÃO: Garantir que motivosDisponiveis seja sempre um array
+                // Se a API retornar dados paginados, usar .results, senão usar .data diretamente
+                if (Array.isArray(res.data)) {
+                    motivosDisponiveis = res.data;
+                } else if (res.data && Array.isArray(res.data.results)) {
+                    motivosDisponiveis = res.data.results;
+                } else {
+                    motivosDisponiveis = [];
+                }
+            } catch(e){
+                console.error('[ERRO] Erro ao carregar motivos:', e);
+                motivosDisponiveis = [];
+            }
+        }
+
+        async function carregarDadosIniciais() {
+            const data = document.getElementById('data-presenca').value;
+            const grid = document.getElementById('grid-colaboradores');
+            grid.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">Carregando...</p></div>';
+
+            // Na aba Minha Equipe, só mostra a lista de usuários DEPOIS que a selfie do dia foi salva
+            if (activeTab === 'minha-equipe' && podeConfirmarDia) {
+                try {
+                    const confRes = await apiClient.get(`${API_CONFIRMACAO_DIA}?data=${data}`);
+                    if (!confRes.data || !confRes.data.confirmado) {
+                        atualizarVisibilidadeConfirmacaoDia();
+                        grid.innerHTML = `
+                            <div class="col-12 text-center py-5">
+                                <div class="alert alert-info d-inline-block text-start">
+                                    <h5 class="alert-heading"><i class="bi bi-camera-fill"></i> Primeiro passo</h5>
+                                    <p class="mb-0">Tire a selfie com o time para desbloquear a lista e confirmar a presença do dia.</p>
+                                </div>
+                                <div class="mt-4">
+                                    <button type="button" class="btn btn-primary btn-lg" onclick="abrirModalSelfie()">
+                                        <i class="bi bi-camera-fill"></i> Tirar selfie e desbloquear lista
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        carregarStatusConfirmacaoDia();
+                        return;
+                    }
+                } catch (e) {
+                    // Erro na API: mostra lista mesmo assim para não travar
+                }
+            }
+
+            const equipeEndpoint = (activeTab === 'todos-usuarios')
+                ? '/api/presenca/todos-usuarios/?participa_controle_presenca=true'
+                : '/api/presenca/minha-equipe/?participa_controle_presenca=true';
+
+            try {
+                const [equipeRes, presencasRes] = await Promise.all([
+                    apiClient.get(equipeEndpoint),
+                    apiClient.get(`${API_REGISTROS}?data=${data}`)
+                ]);
+                
+                let equipe = equipeRes.data;
+                let presencasDoDia = presencasRes.data;
+                
+                // DEBUG: Verificar estrutura da resposta de presenças
+                console.log('[DEBUG] Resposta bruta de presenças:', presencasRes);
+                console.log('[DEBUG] Tipo de presencasDoDia:', typeof presencasDoDia);
+                console.log('[DEBUG] É array?', Array.isArray(presencasDoDia));
+                
+                // Se for um objeto com results (paginado), pegar o array
+                if (presencasDoDia && !Array.isArray(presencasDoDia) && presencasDoDia.results) {
+                    presencasDoDia = presencasDoDia.results;
+                    console.log('[DEBUG] Presenças eram paginadas, usando results:', presencasDoDia);
+                } else if (!Array.isArray(presencasDoDia)) {
+                    console.warn('[AVISO] Presenças não é array nem objeto com results:', presencasDoDia);
+                    presencasDoDia = [];
+                }
+
+                // CORREÇÃO: Carregar todos os usuários mesmo se houver paginação
+                if (equipe && equipe.results && Array.isArray(equipe.results)) {
+                    // Se houver paginação, carregar todas as páginas
+                    if (equipe.count && equipe.count > equipe.results.length) {
+                        console.log(`[DEBUG] Detectada paginação: ${equipe.results.length} de ${equipe.count} usuários. Carregando todos...`);
+                        let todosUsuarios = [...equipe.results];
+                        let nextUrl = equipe.next;
+                        
+                        while (nextUrl) {
+                            try {
+                                const nextRes = await apiClient.get(nextUrl);
+                                const nextData = nextRes.data;
+                                if (Array.isArray(nextData)) {
+                                    todosUsuarios = [...todosUsuarios, ...nextData];
+                                    nextUrl = null; // Assumindo que não há mais páginas
+                                } else if (nextData.results && Array.isArray(nextData.results)) {
+                                    todosUsuarios = [...todosUsuarios, ...nextData.results];
+                                    nextUrl = nextData.next;
+                                } else {
+                                    nextUrl = null;
+                                }
+                            } catch (e) {
+                                console.error('Erro ao carregar próxima página:', e);
+                                nextUrl = null;
+                            }
+                        }
+                        equipe = todosUsuarios;
+                        console.log(`[DEBUG] Total de usuários carregados: ${equipe.length}`);
+                    } else {
+                        equipe = equipe.results;
+                    }
+                }
+
+                if(Array.isArray(equipe)) {
+                    renderizarCards(equipe, presencasDoDia || []);
+                    atualizarVisibilidadeConfirmacaoDia();
+                    carregarStatusConfirmacaoDia();
+                } else if (equipe && equipe.detail) {
+                    grid.innerHTML = `<div class="col-12 text-center text-danger py-4">Erro ao carregar equipe: ${equipe.detail}</div>`;
+                } else {
+                    grid.innerHTML = '<div class="col-12 text-center text-danger py-4">Erro ao carregar equipe (resposta inesperada).</div>';
+                }
+
+            } catch(e) {
+                console.error(e);
+                grid.innerHTML = '<div class="col-12 text-center text-danger py-4">Erro de conexão.</div>';
+            }
+        }
+
+        function renderizarCards(lista, presencasDoDia) {
+            const grid = document.getElementById('grid-colaboradores');
+            grid.innerHTML = '';
+
+            // DEBUG: Verificar estrutura dos dados de presença
+            console.log('[DEBUG] Presenças recebidas:', presencasDoDia);
+            
+            // Criar mapa de presenças usando o ID do colaborador
+            const presencasMap = Array.isArray(presencasDoDia)
+                ? presencasDoDia.reduce((map, p) => { 
+                    const colaboradorId = p.colaborador; // ID do colaborador
+                    console.log(`[DEBUG] Mapeando presença: colaborador=${colaboradorId}, status=${p.status}`);
+                    map[colaboradorId] = p; 
+                    return map; 
+                }, {})
+                : {};
+            
+            console.log('[DEBUG] Mapa de presenças criado:', presencasMap);
+
+            if (!Array.isArray(lista) || lista.length === 0) {
+                grid.innerHTML = '<div class="col-12 text-center text-muted py-5">Nenhum colaborador encontrado.</div>';
+                return;
+            }
+
+            lista.forEach(p => {
+                // DEBUG: Verificar mapeamento - usar o ID do colaborador
+                const registro = presencasMap[p.id];
+                console.log(`[DEBUG] Renderizando card para usuário ID=${p.id}, username=${p.username}, registro encontrado:`, registro ? 'SIM' : 'NÃO');
+                if (registro) {
+                    console.log(`[DEBUG] Detalhes do registro:`, registro);
+                }
+                
+                let barClass = 'status-pendente';
+                let statusText = 'Pendente';
+                let statusColor = 'text-muted';
+                let cardBorder = '#ced4da';
+                
+                if (registro) {
+                    if (registro.status) {
+                        barClass = 'status-presente';
+                        statusText = 'Presente';
+                        statusColor = 'text-success';
+                        cardBorder = 'var(--cor-sucesso)';
+                    } else {
+                        const desc = registro.motivo_nome || 'Motivo não informado';
+                        statusText = `Ausente: ${desc}`;
+                        statusColor = 'text-danger';
+                        barClass = registro.motivo_ausencia?.gera_desconto ? 'status-ausente' : 'status-justificado';
+                        cardBorder = registro.motivo_ausencia?.gera_desconto ? 'var(--cor-perigo)' : 'var(--cor-aviso)';
+                    }
+                }
+
+                const usernameDisplay = (p.username || '??').toUpperCase();
+                const iniciais = usernameDisplay.substring(0, 2);
+                const cardCol = document.createElement('div');
+                
+                // Grid denso
+                cardCol.className = 'col-12 col-sm-6 col-lg-3 col-xl-3';
+
+                // Conteúdo do Card
+                let cardContent = `
+                    <div class="p-3 flex-grow-1">
+                        <div class="d-flex align-items-center gap-3 mb-2">
+                            <div class="avatar-circle flex-shrink-0">${iniciais}</div>
+                            <div class="overflow-hidden flex-grow-1">
+                                <h6 class="mb-0 text-truncate fw-bold text-dark" title="${usernameDisplay}">${usernameDisplay}</h6>
+                                <small class="fw-bold ${statusColor}" id="status-text-${p.id}">${statusText}</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Rodapé (Ações ou Auditoria)
+                let footerContent = '';
+
+                if (!registro) {
+                    // PENDENTE: Botões Grandes (Visíveis para quem pode marcar)
+                    footerContent = `
+                        <div class="action-footer-pending d-flex w-100">
+                            <button class="btn btn-success flex-grow-1" style="border-right: 1px solid rgba(0,0,0,0.1);" onclick="salvarStatus(${p.id}, '${usernameDisplay}', true)">PRESENTE</button>
+                            <button class="btn btn-danger flex-grow-1" onclick="abrirModalAusencia(${p.id}, '${usernameDisplay}')">AUSÊNCIA</button>
+                        </div>
+                    `;
+                } else {
+                    // JÁ MARCADO: Auditoria
+                    let auditHtml = '';
+                    const opts = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+                    
+                    if (registro.criado_em) {
+                        const dt = new Date(registro.criado_em).toLocaleString('pt-BR', opts);
+                        const user = (registro.lancado_por_nome || 'Sistema').split(' ')[0].toUpperCase();
+                        auditHtml += `<div class="audit-line">Lançado: <strong>${user}</strong> em ${dt}</div>`;
+                    }
+                    if (registro.editado_em && registro.editado_por_nome) {
+                        const dtEdit = new Date(registro.editado_em).toLocaleString('pt-BR', opts);
+                        const userEdit = (registro.editado_por_nome || '').split(' ')[0].toUpperCase();
+                        auditHtml += `<div class="audit-line text-primary">Editado: <strong>${userEdit}</strong> em ${dtEdit}</div>`;
+                    }
+                    
+                    footerContent = `<div class="audit-info" id="audit-${p.id}">${auditHtml}</div>`;
+
+                    // BOTÕES DE EDIÇÃO/EXCLUSÃO: Apenas para Gestores Supremos
+                    if (isGestorSupremo) {
+                        footerContent += `
+                        <div class="action-footer-recorded d-flex w-100" id="footer-recorded-${p.id}">
+                            <button class="btn btn-action-edit flex-grow-1" onclick="ativarModoEdicao(${p.id}, '${usernameDisplay}')">
+                                <i class="bi bi-pencil-square"></i> Alterar
+                            </button>
+                            <button class="btn btn-action-delete flex-grow-1" onclick="removerRegistro(${registro.id})">
+                                <i class="bi bi-trash"></i> Excluir
+                            </button>
+                        </div>
+                        `;
+                    }
+                }
+
+                cardCol.innerHTML = `
+                    <div class="presence-card" id="card-${p.id}" style="border-left: 5px solid ${cardBorder};">
+                        ${cardContent}
+                        ${footerContent}
+                    </div>
+                `;
+                grid.appendChild(cardCol);
+            });
+        }
+
+        // --- MODO DE EDIÇÃO VISUAL ---
+        window.ativarModoEdicao = function(id, nome) {
+            const cardEl = document.getElementById(`card-${id}`);
+            
+            const auditDiv = document.getElementById(`audit-${id}`);
+            const recordedFooter = document.getElementById(`footer-recorded-${id}`);
+            if(auditDiv) auditDiv.style.display = 'none'; 
+            if(recordedFooter) recordedFooter.remove();
+
+            const statusText = document.getElementById(`status-text-${id}`);
+            if(statusText) {
+                statusText.textContent = "Editando...";
+                statusText.className = "fw-bold text-warning";
+            }
+            cardEl.style.borderLeftColor = "#ffc107"; 
+
+            const buttonsHtml = `
+                <div class="action-footer-pending d-flex w-100 mt-auto">
+                    <button class="btn btn-success flex-grow-1" style="border-right: 1px solid rgba(0,0,0,0.1);" onclick="salvarStatus(${id}, '${nome}', true)">PRESENTE</button>
+                    <button class="btn btn-danger flex-grow-1" onclick="abrirModalAusencia(${id}, '${nome}')">AUSÊNCIA</button>
+                </div>
+            `;
+            
+            cardEl.insertAdjacentHTML('beforeend', buttonsHtml);
+        }
+
+        // --- EXCLUSÃO DEFINITIVA ---
+        window.removerRegistro = async function(registroId) {
+            if (!confirm('Tem certeza que deseja APAGAR este registro?')) return;
+
+            try {
+                await apiClient.delete(`${API_REGISTROS}${registroId}/`); 
+                carregarDadosIniciais(); 
+            } catch(e) {
+                console.error(e);
+                alert('Erro ao excluir registro.');
+            }
+        }
+
+        async function salvarStatus(vendedorId, nome, presente, detalhes = {}) {
+            const data = document.getElementById('data-presenca').value;
+            // CORREÇÃO: Garantir que não enviamos 'id' no body para evitar erro de chave duplicada
+            const body = {
+                colaborador: vendedorId,
+                data: data,
+                status: presente,
+                motivo: !presente ? detalhes.motivoId : null,
+                observacao: !presente ? (detalhes.observacao || "") : ""
+            };
+
+            console.log('[DEBUG] Enviando registro de presença:', body);
+
+            // Desabilitar botões durante o salvamento
+            const cardEl = document.getElementById(`card-${vendedorId}`);
+            if (cardEl) {
+                const buttons = cardEl.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                });
+            }
+
+            try {
+                const response = await apiClient.post(API_REGISTROS, body);
+                console.log('[DEBUG] ✅ Resposta do servidor recebida:', response.data);
+                console.log('[DEBUG] Tipo de resposta:', typeof response.data);
+                console.log('[DEBUG] Campos na resposta:', Object.keys(response.data || {}));
+                
+                // Verificar se a resposta tem os dados necessários
+                if (!response.data) {
+                    console.error('[ERRO] Resposta vazia do servidor');
+                    alert('Erro: Resposta vazia do servidor. Recarregue a página.');
+                    if (cardEl) {
+                        const buttons = cardEl.querySelectorAll('button');
+                        buttons.forEach(btn => {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                        });
+                    }
+                    return;
+                }
+                
+                // Atualizar imediatamente o card com a resposta do servidor
+                console.log('[DEBUG] Chamando atualizarCardAposSalvar...');
+                atualizarCardAposSalvar(vendedorId, nome, response.data);
+                
+                // NÃO recarregar dados imediatamente - a atualização visual é suficiente
+                // Isso evita o "piscar" e permite que o usuário veja a mudança imediatamente
+                console.log('[DEBUG] ✅ Card atualizado. Atualização visual mantida.');
+                
+            } catch (e) {
+                console.error('[ERRO] ❌ Erro ao salvar presença:', e);
+                console.error('[ERRO] Resposta completa do erro:', e.response);
+                const errorMsg = e.response?.data?.detail || e.message || 'Erro ao salvar.';
+                
+                // Se o erro for sobre registro já existente, recarregar os dados para mostrar o registro existente
+                if (errorMsg.includes('Já existe um registro') || errorMsg.includes('já existe') || errorMsg.includes('already exists')) {
+                    console.log('[DEBUG] ⚠️ Registro já existe no banco. Recarregando dados para mostrar o registro existente...');
+                    // Não mostrar alerta, apenas recarregar
+                    setTimeout(() => {
+                        carregarDadosIniciais();
+                    }, 300);
+                } else {
+                    // Para outros erros, mostrar alerta
+                    alert(`Erro ao salvar: ${errorMsg}`);
+                }
+                
+                // Reabilitar botões em caso de erro
+                if (cardEl) {
+                    const buttons = cardEl.querySelectorAll('button');
+                    buttons.forEach(btn => {
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                    });
+                }
+            }
+        }
+        
+        // Nova função para atualizar o card imediatamente após salvar
+        function atualizarCardAposSalvar(vendedorId, nome, registro) {
+            console.log('[DEBUG] atualizarCardAposSalvar chamado');
+            console.log('[DEBUG] Parâmetros:', { vendedorId, nome, registro });
+            
+            const cardEl = document.getElementById(`card-${vendedorId}`);
+            if (!cardEl) {
+                console.error(`[ERRO] Card não encontrado: card-${vendedorId}`);
+                return;
+            }
+            
+            console.log('[DEBUG] Card encontrado:', cardEl);
+            
+            const statusText = document.getElementById(`status-text-${vendedorId}`);
+            if (!statusText) {
+                console.error(`[ERRO] Status text não encontrado: status-text-${vendedorId}`);
+            }
+            
+            // Atualizar status visual
+            let statusColor, statusTextValue, cardBorder;
+            
+            if (registro.status) {
+                statusColor = 'text-success';
+                statusTextValue = 'Presente';
+                cardBorder = 'var(--cor-sucesso)';
+            } else {
+                const desc = registro.motivo_nome || 'Motivo não informado';
+                statusTextValue = `Ausente: ${desc}`;
+                statusColor = 'text-danger';
+                cardBorder = 'var(--cor-perigo)';
+            }
+            
+            // Atualizar cor da borda do card
+            cardEl.style.borderLeftColor = cardBorder;
+            
+            // Atualizar texto do status
+            if (statusText) {
+                statusText.textContent = statusTextValue;
+                statusText.className = `fw-bold ${statusColor}`;
+            }
+            
+            // Remover botões pendentes
+            const pendingFooter = cardEl.querySelector('.action-footer-pending');
+            if (pendingFooter) {
+                pendingFooter.remove();
+            }
+            
+            // Remover rodapé existente (auditoria e botões) para evitar duplicação
+            const existingAudit = cardEl.querySelector('.audit-info');
+            if (existingAudit) existingAudit.remove();
+            const existingFooter = cardEl.querySelector('.action-footer-recorded');
+            if (existingFooter) existingFooter.remove();
+            
+            // Construir rodapé de auditoria
+            let auditHtml = '';
+            const opts = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+            
+            console.log('[DEBUG] Campos de auditoria no registro:', {
+                criado_em: registro.criado_em,
+                lancado_por_nome: registro.lancado_por_nome,
+                editado_em: registro.editado_em,
+                editado_por_nome: registro.editado_por_nome
+            });
+            
+            // Sempre mostrar quem lançou (se houver)
+            if (registro.lancado_por_nome) {
+                let dtCriado = '';
+                if (registro.criado_em) {
+                    try {
+                        dtCriado = new Date(registro.criado_em).toLocaleString('pt-BR', opts);
+                    } catch(e) {
+                        console.warn('[AVISO] Erro ao formatar data criado_em:', e);
+                        dtCriado = 'Data não disponível';
+                    }
+                }
+                const user = (registro.lancado_por_nome || 'Sistema').split(' ')[0].toUpperCase();
+                auditHtml += `<div class="audit-line">Lançado: <strong>${user}</strong>${dtCriado ? ' em ' + dtCriado : ''}</div>`;
+            }
+            
+            // Mostrar quem editou (se foi editado)
+            if (registro.editado_por_nome) {
+                let dtEdit = '';
+                if (registro.editado_em) {
+                    try {
+                        dtEdit = new Date(registro.editado_em).toLocaleString('pt-BR', opts);
+                    } catch(e) {
+                        console.warn('[AVISO] Erro ao formatar data editado_em:', e);
+                        dtEdit = 'Data não disponível';
+                    }
+                }
+                const userEdit = registro.editado_por_nome.split(' ')[0].toUpperCase();
+                auditHtml += `<div class="audit-line text-primary">Editado: <strong>${userEdit}</strong>${dtEdit ? ' em ' + dtEdit : ''}</div>`;
+            }
+            
+            let footerContent = '';
+            if (auditHtml) {
+                footerContent = `<div class="audit-info" id="audit-${vendedorId}">${auditHtml}</div>`;
+            }
+            
+            // Adicionar botões de edição/exclusão para gestores supremos
+            if (isGestorSupremo) {
+                footerContent += `
+                    <div class="action-footer-recorded d-flex w-100" id="footer-recorded-${vendedorId}">
+                        <button class="btn btn-action-edit flex-grow-1" onclick="ativarModoEdicao(${vendedorId}, '${nome}')">
+                            <i class="bi bi-pencil-square"></i> Alterar
+                        </button>
+                        <button class="btn btn-action-delete flex-grow-1" onclick="removerRegistro(${registro.id})">
+                            <i class="bi bi-trash"></i> Excluir
+                        </button>
+                    </div>
+                `;
+            }
+            
+            // Adicionar o rodapé ao card apenas se houver conteúdo
+            if (footerContent) {
+                cardEl.insertAdjacentHTML('beforeend', footerContent);
+                console.log('[DEBUG] ✅ Rodapé adicionado ao card');
+            } else {
+                console.warn('[AVISO] Nenhum conteúdo de rodapé para adicionar');
+            }
+        }
+
+        window.abrirModalAusencia = function(id, nome) {
+            document.getElementById('modal-title').textContent = `Registrar Ausência: ${nome}`;
+            const select = document.getElementById('select-motivo');
+            select.innerHTML = '<option value="">Selecione...</option>';
+            // CORREÇÃO: Garantir que motivosDisponiveis seja um array antes de usar forEach
+            if (Array.isArray(motivosDisponiveis)) {
+                motivosDisponiveis.forEach(m => select.add(new Option(m.motivo, m.id)));
+            } else {
+                console.error('[ERRO] motivosDisponiveis não é um array:', motivosDisponiveis);
+                alert('Erro ao carregar motivos de ausência. Por favor, recarregue a página.');
+            }
+            document.getElementById('obs-motivo').value = '';
+            
+            document.getElementById('btn-confirmar-ausencia').onclick = function() {
+                const motivoId = select.value;
+                if (!motivoId) { alert('Selecione o motivo.'); return; }
+                const obs = document.getElementById('obs-motivo').value;
+                salvarStatus(id, nome, false, { motivoId: motivoId, observacao: obs });
+                modalAusencia.hide();
+            };
+            modalAusencia.show();
+        }
+    </script>
+{% endblock %}

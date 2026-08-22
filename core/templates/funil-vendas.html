@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Funil de Vendas (WhatsApp) - Record{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4" style="max-width:1200px">
+        <h1 class="h4 mb-1"><i class="bi bi-funnel text-primary"></i> Funil de vendas (WhatsApp)</h1>
+        <p class="text-muted small mb-4">Tentativas do fluxo <strong>VENDER</strong> (a partir do CEP). Acesso: <strong>Diretoria</strong> ou <strong>Admin</strong>.</p>
+
+        <div id="alert-403" class="alert alert-danger d-none">Sem permissão para esta ferramenta.</div>
+        <div id="alert-env" class="alert alert-warning d-none">Em produção, defina <code>FUNIL_VENDAS_REGISTRAR=true</code> para gravar novas tentativas.</div>
+
+        <div class="card card-modern shadow-sm mb-3">
+            <div class="card-body row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">Status</label>
+                    <select id="filtro-status" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="em_andamento">Em andamento</option>
+                        <option value="concluido">Concluído</option>
+                        <option value="erro">Erro</option>
+                        <option value="abandonado">Abandonado</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">Telefone (contém)</label>
+                    <input type="text" id="filtro-telefone" class="form-control form-control-sm" placeholder="55...">
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-primary btn-sm w-100" id="btn-buscar">Buscar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive card card-modern shadow-sm">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Telefone</th>
+                        <th>Vendedor</th>
+                        <th>Status</th>
+                        <th>Funil (máx)</th>
+                        <th>Protocolo</th>
+                        <th>Início</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="tbody">
+                    <tr><td colspan="8" class="text-center text-muted py-4">Carregando…</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <nav class="mt-2 d-flex justify-content-between align-items-center">
+            <span class="small text-muted" id="pag-info"></span>
+            <div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-prev" disabled>Anterior</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-next" disabled>Próxima</button>
+            </div>
+        </nav>
+    </main>
+
+    <div class="modal fade" id="modalDetalhe" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Tentativa #<span id="d-id"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body small">
+                    <pre id="d-json" class="funil-json p-2 rounded" style="white-space:pre-wrap;max-height:70vh;font-size:11px"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.funil-json { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+        const API_BASE = '/api/crm/funil-venda-wpp/tentativas/';
+        let page = 1;
+        const pageSize = 25;
+
+        function getToken() {
+            return localStorage.getItem('accessToken');
+        }
+
+        function podeAcessar() {
+            try {
+                const t = getToken();
+                if (!t) return false;
+                const p = jwt_decode(t);
+                const role = (p.user_role || p.perfil || '').toString();
+                return role === 'Diretoria' || role === 'Admin' || p.is_staff === true;
+            } catch (e) { return false; }
+        }
+
+        async function carregar() {
+            const tbody = document.getElementById('tbody');
+            const token = getToken();
+            if (!token) { window.location.href = '/'; return; }
+            if (!podeAcessar()) {
+                document.getElementById('alert-403').classList.remove('d-none');
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">—</td></tr>';
+                return;
+            }
+
+            const st = document.getElementById('filtro-status').value;
+            const tel = document.getElementById('filtro-telefone').value.trim();
+            let url = API_BASE + `?page=${page}&page_size=${pageSize}`;
+            if (st) url += `&status=${encodeURIComponent(st)}`;
+            if (tel) url += `&telefone=${encodeURIComponent(tel)}`;
+
+            try {
+                const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+                if (r.status === 403) {
+                    document.getElementById('alert-403').classList.remove('d-none');
+                    return;
+                }
+                const data = await r.json();
+                if (!data.results || !data.results.length) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum registro.</td></tr>';
+                } else {
+                    tbody.innerHTML = data.results.map(t => `
+                        <tr>
+                            <td>${t.id}</td>
+                            <td>${t.telefone || ''}</td>
+                            <td>${t.usuario_username || '—'}</td>
+                            <td><span class="badge bg-secondary">${t.status}</span></td>
+                            <td>${t.funil_estagio_max || '—'}</td>
+                            <td>${t.protocolo_pap || '—'}</td>
+                            <td>${t.iniciado_em ? t.iniciado_em.replace('T', ' ').slice(0, 19) : '—'}</td>
+                            <td><button type="button" class="btn btn-link btn-sm p-0 ver-detalhe" data-id="${t.id}">Detalhe</button></td>
+                        </tr>`).join('');
+                }
+                document.getElementById('pag-info').textContent =
+                    `Página ${data.page || 1} de ${data.total_pages || 1} (${data.count || 0} itens)`;
+                document.getElementById('btn-prev').disabled = (data.page || 1) <= 1;
+                document.getElementById('btn-next').disabled = (data.page || 1) >= (data.total_pages || 1);
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-danger">Erro ao carregar.</td></tr>';
+            }
+        }
+
+        document.getElementById('btn-buscar').addEventListener('click', () => { page = 1; carregar(); });
+        document.getElementById('btn-prev').addEventListener('click', () => { if (page > 1) { page--; carregar(); } });
+        document.getElementById('btn-next').addEventListener('click', () => { page++; carregar(); });
+
+        document.getElementById('tbody').addEventListener('click', async (ev) => {
+            const btn = ev.target.closest('.ver-detalhe');
+            if (!btn) return;
+            const id = btn.getAttribute('data-id');
+            const token = getToken();
+            const r = await fetch(API_BASE + id + '/', { headers: { 'Authorization': 'Bearer ' + token } });
+            const j = await r.json();
+            document.getElementById('d-id').textContent = id;
+            document.getElementById('d-json').textContent = JSON.stringify(j, null, 2);
+            new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
+        });
+
+        carregar();
+    </script>
+{% endblock %}

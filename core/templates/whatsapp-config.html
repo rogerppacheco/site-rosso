@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}WhatsApp — Configuração{% endblock %}
+
+{% block extra_css %}
+<style>
+.whatsapp-config-page main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+        .whatsapp-config-page .provider-card { border: 2px solid transparent; cursor: pointer; transition: all .2s; background: var(--bg-card); }
+        .whatsapp-config-page .provider-card.active { border-color: var(--accent-primary); background: var(--bg-secondary); }
+        .whatsapp-config-page .provider-card:hover { border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent); }
+        .whatsapp-config-page .bg-white { background-color: var(--bg-card) !important; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/" class="nav-button">Voltar</a></li>
+{% endblock %}
+
+{% block content %}
+<main class="whatsapp-config-page">
+        <h2 class="fw-bold mb-1"><i class="bi bi-whatsapp text-success"></i> Configuração WhatsApp</h2>
+        <p class="text-muted mb-4">Escolha o provedor ativo. Em produção recomendamos o <strong>modo híbrido</strong>: Z-API para a equipe e WhatsAtende oficial para o cliente.</p>
+
+        <div class="card card-modern shadow-sm mb-4">
+            <div class="card-header fw-bold">Provedor ativo</div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card card-modern provider-card h-100 p-3" id="card-provider-hybrid" onclick="selecionarProvider('hybrid')">
+                            <div class="d-flex align-items-start gap-2">
+                                <input class="form-check-input mt-1" type="radio" name="provider" id="radio-hybrid" value="hybrid">
+                                <div>
+                                    <strong>Híbrido</strong> <span class="badge bg-success ms-1">recomendado</span>
+                                    <p class="small text-muted mb-0 mt-1">A (equipe/grupos) = Z-API · B (cliente) = WhatsAtende Cloud API.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card card-modern provider-card h-100 p-3" id="card-provider-zapi" onclick="selecionarProvider('zapi')">
+                            <div class="d-flex align-items-start gap-2">
+                                <input class="form-check-input mt-1" type="radio" name="provider" id="radio-zapi" value="zapi">
+                                <div>
+                                    <strong>Z-API</strong> <span class="badge bg-secondary ms-1">legado</span>
+                                    <p class="small text-muted mb-0 mt-1">Webhook no painel Z-API → Django. Uma conexão só.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card card-modern provider-card h-100 p-3" id="card-provider-evolution" onclick="selecionarProvider('evolution')">
+                            <div class="d-flex align-items-start gap-2">
+                                <input class="form-check-input mt-1" type="radio" name="provider" id="radio-evolution" value="evolution">
+                                <div>
+                                    <strong>Evolution + n8n</strong>
+                                    <p class="small text-muted mb-0 mt-1">Outbound via n8n; inbound direto. Requer QR abaixo.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card card-modern provider-card h-100 p-3" id="card-provider-whatsatende" onclick="selecionarProvider('whatsatende')">
+                            <div class="d-flex align-items-start gap-2">
+                                <input class="form-check-input mt-1" type="radio" name="provider" id="radio-whatsatende" value="whatsatende">
+                                <div>
+                                    <strong>WhatsAtende (A+B)</strong>
+                                    <p class="small text-muted mb-0 mt-1">Bot e cliente só na WhatsAtende (sem Z-API).</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="cfg-status-linhas" class="small text-muted mb-3"></div>
+                <button type="button" class="btn btn-primary" id="btn-salvar-provider" onclick="salvarProvider()">
+                    <i class="bi bi-check2-circle"></i> Salvar provedor
+                </button>
+                <span id="cfg-save-msg" class="ms-2 small"></span>
+            </div>
+        </div>
+
+        <div class="card card-modern shadow-sm mb-4 d-none" id="panel-zapi">
+            <div class="card-header bg-secondary text-white fw-bold">Z-API — Número A (equipe)</div>
+            <div class="card-body">
+                <p class="mb-2">QR Code e conexão do aparelho ficam no painel da Z-API. No híbrido, bot, grupos e comunicados internos usam esta conexão.</p>
+                <p class="mb-0" id="zapi-cred-status"></p>
+            </div>
+        </div>
+
+        <div class="card card-modern shadow-sm mb-4 d-none" id="panel-hybrid-b">
+            <div class="card-header text-white fw-bold" style="background:#0f766e;">WhatsAtende — Número B (cliente / Cloud API)</div>
+            <div class="card-body">
+                <p class="mb-2">Templates Meta e respostas do cliente final. Não depende do Número A da WhatsAtende — pode desativá-lo no painel.</p>
+                <p class="mb-1" id="hybrid-b-cred-status"></p>
+                <p class="small text-muted mb-0">Webhook inbound (cliques nos templates): <code id="hybrid-b-webhook-url">—</code></p>
+            </div>
+        </div>
+
+        <div class="card card-modern shadow-sm mb-4 d-none" id="panel-evolution">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <span class="fw-bold">Evolution — conexão</span>
+                <button type="button" class="btn btn-sm btn-light" onclick="carregarWhatsAppConexao('evolution')"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Instância <code id="wa-instance-name">site_record_zap</code></p>
+                <div class="mb-3">
+                    <span id="wa-status-badge" class="badge bg-secondary">Consultando...</span>
+                    <span id="wa-status-text" class="small text-muted ms-2"></span>
+                </div>
+                <div id="wa-connected-msg" class="alert alert-success py-2 small d-none">Aparelho conectado.</div>
+                <div id="wa-connecting-msg" class="alert alert-warning py-2 small d-none">Estado connecting — desconecte e gere QR limpo.</div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-success btn-sm" id="btn-wa-qrcode" onclick="gerarWhatsAppQrCode('evolution')"><i class="bi bi-qr-code"></i> Gerar QR Code</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm d-none" id="btn-wa-disconnect" onclick="desconectarWhatsApp('evolution')"><i class="bi bi-box-arrow-right"></i> Desconectar</button>
+                </div>
+                <div id="wa-qrcode-wrap" class="text-center mt-3 d-none">
+                    <img id="wa-qrcode-img" alt="QR Code" class="border rounded p-2 bg-white" width="260" height="260">
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-modern shadow-sm mb-4 d-none" id="panel-whatsatende">
+            <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:#0f766e;">
+                <span class="fw-bold">WhatsAtende — conexão</span>
+                <button type="button" class="btn btn-sm btn-light" onclick="carregarWhatsAppConexao('whatsatende')"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+            </div>
+            <div class="card-body">
+                <p class="mb-2" id="whatsatende-cred-status"></p>
+                <p class="text-muted small mb-2">API <code id="wa-atende-api-url">—</code> · conexão <code id="wa-atende-id">—</code></p>
+                <div class="mb-3">
+                    <span id="wa-atende-status-badge" class="badge bg-secondary">—</span>
+                </div>
+                <div id="wa-atende-connected-msg" class="alert alert-success py-2 small d-none">Conexão WhatsAtende ativa.</div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-success btn-sm" id="btn-wa-atende-qrcode" onclick="gerarWhatsAppQrCode('whatsatende')"><i class="bi bi-qr-code"></i> Gerar QR Code</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm d-none" id="btn-wa-atende-disconnect" onclick="desconectarWhatsApp('whatsatende')"><i class="bi bi-box-arrow-right"></i> Desconectar</button>
+                </div>
+                <div id="wa-atende-qrcode-wrap" class="text-center mt-3 d-none">
+                    <img id="wa-atende-qrcode-img" alt="QR Code WhatsAtende" class="border rounded p-2 bg-white" width="260" height="260">
+                </div>
+                <p class="small text-muted mt-3 mb-0">Configure <code>WHATSATENDE_TOKEN</code> (token da conexão) e <code>WHATSATENDE_WHATSAPP_ID</code> no servidor. Webhook inbound → <code>/api/crm/webhook-whatsapp/</code>.</p>
+            </div>
+        </div>
+
+        <div id="wa-error-msg" class="alert alert-danger d-none"></div>
+
+        <div class="card card-modern border-warning shadow-sm">
+            <div class="card-body small">
+                <strong><i class="bi bi-info-circle"></i> Capacidades por provedor</strong>
+                <ul class="mb-0 mt-2">
+                    <li><strong>Híbrido:</strong> Z-API (bot, grupos, comunicados) + WhatsAtende B (templates Meta / cliente). Pode desligar o Número A na WhatsAtende.</li>
+                    <li><strong>Z-API:</strong> botões, lista, delivery e webhook completos.</li>
+                    <li><strong>Evolution:</strong> botões via API direta; se falharem, fallback para texto.</li>
+                    <li><strong>WhatsAtende (A+B):</strong> texto/mídia/checkNumber; botões/lista/grupos limitados na API pública.</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script>
+        const apiUrl = window.location.origin;
+        let cfgAtual = null;
+        let providerSelecionado = 'zapi';
+        let waPollInterval = null;
+        const providerNomes = {
+            hybrid: 'Híbrido (Z-API equipe + WhatsAtende cliente)',
+            zapi: 'Z-API (legado)',
+            evolution: 'Evolution + n8n',
+            whatsatende: 'WhatsAtende (A+B)',
+        };
+
+        async function apiFetch(endpoint, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const token = localStorage.getItem('accessToken');
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+            const response = await fetch(`${apiUrl}${finalEndpoint}`, { ...options, headers });
+            let data = {};
+            try { data = await response.json(); } catch (e) {}
+            if (response.status === 401) { alert('Sessão expirada.'); window.location.href = '/'; throw new Error('401'); }
+            if (!response.ok) throw new Error(data.detail || data.error || 'Erro na requisição');
+            return data;
+        }
+
+        function waSetError(msg) {
+            const el = document.getElementById('wa-error-msg');
+            if (!msg) { el.classList.add('d-none'); return; }
+            el.textContent = msg;
+            el.classList.remove('d-none');
+        }
+
+        function marcarProviderUi(provider) {
+            providerSelecionado = provider;
+            ['hybrid', 'zapi', 'evolution', 'whatsatende'].forEach((p) => {
+                const radio = document.getElementById(`radio-${p}`);
+                const card = document.getElementById(`card-provider-${p}`);
+                if (radio) radio.checked = provider === p;
+                if (card) card.classList.toggle('active', provider === p);
+            });
+            document.getElementById('panel-zapi').classList.toggle(
+                'd-none',
+                !(provider === 'zapi' || provider === 'hybrid')
+            );
+            document.getElementById('panel-hybrid-b').classList.toggle(
+                'd-none',
+                provider !== 'hybrid'
+            );
+            const evoOk = cfgAtual?.evolutionConfigured;
+            const waOk = cfgAtual?.whatsatendeConfigured;
+            document.getElementById('panel-evolution').classList.toggle(
+                'd-none',
+                !(provider === 'evolution' || (provider === 'zapi' && evoOk))
+            );
+            document.getElementById('panel-whatsatende').classList.toggle(
+                'd-none',
+                !(provider === 'whatsatende' || (waOk && provider !== 'hybrid'))
+            );
+        }
+
+        function selecionarProvider(p) { marcarProviderUi(p); }
+
+        async function carregarConfig() {
+            cfgAtual = await apiFetch('/whatsapp/config/');
+            marcarProviderUi(cfgAtual.provider || 'zapi');
+            const linhas = [
+                `Credenciais Z-API no servidor: ${cfgAtual.zapiConfigured ? 'OK' : 'ausentes'}`,
+                `Evolution: ${cfgAtual.evolutionConfigured ? 'OK' : 'ausente'}`,
+                `WhatsAtende A (legado bot): ${cfgAtual.whatsatendeConfigured ? 'OK' : 'ausente'}${cfgAtual.whatsatendeConnectionConfigured ? ' (conexão completa)' : cfgAtual.whatsatendeConfigured ? ' (falta WHATSATENDE_WHATSAPP_ID)' : ''}`,
+                `WhatsAtende B (cliente): ${cfgAtual.whatsatendeClienteConfigured ? 'OK id=' + (cfgAtual.whatsatendeWhatsappIdB || '') : 'ausente'}`,
+                `Híbrido pronto: ${cfgAtual.hybridReady ? 'sim (Z-API + TOKEN_B)' : 'não'}`,
+                `n8n outbound: ${cfgAtual.n8nConfigured ? 'OK' : 'ausente (só afeta envios no modo Evolution)'}`,
+            ];
+            if (cfgAtual.aviso) linhas.unshift(`<span class="text-warning">${cfgAtual.aviso}</span>`);
+            if (cfgAtual.atualizadoEm) linhas.push(`Última alteração: ${new Date(cfgAtual.atualizadoEm).toLocaleString('pt-BR')}${cfgAtual.atualizadoPor ? ' por ' + cfgAtual.atualizadoPor : ''}`);
+            document.getElementById('cfg-status-linhas').innerHTML = linhas.map(l => `<div>${l}</div>`).join('');
+            document.getElementById('zapi-cred-status').innerHTML = cfgAtual.zapiConfigured
+                ? '<span class="text-success"><i class="bi bi-check-circle"></i> ZAPI_INSTANCE_ID e ZAPI_TOKEN configurados.</span>'
+                : '<span class="text-danger"><i class="bi bi-x-circle"></i> Credenciais Z-API não encontradas nas variáveis do servidor.</span>';
+            const hybridB = document.getElementById('hybrid-b-cred-status');
+            if (hybridB) {
+                hybridB.innerHTML = cfgAtual.whatsatendeClienteConfigured
+                    ? `<span class="text-success"><i class="bi bi-check-circle"></i> TOKEN_B / ID_B OK (conexão ${cfgAtual.whatsatendeWhatsappIdB || '—'}).</span>`
+                    : '<span class="text-danger"><i class="bi bi-x-circle"></i> Falta WHATSATENDE_TOKEN_B / WHATSATENDE_WHATSAPP_ID_B.</span>';
+            }
+            const hybridWh = document.getElementById('hybrid-b-webhook-url');
+            if (hybridWh && cfgAtual.whatsatendeWebhookUrl) {
+                hybridWh.textContent = cfgAtual.whatsatendeWebhookUrl;
+            }
+            document.getElementById('whatsatende-cred-status').innerHTML = cfgAtual.whatsatendeConfigured
+                ? (cfgAtual.whatsatendeConnectionConfigured
+                    ? `<span class="text-success"><i class="bi bi-check-circle"></i> Número A (bot) OK.${cfgAtual.whatsatendeClienteConfigured ? ' Número B (cliente) OK.' : ' <strong>Falta TOKEN_B / WHATSAPP_ID_B</strong>.'}</span>`
+                    : '<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> Token A OK — falta WHATSATENDE_WHATSAPP_ID para QR/status.</span>')
+                : '<span class="text-danger"><i class="bi bi-x-circle"></i> WHATSATENDE_TOKEN ausente no servidor.</span>';
+            if (cfgAtual.whatsatendeApiUrl) document.getElementById('wa-atende-api-url').textContent = cfgAtual.whatsatendeApiUrl;
+            if (cfgAtual.whatsatendeWhatsappId) document.getElementById('wa-atende-id').textContent = cfgAtual.whatsatendeWhatsappId;
+            if (cfgAtual.evolutionConfigured && cfgAtual.provider === 'evolution') carregarWhatsAppConexao('evolution', true);
+            if (cfgAtual.whatsatendeConnectionConfigured && cfgAtual.provider === 'whatsatende') {
+                carregarWhatsAppConexao('whatsatende', true);
+            }
+            if (cfgAtual.provider === 'hybrid') {
+                document.getElementById('cfg-save-msg').innerHTML =
+                    '<span class="text-success">Modo híbrido ativo: equipe/grupos na Z-API; cliente no Número B WhatsAtende.</span>';
+            } else if (cfgAtual.provider === 'zapi' && cfgAtual.evolutionConfigured) {
+                document.getElementById('cfg-save-msg').innerHTML =
+                    '<span class="text-info">Provedor ativo: Z-API. Escaneie o QR Evolution e só depois salve Evolution.</span>';
+            }
+        }
+
+        async function salvarProvider() {
+            if (providerSelecionado === cfgAtual?.provider) {
+                document.getElementById('cfg-save-msg').textContent = 'Nenhuma alteração.';
+                return;
+            }
+            const nome = providerNomes[providerSelecionado] || providerSelecionado;
+            const avisoWebhook = providerSelecionado === 'hybrid'
+                ? 'Híbrido: webhook Z-API (bot) + webhook WhatsAtende B com token (cliente) → /api/crm/webhook-whatsapp/...'
+                : 'Confirme que o webhook inbound aponta para /api/crm/webhook-whatsapp/ no provedor escolhido.';
+            if (!confirm(`Alterar provedor ativo para ${nome}?\n\n${avisoWebhook}`)) return;
+            document.getElementById('btn-salvar-provider').disabled = true;
+            try {
+                const res = await apiFetch('/whatsapp/config/', { method: 'PATCH', body: JSON.stringify({ provider: providerSelecionado }) });
+                cfgAtual = res;
+                document.getElementById('cfg-save-msg').textContent = 'Salvo!';
+                marcarProviderUi(res.provider);
+                await carregarConfig();
+            } catch (e) {
+                alert('Erro ao salvar: ' + e.message);
+            } finally {
+                document.getElementById('btn-salvar-provider').disabled = false;
+            }
+        }
+
+        function waAtualizarUi(status, backend) {
+            if (!status) return;
+            if (backend === 'whatsatende') {
+                const badge = document.getElementById('wa-atende-status-badge');
+                const map = { open: 'Conectado', close: 'Desconectado', connecting: 'Aguardando QR', unconfigured: 'Não configurado' };
+                badge.textContent = map[status.state] || status.state || '—';
+                badge.className = 'badge ' + (status.connected ? 'bg-success' : 'bg-secondary');
+                if (status.instanceName) document.getElementById('wa-atende-id').textContent = status.instanceName;
+                document.getElementById('wa-atende-connected-msg').classList.toggle('d-none', !status.connected);
+                document.getElementById('btn-wa-atende-disconnect').classList.toggle('d-none', !(status.connected || status.state === 'connecting'));
+                document.getElementById('btn-wa-atende-qrcode').classList.toggle('d-none', !!status.connected);
+                return;
+            }
+            const badge = document.getElementById('wa-status-badge');
+            const map = { open: 'Conectado', close: 'Desconectado', connecting: 'Aguardando', zapi: 'Z-API', unconfigured: 'Não configurado' };
+            badge.textContent = map[status.state] || status.state || '—';
+            badge.className = 'badge ' + (status.connected ? 'bg-success' : 'bg-secondary');
+            if (status.instanceName) document.getElementById('wa-instance-name').textContent = status.instanceName;
+            document.getElementById('wa-connected-msg').classList.toggle('d-none', !status.connected);
+            document.getElementById('wa-connecting-msg').classList.toggle('d-none', !(status.state === 'connecting' && !status.connected));
+            if (status.message && status.setupMode) {
+                waSetError('');
+                document.getElementById('cfg-save-msg').innerHTML = `<span class="text-info">${status.message}</span>`;
+            }
+            document.getElementById('btn-wa-disconnect').classList.toggle('d-none', !(status.connected || status.state === 'connecting'));
+            document.getElementById('btn-wa-qrcode').classList.toggle('d-none', !!status.connected);
+        }
+
+        async function carregarWhatsAppConexao(backend, silent) {
+            waSetError('');
+            const b = backend || (cfgAtual?.provider === 'whatsatende' ? 'whatsatende' : 'evolution');
+            try {
+                const data = await apiFetch(`/whatsapp/status/?backend=${b}`);
+                waAtualizarUi(data, b);
+                if (data.connected && waPollInterval) { clearInterval(waPollInterval); waPollInterval = null; }
+            } catch (e) {
+                if (!silent) waSetError(e.message || 'Erro ao consultar status.');
+            }
+        }
+
+        async function gerarWhatsAppQrCode(backend) {
+            waSetError('');
+            const b = backend || 'evolution';
+            try {
+                const data = await apiFetch(`/whatsapp/qrcode/?backend=${b}`);
+                const src = data.base64 || data.qrcode || '';
+                if (!src) throw new Error('QR Code não retornado pela API.');
+                if (b === 'whatsatende') {
+                    document.getElementById('wa-atende-qrcode-img').src = src;
+                    document.getElementById('wa-atende-qrcode-wrap').classList.remove('d-none');
+                } else {
+                    document.getElementById('wa-qrcode-img').src = src;
+                    document.getElementById('wa-qrcode-wrap').classList.remove('d-none');
+                }
+            } catch (e) {
+                waSetError(e.message || 'Não foi possível gerar o QR Code.');
+            }
+        }
+
+        async function desconectarWhatsApp(backend) {
+            const b = backend || 'evolution';
+            const label = b === 'whatsatende' ? 'WhatsAtende' : 'Evolution';
+            if (!confirm(`Desconectar e resetar sessão ${label}?`)) return;
+            try {
+                const res = await apiFetch(`/whatsapp/disconnect/?backend=${b}`, { method: 'DELETE' });
+                waAtualizarUi(res.status || res, b);
+                if (b === 'whatsatende') {
+                    document.getElementById('wa-atende-qrcode-wrap').classList.add('d-none');
+                } else {
+                    document.getElementById('wa-qrcode-wrap').classList.add('d-none');
+                }
+                await carregarWhatsAppConexao(b);
+            } catch (e) {
+                waSetError(e.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('accessToken')) { window.location.href = '/'; return; }
+            try {
+                const payload = jwt_decode(localStorage.getItem('accessToken'));
+                const perfil = payload.user_role || payload.perfil || '';
+                const ok = ['Diretoria', 'Admin', 'BackOffice'].includes(perfil) || payload.is_superuser;
+                if (!ok) { alert('Sem permissão.'); window.location.href = '/area-interna/'; return; }
+                await carregarConfig();
+            } catch (e) {
+                alert('Erro ao carregar configuração.');
+                window.location.href = '/area-interna/';
+            }
+        });
+    </script>
+{% endblock %}

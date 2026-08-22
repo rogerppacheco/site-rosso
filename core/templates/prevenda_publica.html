@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Pré-venda - {{ acionamento.nome_condominio }}{% endblock %}
+
+{% block brand_url %}#{% endblock %}
+
+{% block header_nav %}{% endblock %}
+
+{% block extra_css %}
+<style>
+        .prevenda-publica-page {
+            min-height: calc(100vh - 72px);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem 1rem;
+        }
+        [data-theme="dark"] .prevenda-publica-page {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d1b4e 100%);
+        }
+        .prevenda-publica-page .container-main {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .prevenda-publica-page .card-landing {
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+        }
+        .prevenda-publica-page .card-header-landing {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text-on-accent);
+            padding: 2rem;
+            text-align: center;
+        }
+        .prevenda-publica-page .banner-image {
+            width: 100%;
+            max-height: 300px;
+            object-fit: cover;
+            margin-bottom: 1rem;
+            display: block;
+            height: auto;
+            background-color: var(--bg-secondary);
+        }
+        @media (max-width: 768px) {
+            .prevenda-publica-page .banner-image { max-height: 200px; }
+            .prevenda-publica-page { padding: 1rem 0.5rem; }
+            .prevenda-publica-page .form-section { padding: 1.5rem; }
+            .prevenda-publica-page .card-header-landing { padding: 1.5rem 1rem; }
+            .prevenda-publica-page .card-header-landing h1 { font-size: 1.5rem; }
+        }
+        .prevenda-publica-page .banner-container {
+            width: 100%;
+            overflow: hidden;
+            background-color: var(--bg-secondary);
+        }
+        .prevenda-publica-page .form-section {
+            padding: 2rem;
+            color: var(--text-primary);
+        }
+        .prevenda-publica-page .btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 10px;
+            color: var(--text-on-accent);
+        }
+        .prevenda-publica-page .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            color: var(--text-on-accent);
+        }
+        .prevenda-publica-page .alert-success {
+            border-radius: 10px;
+            border: none;
+        }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="prevenda-publica-page">
+    <div class="container-main">
+        <div class="card card-landing card-modern">
+            <div class="card-header-landing">
+                <h1 class="mb-0">
+                    <i class="bi bi-building"></i> {{ acionamento.nome_condominio }}
+                </h1>
+                <p class="mb-0 mt-2">Cadastre-se para pré-venda de internet</p>
+            </div>
+
+            {% if link.imagem_banner %}
+            <div class="banner-container" id="banner-container">
+                <img src="{{ link.imagem_banner }}" alt="Banner promocional" class="banner-image" id="banner-img"
+                     onerror="console.error('Erro ao carregar banner. URL:', this.src); document.getElementById('banner-container').innerHTML='<div style=\'padding:2rem;text-align:center;color:var(--text-secondary);\'><i class=\'bi bi-image\' style=\'font-size:3rem;display:block;margin-bottom:1rem;opacity:0.3;\'></i><small>Banner não disponível</small></div>';"
+                     onload="console.log('Banner carregado:', this.src);">
+            </div>
+            {% endif %}
+
+            <div class="form-section">
+                <div id="mensagem-sucesso" class="alert alert-success d-none" role="alert">
+                    <i class="bi bi-check-circle"></i> <strong>Cadastro realizado com sucesso!</strong><br>
+                    Entraremos em contato em breve através do WhatsApp informado.
+                </div>
+
+                <form id="form-prevenda-publica">
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label for="nome_cliente" class="form-label">Nome Completo *</label>
+                            <input type="text" class="form-control" id="nome_cliente" name="nome_cliente" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="telefone_whatsapp" class="form-label">Telefone/WhatsApp *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-whatsapp"></i></span>
+                                <input type="text" class="form-control" id="telefone_whatsapp" name="telefone_whatsapp"
+                                       placeholder="(31) 99999-9999" required>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">E-mail</label>
+                            <input type="email" class="form-control" id="email" name="email"
+                                   placeholder="seuemail@exemplo.com">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="bloco" class="form-label">Bloco</label>
+                            <input type="text" class="form-control" id="bloco" name="bloco"
+                                   placeholder="Ex: A, B, 1">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="apartamento" class="form-label">Apartamento</label>
+                            <input type="text" class="form-control" id="apartamento" name="apartamento"
+                                   placeholder="Ex: 101, 202">
+                        </div>
+
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-submit w-100">
+                                <i class="bi bi-check-circle"></i> Cadastrar Pré-venda
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+        document.getElementById('telefone_whatsapp').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length <= 11) {
+                value = value.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+                if (value.length < 14) {
+                    value = value.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
+                }
+            }
+            e.target.value = value;
+        });
+
+        document.getElementById('form-prevenda-publica').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const form = e.target;
+            const btn = form.querySelector('button[type="submit"]');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Cadastrando...';
+
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('/api/crm/prevenda/publica/{{ codigo }}/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('mensagem-sucesso').classList.remove('d-none');
+                    form.reset();
+                    form.style.display = 'none';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    alert(result.error || 'Erro ao cadastrar. Tente novamente.');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro de conexão. Tente novamente.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        });
+</script>
+{% endblock %}

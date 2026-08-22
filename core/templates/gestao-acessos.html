@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Gestão de Acessos - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.gestao-acessos-page .gestao-content {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+.gestao-acessos-page .bg-white { background-color: var(--bg-card) !important; }
+.gestao-acessos-page .bg-light { background-color: var(--bg-secondary) !important; color: var(--text-primary); }
+.gestao-acessos-page .text-dark { color: var(--text-primary) !important; }
+.gestao-acessos-page .table-light { --bs-table-bg: var(--table-stripe-bg); color: var(--text-primary); }
+.gestao-acessos-page .modal-header.bg-light,
+.gestao-acessos-page .modal-footer.bg-light { background-color: var(--bg-secondary) !important; border-color: var(--border-color); }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="gestao-acessos-page gestao-content">
+        <div class="alert alert-info py-2 small mb-3">
+            <i class="bi bi-info-circle"></i> Esta ferramenta mostra apenas usuários que <strong>não</strong> são Admin ou Diretoria. Quem tem permissão pode editar perfil e dados destes usuários.
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3>Gestão de Acessos</h3>
+            <button class="btn btn-primary" onclick="abrirModalUsuario()"><i class="bi bi-person-plus-fill"></i> Novo Usuário</button>
+        </div>
+        <div class="card card-modern mt-4">
+            <div class="card-header py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-0">Lista de Usuários <span id="lista-status-titulo" class="badge bg-success">Ativos</span></h5>
+                        <small id="contador-usuarios" class="text-muted">Carregando...</small>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="exportarUsuariosExcel()"><i class="bi bi-file-earmark-excel"></i> Exportar Excel</button>
+                        <div class="input-group input-group-sm" style="width: 320px;">
+                            <span class="input-group-text"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" id="busca-usuario" class="form-control" placeholder="Buscar (nome, e-mail, login)..." autocomplete="off">
+                            <button type="button" class="btn btn-outline-secondary" id="btn-limpar-busca-usuario" title="Limpar" style="display:none;"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <span id="busca-usuario-loading" class="spinner-border spinner-border-sm text-primary" style="display:none;"></span>
+                        <div class="btn-group">
+                            <button onclick="mostrarListaUsuarios('ativos', this)" class="btn btn-sm btn-outline-primary active">Ativos</button>
+                            <button onclick="mostrarListaUsuarios('inativos', this)" class="btn btn-sm btn-outline-secondary">Inativos</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="acoes-massa" class="mt-3 p-2 bg-light rounded border d-none align-items-center justify-content-between">
+                    <span class="small fw-bold text-muted"><span id="count-selecionados">0</span> selecionados</span>
+                    <div class="d-flex gap-2">
+                        <select id="novo-perfil-massa" class="form-select form-select-sm" style="width: 200px;"><option value="">Alterar Perfil para...</option></select>
+                        <button onclick="aplicarMudancaPerfilEmMassa()" class="btn btn-sm btn-primary">Aplicar</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="tabela-usuarios">
+                        <thead class="table-light"><tr id="user-list-header"><th style="width: 40px;"><input type="checkbox" id="check-all" onclick="toggleTodos(this)"></th><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Matr. PAP</th><th>Canal</th><th>Líder</th><th class="text-end">Ações</th></tr></thead>
+                        <tbody id="user-list-body"></tbody>
+                    </table>
+                </div>
+                <div id="pagination-container" class="p-3 border-top bg-light" style="display: none;"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal usuário (igual Governança, sem aba desnecessária) -->
+    <div class="modal fade" id="userModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 90%;">
+            <div class="modal-content">
+                <div class="modal-header bg-light border-bottom">
+                    <h5 class="modal-title fw-bold" id="userModalTitle">Novo Usuário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <ul class="nav nav-tabs nav-fill" id="userModalTabs" role="tablist">
+                        <li class="nav-item"><button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#dados-content" type="button">Dados Pessoais</button></li>
+                        <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#financeiro-content" type="button">Financeiro</button></li>
+                        <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#opcoes-content" type="button">Opções</button></li>
+                    </ul>
+                    <form id="user-form">
+                        <input type="hidden" id="user_id">
+                        <div class="tab-content p-4">
+                            <div class="tab-pane fade show active" id="dados-content">
+                                <div class="row g-3">
+                                    <div class="col-12"><h6 class="text-primary border-bottom pb-2 mb-2"><i class="bi bi-person-vcard me-1"></i> Identificação</h6></div>
+                                    <div class="col-lg-7 col-md-6"><label class="form-label fw-bold">Nome Completo</label><input type="text" class="form-control" id="nome_completo" required placeholder="Nome e sobrenome"></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">CPF</label><input type="text" class="form-control" id="cpf" placeholder="Apenas números"></div>
+                                    <div class="col-lg-4 col-md-6"><label class="form-label fw-bold">E-mail</label><input type="email" class="form-control" id="email" required></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Matrícula PAP</label><input type="text" class="form-control" id="matricula_pap" placeholder="Opcional"></div>
+                                    <div class="col-lg-2 col-md-6"><label class="form-label fw-bold">Senha PAP</label><input type="password" class="form-control" id="senha_pap" placeholder="Branco = manter" autocomplete="new-password"></div>
+                                    <div class="col-12 mt-3 pt-3"><h6 class="text-primary border-bottom pb-2 mb-2"><i class="bi bi-fingerprint me-1"></i> Br Pronto (Biometria – Auditoria)</h6></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Login Br Pronto</label><input type="text" class="form-control" id="brpronto_login" placeholder="Ex.: TT828860 (perfil BO)"></div>
+                                    <div class="col-lg-2 col-md-6"><label class="form-label fw-bold">Senha Br Pronto</label><input type="password" class="form-control" id="brpronto_senha" placeholder="Branco = manter" autocomplete="new-password"></div>
+                                    <div class="col-lg-2 col-md-6"><label class="form-label fw-bold">Domínio Br Pronto</label><input type="text" class="form-control" id="brpronto_dominio" placeholder="BrPronto"></div>
+                                    <div class="col-lg-3 col-md-6 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="brpronto_disponivel_para_automacao"><label class="form-check-label" for="brpronto_disponivel_para_automacao">Disponibilizar no pool</label></div></div>
+                                    <div class="col-lg-3 col-md-6 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="autorizar_consulta_bio_wpp"><label class="form-check-label" for="autorizar_consulta_bio_wpp">Autorizar BIO no WhatsApp</label></div></div>
+                                    <div class="col-12 mt-3 pt-3"><h6 class="text-primary border-bottom pb-2 mb-2"><i class="bi bi-whatsapp me-1"></i> WhatsApp</h6></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">WhatsApp 1</label><input type="text" class="form-control" id="tel_whatsapp" placeholder="DDD + número"></div>
+                                    <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">WhatsApp 2</label><input type="text" class="form-control" id="tel_whatsapp_2" placeholder="Opcional"></div>
+                                    <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">WhatsApp 3</label><input type="text" class="form-control" id="tel_whatsapp_3" placeholder="Opcional"></div>
+                                    <div class="col-12 mt-3 pt-3"><h6 class="text-primary border-bottom pb-2 mb-2"><i class="bi bi-key me-1"></i> Acesso</h6></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Username</label><input type="text" class="form-control" id="usuario_login" required placeholder="Login único"></div>
+                                    <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">Senha</label><input type="password" class="form-control" id="senha" placeholder="Vazio = não alterar"></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Perfil</label><select class="form-select" id="perfil_id" required></select></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Líder</label><select class="form-select" id="supervisor_id"><option value="">Nenhum</option></select></div>
+                                    <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">Canal</label><select class="form-select" id="user_canal"><option value="PAP">PAP</option><option value="DIGITAL">Digital</option><option value="RECEPTIVO">Receptivo</option><option value="PARCEIRO">Parceiro</option></select></div>
+                                    <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">Cluster</label><select class="form-select" id="user_cluster"><option value="">Nenhum</option><option value="CLUSTER_1">CLUSTER 1</option><option value="CLUSTER_2">CLUSTER 2</option><option value="CLUSTER_3">CLUSTER 3</option></select></div>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="opcoes-content">
+                                <div class="row g-3">
+                                    <div class="form-check form-switch mb-3 p-3 rounded bg-light border"><input class="form-check-input" type="checkbox" id="participa_controle_presenca"><label class="form-check-label fw-bold" for="participa_controle_presenca">Participa Controle Presença?</label></div>
+                                    <div class="form-check form-switch mb-3 p-3 rounded bg-light border" id="container-vendedor-solo" style="display: none;"><input class="form-check-input" type="checkbox" id="vendedor_solo"><label class="form-check-label fw-bold" for="vendedor_solo">Vendedor solo</label></div>
+                                    <div class="form-check form-switch mb-3 p-3 rounded bg-light border"><input class="form-check-input" type="checkbox" id="autorizar_venda_sem_auditoria"><label class="form-check-label fw-bold" for="autorizar_venda_sem_auditoria">Autorizar venda sem auditoria?</label></div>
+                                    <div class="form-check form-switch mb-3 p-3 rounded bg-light border"><input class="form-check-input" type="checkbox" id="autorizar_venda_automatica"><label class="form-check-label fw-bold" for="autorizar_venda_automatica">Autorizar venda Automática</label></div>
+                                    <div class="form-check form-switch mb-3 p-3 rounded bg-light border"><input class="form-check-input" type="checkbox" id="autorizar_analise_credito_wpp"><label class="form-check-label fw-bold" for="autorizar_analise_credito_wpp">Análise de crédito pelo WhatsApp</label></div>
+                                    <div class="form-check form-switch mb-3 p-3 rounded bg-light border"><input class="form-check-input" type="checkbox" id="autorizar_inclusao_wpp"><label class="form-check-label fw-bold" for="autorizar_inclusao_wpp">Inclusão/Viabilidade pelo WhatsApp</label></div>
+                                    <div class="form-check form-switch mb-3 p-3 rounded bg-light border"><input class="form-check-input" type="checkbox" id="login_pap_disponivel_para_automacao"><label class="form-check-label fw-bold" for="login_pap_disponivel_para_automacao">Login PAP para o bot</label></div>
+                                    <div class="ms-3 mb-3 p-3 rounded bg-light border small">
+                                        <span class="fw-bold text-secondary">Permitir uso por automação:</span>
+                                        <div class="form-check form-switch mt-2"><input class="form-check-input" type="checkbox" id="pap_automacao_vender"><label class="form-check-label" for="pap_automacao_vender">Vender</label></div>
+                                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pap_automacao_credito"><label class="form-check-label" for="pap_automacao_credito">Crédito</label></div>
+                                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pap_automacao_pedido"><label class="form-check-label" for="pap_automacao_pedido">Pedido</label></div>
+                                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pap_automacao_status"><label class="form-check-label" for="pap_automacao_status">Status</label></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="financeiro-content">
+                                <div class="row g-3">
+                                    <div class="col-lg-3"><label class="form-label small fw-bold">Meta</label><input type="number" class="form-control" id="meta_comissao"></div>
+                                    <div class="col-lg-3"><label class="form-label small fw-bold">Chave PIX</label><input type="text" class="form-control" id="chave_pix"></div>
+                                    <div class="col-lg-3"><label class="form-label small fw-bold">Titular</label><input type="text" class="form-control" id="nome_da_conta"></div>
+                                    <div class="col-lg-3"><label class="form-label small fw-bold">Almoço</label><input type="number" class="form-control" id="valor_almoco" step="0.01"></div>
+                                    <div class="col-lg-3"><label class="form-label small fw-bold">Passagem</label><input type="number" class="form-control" id="valor_passagem" step="0.01"></div>
+                                    <div class="col-lg-2"><label class="form-label small">Desc. Boleto</label><input type="number" class="form-control" id="desconto_boleto" step="0.01"></div>
+                                    <div class="col-lg-2"><label class="form-label small">Desc. Viab.</label><input type="number" class="form-control" id="desconto_inclusao_viabilidade" step="0.01"></div>
+                                    <div class="col-lg-2"><label class="form-label small">Desc. Antecip.</label><input type="number" class="form-control" id="desconto_instalacao_antecipada" step="0.01"></div>
+                                    <div class="col-lg-2"><label class="form-label small">Adiant. CNPJ</label><input type="number" class="form-control" id="adiantamento_cnpj" step="0.01"></div>
+                                    <div class="col-lg-2"><label class="form-label small">Desc. INSS</label><input type="number" class="form-control" id="desconto_inss_fixo" step="0.01"></div>
+                                    <div class="col-12">
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="recebe_adiantamento_cnpj" checked>
+                                            <label class="form-check-label fw-bold" for="recebe_adiantamento_cnpj">Recebe adiantamento de CNPJ</label>
+                                        </div>
+                                        <div class="form-check form-switch p-3 rounded bg-light border">
+                                            <input class="form-check-input" type="checkbox" id="recebe_adiantamento_sabado">
+                                            <label class="form-check-label fw-bold" for="recebe_adiantamento_sabado">Recebe adiantamento de comissão (O.S. aberta em sábado)</label>
+                                            <small class="text-muted d-block ms-4 mt-1">Desmarcado = não entra no automático nem no lote da Esteira.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="user-form" class="btn btn-primary px-4">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+    (function() {
+        const token = localStorage.getItem('accessToken');
+        if (!token) { window.location.href = '/'; return; }
+        let payload;
+        try { payload = jwt_decode(token); } catch (e) { window.location.href = '/'; return; }
+        if (!payload.pode_gestao_acessos) { alert('Você não tem permissão para acessar a Gestão de Acessos.'); window.location.href = '/area-interna/'; return; }
+
+        const API_BASE = '/gestao-acessos';
+        const API_GRUPOS = API_BASE + '/grupos/';
+        const API_USUARIOS = API_BASE + '/usuarios';
+
+        const apiUrl = '';
+        async function apiFetch(endpoint, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            const t = localStorage.getItem('accessToken');
+            if (t) headers['Authorization'] = `Bearer ${t}`;
+            let finalEndpoint = endpoint.startsWith('/api') ? endpoint : '/api' + (endpoint.startsWith('/') ? endpoint : '/' + endpoint);
+            const res = await fetch(apiUrl + finalEndpoint, { ...options, headers });
+            if (res.status === 401) { alert('Sessão expirada.'); localStorage.removeItem('accessToken'); window.location.href = '/'; throw new Error('Não autorizado'); }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || err.error || res.statusText);
+            }
+            if (res.status === 204) return null;
+            return res.json();
+        }
+
+        function logout() { localStorage.removeItem('accessToken'); window.location.href = '/'; }
+
+        let todosUsuariosCache = [];
+        let lideresCache = { data: [], timestamp: 0 };
+        let gruposCache = { data: [], timestamp: 0 };
+        let paginacaoAtual = { page: 1, total: 0, pages: 0 };
+        const CACHE_DURATION = 5 * 60 * 1000;
+        const ITEMS_PER_PAGE = 20;
+        const SEARCH_PAGE_SIZE = 100;
+        let debounceTimerBuscaUsuario = null;
+
+        const userModal = new bootstrap.Modal(document.getElementById('userModal'));
+        const userForm = document.getElementById('user-form');
+        const perfilSelectEl = document.getElementById('perfil_id');
+
+        function atualizarVisibilidadeVendedorSolo() {
+            const container = document.getElementById('container-vendedor-solo');
+            const checkbox = document.getElementById('vendedor_solo');
+            if (!container || !checkbox || !perfilSelectEl) return;
+            const nomePerfil = (perfilSelectEl.options[perfilSelectEl.selectedIndex]?.text || '').trim().toLowerCase();
+            const isVendedor = nomePerfil === 'vendedor';
+            container.style.display = isVendedor ? 'block' : 'none';
+            checkbox.disabled = !isVendedor;
+            if (!isVendedor) checkbox.checked = false;
+        }
+
+        perfilSelectEl?.addEventListener('change', atualizarVisibilidadeVendedorSolo);
+
+        async function carregarCacheLideres() {
+            const agora = Date.now();
+            if (lideresCache.data.length && (agora - (lideresCache.timestamp || 0)) < CACHE_DURATION) return lideresCache.data;
+            const res = await apiFetch(API_USUARIOS + '/lideres/');
+            lideresCache.data = Array.isArray(res) ? res : [];
+            lideresCache.timestamp = agora;
+            return lideresCache.data;
+        }
+
+        function buscarNomeSupervisor(supervisorId, userData) {
+            if (!supervisorId) return '-';
+            if (userData && userData.supervisor_detalhe && userData.supervisor_detalhe.username) return userData.supervisor_detalhe.username;
+            const l = lideresCache.data.find(l => l.id == supervisorId);
+            if (l) return l.username || (l.nome_exibicao || '').split('(').pop().replace(')', '') || '-';
+            const u = todosUsuariosCache.find(u => u.id == supervisorId);
+            return (u && u.username) ? u.username : '-';
+        }
+
+        window.mostrarListaUsuarios = function(status, btn) {
+            document.getElementById('lista-status-titulo').textContent = status === 'ativos' ? 'Ativos' : 'Inativos';
+            if (btn) { btn.parentElement.querySelectorAll('.btn').forEach(b => { b.classList.remove('active', 'btn-outline-primary'); }); btn.classList.add('active', 'btn-outline-primary'); }
+            document.getElementById('busca-usuario').value = '';
+            document.getElementById('btn-limpar-busca-usuario').style.display = 'none';
+            paginacaoAtual.page = 1;
+            carregarUsuarios(status, 1);
+        };
+
+        const FETCH_TIMEOUT_MS = 15000;
+        async function carregarUsuarios(status, page, searchTerm) {
+            const tbody = document.getElementById('user-list-body');
+            if (!tbody) { console.error('Gestão de Acessos: elemento #user-list-body não encontrado.'); return; }
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Carregando...</td></tr>';
+            try {
+                const emBusca = (searchTerm || '').trim();
+                const pageSize = emBusca ? SEARCH_PAGE_SIZE : ITEMS_PER_PAGE;
+                let url = API_USUARIOS + '/?is_active=' + (status === 'ativos') + '&page=' + page + '&page_size=' + pageSize;
+                if (emBusca) url += '&search=' + encodeURIComponent(searchTerm.trim());
+                let res, dados, total;
+                const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado. Verifique sua conexão e tente novamente.')), FETCH_TIMEOUT_MS));
+                try {
+                    res = await Promise.race([apiFetch(url), timeoutPromise]);
+                    dados = Array.isArray(res) ? res : (res.results || []);
+                    total = (res && res.count !== undefined) ? res.count : dados.length;
+                } catch (err) {
+                    res = await Promise.race([apiFetch(API_USUARIOS + '/?is_active=' + (status === 'ativos') + '&page_size=1000'), timeoutPromise]);
+                    dados = Array.isArray(res) ? res : (res.results || []);
+                    total = dados.length;
+                    const start = (page - 1) * ITEMS_PER_PAGE;
+                    dados = dados.slice(start, start + ITEMS_PER_PAGE);
+                }
+                todosUsuariosCache = dados;
+                await carregarCacheLideres();
+                paginacaoAtual = { page, total, pages: Math.max(1, Math.ceil(total / pageSize)), pageSize };
+                const contador = document.getElementById('contador-usuarios');
+                if (contador) contador.textContent = 'Mostrando ' + (((page - 1) * pageSize) + 1) + '-' + Math.min(page * pageSize, total) + ' de ' + total + ' usuário(s)';
+                await carregarGruposParaSelect();
+                renderizarTabelaUsuarios(dados, status);
+                renderizarControlesPaginacao(status);
+            } catch (e) {
+                console.error('Gestão de Acessos – carregar usuários:', e);
+                if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-danger">Erro: ' + (e.message || 'Falha ao carregar.') + '</td></tr>';
+            }
+        }
+
+        async function carregarGruposParaSelect() {
+            if (gruposCache.data.length) return gruposCache.data;
+            const res = await apiFetch(API_GRUPOS);
+            gruposCache.data = Array.isArray(res) ? res : (res.results || []);
+            return gruposCache.data;
+        }
+
+        function renderizarTabelaUsuarios(lista, status) {
+            const tbody = document.getElementById('user-list-body');
+            const isAtivos = status === 'ativos';
+            const headerRow = document.getElementById('user-list-header');
+            headerRow.innerHTML = isAtivos
+                ? '<th style="width:40px"><input type="checkbox" id="check-all" onclick="toggleTodos(this)"></th><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Matr. PAP</th><th>Canal</th><th>Líder</th><th class="text-end">Ações</th>'
+                : '<th>Nome</th><th>E-mail</th><th>Perfil</th><th>Matr. PAP</th><th>Canal</th><th class="text-end">Ações</th>';
+            if (!lista.length) { tbody.innerHTML = '<tr><td colspan="8">Nenhum usuário.</td></tr>'; return; }
+            const fragment = document.createDocumentFragment();
+            lista.forEach(user => {
+                const row = document.createElement('tr');
+                if (isAtivos) {
+                    const td = document.createElement('td');
+                    td.innerHTML = '<input type="checkbox" class="user-check" value="' + user.id + '">';
+                    row.appendChild(td);
+                }
+                row.appendChild(createCell(user.username || user.nome_completo || '-'));
+                row.appendChild(createCell(user.email || '-'));
+                let perfilNome = user.perfil_nome || (user.groups && user.groups[0] ? (gruposCache.data.find(g => g.id == (user.groups[0].id || user.groups[0])) || {}).name : '') || '-';
+                row.appendChild(createCell(perfilNome));
+                row.appendChild(createCell(user.matricula_pap || '-'));
+                row.appendChild(createCell(user.canal || '-'));
+                if (isAtivos) {
+                    let supId = user.supervisor && (typeof user.supervisor === 'object' ? user.supervisor.id : user.supervisor);
+                    row.appendChild(createCell(supId ? buscarNomeSupervisor(supId, user) : '-'));
+                }
+                const acoes = document.createElement('td');
+                acoes.className = 'text-end';
+                if (isAtivos) {
+                    acoes.innerHTML = '<button class="btn btn-xs btn-editar me-1" onclick="window.editarUsuarioPeloId(' + user.id + ')"><i class="bi bi-pencil"></i></button><button class="btn btn-xs btn-excluir" onclick="window.inativarUsuario(' + user.id + ')"><i class="bi bi-trash"></i></button>';
+                } else {
+                    acoes.innerHTML = '<button class="btn btn-xs btn-outline-success" onclick="window.reativarUsuario(' + user.id + ')"><i class="bi bi-check-circle"></i></button>';
+                }
+                row.appendChild(acoes);
+                fragment.appendChild(row);
+            });
+            tbody.innerHTML = '';
+            tbody.appendChild(fragment);
+        }
+        function createCell(text) { const td = document.createElement('td'); td.textContent = text; return td; }
+
+        window.irParaPagina = function(page) {
+            const status = document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos';
+            const search = (document.getElementById('busca-usuario') || {}).value.trim();
+            carregarUsuarios(status, page, search || undefined);
+        };
+
+        window.exportarUsuariosExcel = async function() {
+            const isAtivo = document.getElementById('lista-status-titulo').textContent.includes('Ativos');
+            const search = (document.getElementById('busca-usuario') || {}).value.trim();
+            const params = new URLSearchParams();
+            params.set('is_active', isAtivo ? 'true' : 'false');
+            if (search) params.set('search', search);
+            const token = localStorage.getItem('accessToken');
+            try {
+                const res = await fetch('/api' + API_USUARIOS + '/exportar-excel/?' + params.toString(), {
+                    method: 'GET',
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                });
+                if (!res.ok) {
+                    let msg = 'Falha ao exportar.';
+                    try {
+                        const err = await res.json();
+                        msg = err.detail || err.error || msg;
+                    } catch (_) {}
+                    throw new Error(msg);
+                }
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const dispo = res.headers.get('Content-Disposition') || '';
+                const match = dispo.match(/filename="?([^"]+)"?/i);
+                a.href = url;
+                a.download = match ? match[1] : 'usuarios.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('Erro ao exportar: ' + (e.message || e));
+            }
+        };
+
+        function renderizarControlesPaginacao(status) {
+            const container = document.getElementById('pagination-container');
+            if (!container) return;
+            const total = paginacaoAtual.pages;
+            const current = paginacaoAtual.page;
+            const pSize = paginacaoAtual.pageSize || ITEMS_PER_PAGE;
+            if (total <= 1) {
+                container.style.display = 'block';
+                container.innerHTML = '<div class="text-center text-muted small">Página 1 de 1 – Mostrando 1-' + Math.min(pSize, paginacaoAtual.total) + ' de ' + paginacaoAtual.total + ' usuário(s)</div>';
+                return;
+            }
+            let html = '<nav><ul class="pagination justify-content-center mb-2">';
+            if (current > 1) {
+                html += '<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault();window.irParaPagina(' + (current - 1) + ')">◀ Anterior</a></li>';
+            } else {
+                html += '<li class="page-item disabled"><span class="page-link">◀ Anterior</span></li>';
+            }
+            const start = Math.max(1, current - 2);
+            const end = Math.min(total, current + 2);
+            if (start > 1) {
+                html += '<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault();window.irParaPagina(1)">1</a></li>';
+                if (start > 2) html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            for (let i = start; i <= end; i++) {
+                if (i === current) {
+                    html += '<li class="page-item active"><span class="page-link">' + i + '</span></li>';
+                } else {
+                    html += '<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault();window.irParaPagina(' + i + ')">' + i + '</a></li>';
+                }
+            }
+            if (end < total) {
+                if (end < total - 1) html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                html += '<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault();window.irParaPagina(' + total + ')">' + total + '</a></li>';
+            }
+            if (current < total) {
+                html += '<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault();window.irParaPagina(' + (current + 1) + ')">Próximo ▶</a></li>';
+            } else {
+                html += '<li class="page-item disabled"><span class="page-link">Próximo ▶</span></li>';
+            }
+            html += '</ul></nav>';
+            const startItem = ((current - 1) * pSize) + 1;
+            const endItem = Math.min(current * pSize, paginacaoAtual.total);
+            html += '<div class="text-center text-muted small">Página ' + current + ' de ' + total + ' – Mostrando ' + startItem + '-' + endItem + ' de ' + paginacaoAtual.total + ' usuário(s)</div>';
+            container.innerHTML = html;
+            container.style.display = 'block';
+        }
+
+        window.toggleTodos = function(checkbox) { document.querySelectorAll('.user-check').forEach(c => c.checked = checkbox.checked); };
+        window.editarUsuarioPeloId = function(id) { const u = todosUsuariosCache.find(x => x.id === id); if (u) abrirModalUsuario(u); };
+
+        window.aplicarMudancaPerfilEmMassa = async function() {
+            const novoPerfil = document.getElementById('novo-perfil-massa').value;
+            const ids = Array.from(document.querySelectorAll('.user-check:checked')).map(c => c.value);
+            if (!novoPerfil || !ids.length) return alert('Selecione perfil e usuários.');
+            for (const uid of ids) await apiFetch(API_USUARIOS + '/' + uid + '/', { method: 'PATCH', body: JSON.stringify({ groups: [parseInt(novoPerfil)] }) });
+            todosUsuariosCache = []; lideresCache = { data: [], timestamp: 0 };
+            alert('Atualizado.');
+            carregarUsuarios(document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos', paginacaoAtual.page);
+        };
+
+        async function abrirModalUsuario(user) {
+            userForm.reset();
+            document.getElementById('user_id').value = user ? user.id : '';
+            document.getElementById('userModalTitle').textContent = user ? 'Editar Usuário' : 'Novo Usuário';
+            await carregarDadosParaFormulario();
+            if (user) {
+                document.getElementById('nome_completo').value = user.nome_completo || '';
+                document.getElementById('cpf').value = user.cpf || '';
+                document.getElementById('email').value = user.email || '';
+                document.getElementById('tel_whatsapp').value = user.tel_whatsapp || '';
+                document.getElementById('tel_whatsapp_2').value = user.tel_whatsapp_2 || '';
+                document.getElementById('tel_whatsapp_3').value = user.tel_whatsapp_3 || '';
+                document.getElementById('usuario_login').value = user.username || '';
+                if (user.groups && user.groups.length) { const gid = typeof user.groups[0] === 'object' ? user.groups[0].id : user.groups[0]; document.getElementById('perfil_id').value = gid || ''; }
+                const supId = user.supervisor && (typeof user.supervisor === 'object' ? user.supervisor.id : user.supervisor);
+                document.getElementById('supervisor_id').value = supId || '';
+                document.getElementById('user_canal').value = user.canal || 'PAP';
+                document.getElementById('user_cluster').value = user.cluster || '';
+                document.getElementById('participa_controle_presenca').checked = user.participa_controle_presenca;
+                document.getElementById('vendedor_solo').checked = user.vendedor_solo || false;
+                document.getElementById('autorizar_venda_sem_auditoria').checked = user.autorizar_venda_sem_auditoria || false;
+                document.getElementById('autorizar_venda_automatica').checked = user.autorizar_venda_automatica || false;
+                document.getElementById('autorizar_analise_credito_wpp').checked = user.autorizar_analise_credito_wpp || false;
+                document.getElementById('autorizar_inclusao_wpp').checked = user.autorizar_inclusao_wpp || false;
+                document.getElementById('login_pap_disponivel_para_automacao').checked = user.login_pap_disponivel_para_automacao !== false;
+                document.getElementById('pap_automacao_vender').checked = user.pap_automacao_vender !== false;
+                document.getElementById('pap_automacao_credito').checked = user.pap_automacao_credito !== false;
+                document.getElementById('pap_automacao_pedido').checked = user.pap_automacao_pedido !== false;
+                document.getElementById('pap_automacao_status').checked = user.pap_automacao_status !== false;
+                document.getElementById('matricula_pap').value = user.matricula_pap || '';
+                document.getElementById('brpronto_login').value = user.brpronto_login || '';
+                document.getElementById('brpronto_dominio').value = user.brpronto_dominio || 'BrPronto';
+                document.getElementById('brpronto_disponivel_para_automacao').checked = !!user.brpronto_disponivel_para_automacao;
+                document.getElementById('autorizar_consulta_bio_wpp').checked = !!user.autorizar_consulta_bio_wpp;
+                ['valor_almoco','valor_passagem','chave_pix','nome_da_conta','meta_comissao','desconto_boleto','desconto_inclusao_viabilidade','desconto_instalacao_antecipada','adiantamento_cnpj','desconto_inss_fixo'].forEach(id => { document.getElementById(id).value = user[id] || ''; });
+                document.getElementById('recebe_adiantamento_cnpj').checked = user.recebe_adiantamento_cnpj !== false;
+                document.getElementById('recebe_adiantamento_sabado').checked = user.recebe_adiantamento_sabado === true;
+            } else {
+                document.getElementById('login_pap_disponivel_para_automacao').checked = true;
+                document.getElementById('pap_automacao_vender').checked = true;
+                document.getElementById('pap_automacao_credito').checked = true;
+                document.getElementById('pap_automacao_pedido').checked = true;
+                document.getElementById('pap_automacao_status').checked = true;
+                document.getElementById('vendedor_solo').checked = false;
+                document.getElementById('recebe_adiantamento_cnpj').checked = true;
+                document.getElementById('recebe_adiantamento_sabado').checked = false;
+                document.getElementById('brpronto_disponivel_para_automacao').checked = false;
+                document.getElementById('autorizar_consulta_bio_wpp').checked = false;
+                document.getElementById('brpronto_dominio').value = 'BrPronto';
+            }
+            atualizarVisibilidadeVendedorSolo();
+            document.getElementById('senha_pap').value = '';
+            document.getElementById('senha_pap').placeholder = (user && user.senha_pap) ? '•••••• (preenchida)' : 'Branco = manter';
+            document.getElementById('brpronto_senha').value = '';
+            document.getElementById('brpronto_senha').placeholder = (user && (user.brpronto_senha_preenchida || user.brpronto_senha)) ? '•••••• (preenchida)' : 'Branco = manter';
+            setTimeout(() => userModal.show(), 100);
+        }
+        window.abrirModalUsuario = abrirModalUsuario;
+
+        async function carregarDadosParaFormulario() {
+            const pSelect = document.getElementById('perfil_id');
+            const sSelect = document.getElementById('supervisor_id');
+            pSelect.innerHTML = '<option value="">Carregando...</option>';
+            sSelect.innerHTML = '<option value="">Carregando...</option>';
+            await carregarGruposParaSelect();
+            pSelect.innerHTML = '<option value="">Selecione um perfil</option>';
+            (gruposCache.data || []).forEach(g => { if (g && g.name && g.id) pSelect.add(new Option(g.name, g.id)); });
+            await carregarCacheLideres();
+            sSelect.innerHTML = '<option value="">Nenhum</option>';
+            (lideresCache.data || []).forEach(l => sSelect.add(new Option(l.nome_exibicao || l.username || '-', l.id)));
+            atualizarVisibilidadeVendedorSolo();
+        }
+
+        userForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('user_id').value;
+            const clean = (v, num) => { if (!v || v === '') return null; if (num) { const n = parseFloat(v); return isNaN(n) ? null : n; } return v; };
+            const parts = (document.getElementById('nome_completo').value || '').trim().split(' ');
+            const body = {
+                first_name: parts.shift() || '', last_name: parts.join(' ') || '',
+                cpf: clean(document.getElementById('cpf').value),
+                email: document.getElementById('email').value,
+                tel_whatsapp: clean(document.getElementById('tel_whatsapp').value),
+                tel_whatsapp_2: clean(document.getElementById('tel_whatsapp_2').value),
+                tel_whatsapp_3: clean(document.getElementById('tel_whatsapp_3').value),
+                username: document.getElementById('usuario_login').value,
+                supervisor: document.getElementById('supervisor_id').value ? parseInt(document.getElementById('supervisor_id').value) : null,
+                canal: document.getElementById('user_canal').value,
+                cluster: clean(document.getElementById('user_cluster').value),
+                groups: document.getElementById('perfil_id').value ? [parseInt(document.getElementById('perfil_id').value)] : [],
+                valor_almoco: clean(document.getElementById('valor_almoco').value, true), valor_passagem: clean(document.getElementById('valor_passagem').value, true),
+                chave_pix: clean(document.getElementById('chave_pix').value), nome_da_conta: clean(document.getElementById('nome_da_conta').value),
+                meta_comissao: clean(document.getElementById('meta_comissao').value, true), desconto_boleto: clean(document.getElementById('desconto_boleto').value, true),
+                desconto_inclusao_viabilidade: clean(document.getElementById('desconto_inclusao_viabilidade').value, true), desconto_instalacao_antecipada: clean(document.getElementById('desconto_instalacao_antecipada').value, true),
+                adiantamento_cnpj: clean(document.getElementById('adiantamento_cnpj').value, true), desconto_inss_fixo: clean(document.getElementById('desconto_inss_fixo').value, true),
+                recebe_adiantamento_cnpj: document.getElementById('recebe_adiantamento_cnpj').checked,
+                recebe_adiantamento_sabado: document.getElementById('recebe_adiantamento_sabado').checked,
+                participa_controle_presenca: document.getElementById('participa_controle_presenca').checked,
+                vendedor_solo: document.getElementById('vendedor_solo').checked,
+                autorizar_venda_sem_auditoria: document.getElementById('autorizar_venda_sem_auditoria').checked,
+                autorizar_venda_automatica: document.getElementById('autorizar_venda_automatica').checked,
+                autorizar_analise_credito_wpp: document.getElementById('autorizar_analise_credito_wpp').checked,
+                autorizar_inclusao_wpp: document.getElementById('autorizar_inclusao_wpp').checked,
+                login_pap_disponivel_para_automacao: document.getElementById('login_pap_disponivel_para_automacao').checked,
+                pap_automacao_vender: document.getElementById('pap_automacao_vender').checked,
+                pap_automacao_credito: document.getElementById('pap_automacao_credito').checked,
+                pap_automacao_pedido: document.getElementById('pap_automacao_pedido').checked,
+                pap_automacao_status: document.getElementById('pap_automacao_status').checked,
+                matricula_pap: clean(document.getElementById('matricula_pap').value),
+                brpronto_login: clean(document.getElementById('brpronto_login').value),
+                brpronto_dominio: clean(document.getElementById('brpronto_dominio').value) || 'BrPronto',
+                brpronto_disponivel_para_automacao: document.getElementById('brpronto_disponivel_para_automacao').checked,
+                autorizar_consulta_bio_wpp: document.getElementById('autorizar_consulta_bio_wpp').checked
+            };
+            if (document.getElementById('senha_pap').value.trim()) body.senha_pap = document.getElementById('senha_pap').value.trim();
+            if (document.getElementById('brpronto_senha').value.trim()) body.brpronto_senha = document.getElementById('brpronto_senha').value.trim();
+            if (document.getElementById('senha').value.trim()) body.password = document.getElementById('senha').value.trim();
+            try {
+                await apiFetch(id ? API_USUARIOS + '/' + id + '/' : API_USUARIOS + '/', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+                todosUsuariosCache = []; lideresCache = { data: [], timestamp: 0 };
+                userModal.hide();
+                carregarUsuarios(document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos', paginacaoAtual.page);
+            } catch (err) { alert('Erro: ' + err.message); }
+        });
+
+        window.inativarUsuario = async function(id) {
+            if (!confirm('Inativar este usuário?')) return;
+            await apiFetch(API_USUARIOS + '/' + id + '/', { method: 'PATCH', body: JSON.stringify({ is_active: false }) });
+            carregarUsuarios(document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos', paginacaoAtual.page);
+        };
+        window.reativarUsuario = async function(id) {
+            if (!confirm('Reativar?')) return;
+            await apiFetch(API_USUARIOS + '/' + id + '/reativar/', { method: 'PUT' });
+            carregarUsuarios(document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos', paginacaoAtual.page);
+        };
+
+        document.getElementById('busca-usuario').addEventListener('input', function() {
+            const term = this.value.trim();
+            document.getElementById('btn-limpar-busca-usuario').style.display = term ? 'inline-block' : 'none';
+            clearTimeout(debounceTimerBuscaUsuario);
+            debounceTimerBuscaUsuario = setTimeout(function() {
+                const status = document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos';
+                carregarUsuarios(status, 1, term);
+            }, 350);
+        });
+        document.getElementById('btn-limpar-busca-usuario').addEventListener('click', function() {
+            document.getElementById('busca-usuario').value = '';
+            this.style.display = 'none';
+            carregarUsuarios(document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos', 1);
+        });
+
+        function initGestaoAcessos() {
+            carregarUsuarios('ativos', 1);
+            carregarGruposParaSelect().then(grupos => {
+                const sel = document.getElementById('novo-perfil-massa');
+                if (sel) {
+                    sel.innerHTML = '<option value="">Alterar Perfil para...</option>';
+                    (grupos || []).forEach(g => { if (g && g.name && g.id) sel.add(new Option(g.name, g.id)); });
+                }
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initGestaoAcessos);
+        } else {
+            initGestaoAcessos();
+        }
+    })();
+    </script>
+{% endblock %}

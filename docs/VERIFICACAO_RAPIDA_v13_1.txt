@@ -1,0 +1,123 @@
+INSTRUÇÕES DE VERIFICAÇÃO RÁPIDA - v13.1
+
+═══════════════════════════════════════════════════════════════════════
+
+🔧 PROBLEMA QUE FOI RESOLVIDO:
+❌ Botões de editar/excluir não estavam aparecendo com cores corretas
+❌ Contraste em páginas continuava ruim
+❌ CSS local em páginas estava conflitando
+
+═══════════════════════════════════════════════════════════════════════
+
+✅ SOLUÇÃO APLICADA:
+1. Incrementado versão CSS de v=13.0 para v=13.1 (força cache clear)
+2. Adicionados +5 seletores para .btn-editar e .btn-action-edit
+3. Adicionados +5 seletores para .btn-excluir e .btn-action-delete
+4. Adicionado !important em propriedade display
+5. Melhorados hover e active states
+
+═══════════════════════════════════════════════════════════════════════
+
+📋 PASSO 1: LIMPAR CACHE (OBRIGATÓRIO)
+
+  Windows/Linux: Ctrl+F5
+  Mac: Cmd+Shift+R
+  
+  Ou feche e reabra navegador com Shift pressionado
+
+═══════════════════════════════════════════════════════════════════════
+
+🧪 PASSO 2: TESTAR PÁGINA DE VALIDAÇÃO
+
+  URL: /teste-botoes-v13-1.html
+  
+  Verifique:
+  ✓ Botões "Editar" aparecem AZUL (#0066FF)
+  ✓ Botões "Excluir" aparecem VERMELHO (#FF3D71)
+  ✓ Passe mouse → botões levantam e ficam mais brilhantes
+  ✓ Versão CSS mostrada é v=13.1
+
+═══════════════════════════════════════════════════════════════════════
+
+🔍 PASSO 3: VALIDAR EM PÁGINAS REAIS
+
+  [ ] /presenca/ 
+      └─ Procure botões "Alterar" (azul) e "Excluir" (vermelho)
+  
+  [ ] /crm-vendas/
+      └─ Verifique botões de ação em linhas de tabela
+  
+  [ ] /governanca/
+      └─ Cheque interface admin (layout, botões)
+  
+  [ ] Página de seu interesse
+      └─ Verifique consistência
+
+═══════════════════════════════════════════════════════════════════════
+
+💾 PASSO 4: CONFIRMAR VERSÃO CSS
+
+  Abra DevTools (F12)
+  └─ Network tab
+  └─ Procure por "custom_styles.css"
+  └─ Verifique URL contém "?v=13.1"
+  
+  Ou execute no console:
+  └─ document.querySelector('link[href*="custom_styles"]').href
+  └─ Deve retornar: "/static/css/custom_styles.css?v=13.1"
+
+═══════════════════════════════════════════════════════════════════════
+
+✅ SUCESSO SE:
+
+  • Todos botões editar aparecem AZUL
+  • Todos botões excluir aparecem VERMELHO
+  • Hover funciona (levanta + brilha)
+  • Versão CSS é v=13.1
+  • Contraste adequado (texto legível)
+
+═══════════════════════════════════════════════════════════════════════
+
+❌ PROBLEMA PERSISTENTE?
+
+1. Limpar cookies/cache completo:
+   Chrome: Ctrl+Shift+Delete → Limpar tudo
+   Firefox: Ctrl+Shift+Delete → Limpar tudo
+
+2. Usar navegador diferente:
+   Testou Chrome? Tente Firefox ou Edge
+
+3. Usar modo Incógnito/Privado:
+   Descarta cache completamente
+
+4. Verificar arquivo CSS:
+   Pasta: /static/css/custom_styles.css
+   Tamanho: ~1563 linhas
+   Procure por: ".btn-editar, .btn-action-edit"
+
+═══════════════════════════════════════════════════════════════════════
+
+📞 SUPORTE
+
+Se problema persistir após todos os passos acima:
+  • Screenshot dos botões (F12 → Console → copiar URL do CSS)
+  • Navegador + versão usada
+  • Sistema operacional
+  • Descrever qual botão está diferente
+
+═══════════════════════════════════════════════════════════════════════
+
+ARQUIVOS DE REFERÊNCIA:
+
+  ✓ CORRECAO_CSS_v13.1.md ← Documentação técnica completa
+  ✓ RESUMO_CORRECAO_v13.1.txt ← Resumo executivo
+  ✓ teste-botoes-v13-1.html ← Página de teste interativa
+  ✓ static/css/custom_styles.css ← Arquivo CSS atualizado (v=13.1)
+
+═══════════════════════════════════════════════════════════════════════
+
+DATA: 2024-01-XX
+VERSÃO: v=13.1
+STATUS: ✅ IMPLEMENTADO E PRONTO PARA TESTE
+
+═══════════════════════════════════════════════════════════════════════

@@ -1,0 +1,138 @@
+# 🎯 COMECE AQUI: Limpeza e Validação
+
+## ✅ Status Geral
+```
+Tabela ImportacaoFPD: ✅ LIMPA (6 registros deletados)
+Validação implementada: ✅ SIM (duplicatas evitadas)
+Update automático: ✅ ATIVADO (atualiza se existir)
+```
+
+---
+
+## 📌 O Que Mudou
+
+### Para Você (Usuário)
+**Antes:** Importar 2x o mesmo arquivo = 2x registros (duplicado) ❌
+**Depois:** Importar 2x o mesmo arquivo = 1 registro atualizado ✅
+
+### No Código
+**Arquivo:** `crm_app/views.py`
+**Mudança:** Agora usa `update_or_create()` com validação de chave
+
+---
+
+## 🚀 Como Usar
+
+### Passo 1: Importe o arquivo FPD
+```
+Acesse: /api/bonus-m10/importar-fpd/
+Arquivo: 1067098.xlsb
+Clique: IMPORTAR
+
+Resultado esperado:
+✅ 2574 registros importados (novos)
+✅ Log: Criados: 2574, Atualizados: 0
+```
+
+### Passo 2: Teste reimportando (opcional)
+```
+Acesse: /api/bonus-m10/importar-fpd/
+Arquivo: 1067098.xlsb (mesmo arquivo)
+Clique: IMPORTAR
+
+Resultado esperado:
+✅ 2574 registros atualizados
+✅ Log: Criados: 0, Atualizados: 2574
+✅ Banco: Ainda tem 2574 registros (sem duplicatas!)
+```
+
+### Passo 3: Valide com script (opcional)
+```bash
+.\.venv\Scripts\python.exe limpar_e_validar_fpd.py
+Escolher: 4 (Validar integridade)
+
+Resultado:
+✅ Sem duplicatas
+✅ Todos os campos preenchidos
+✅ Valores corretos
+```
+
+---
+
+## 📊 Exemplo Visual
+
+```
+BANCO DE DADOS
+
+ANTES: (6 registros de teste)
+┌─────────────────────┐
+│ ImportacaoFPD       │
+├─────────────────────┤
+│ 1. O.S TEST123      │
+│ 2. O.S TEST124      │
+│ 3. O.S TEST125      │
+│ 4. O.S 99999991     │
+│ 5. O.S 99999992     │
+│ 6. O.S 99999993     │
+└─────────────────────┘
+
+DEPOIS DA LIMPEZA: (0 registros)
+┌─────────────────────┐
+│ ImportacaoFPD       │
+├─────────────────────┤
+│ (vazia)             │
+└─────────────────────┘
+
+APÓS IMPORTAR arquivo.xlsb: (2574 registros novos)
+┌─────────────────────┐
+│ ImportacaoFPD       │
+├─────────────────────┤
+│ 1. O.S 07309961     │
+│ 2. O.S 07309962     │
+│ 3. O.S 07309963     │
+│ ...                 │
+│ 2574. O.S XXXXX     │
+└─────────────────────┘
+```
+
+---
+
+## ✨ Garantias
+
+✅ Sem duplicatas (mesmo importando múltiplas vezes)
+✅ Dados atualizados sempre que importa
+✅ Log mostra quantos foram criados vs atualizados
+✅ Integridade validada automaticamente
+
+---
+
+## 📞 Scripts Úteis
+
+### Limpar tabela
+```bash
+python limpar_e_validar_fpd.py
+Opção: 1
+```
+
+### Validar dados
+```bash
+python limpar_e_validar_fpd.py
+Opção: 4
+```
+
+### Ver duplicatas
+```bash
+python limpar_e_validar_fpd.py
+Opção: 2
+```
+
+---
+
+## 🎯 Próximo Passo
+
+**AGORA:** Importe seu arquivo FPD!
+```
+URL: /api/bonus-m10/importar-fpd/
+```
+
+Pronto! ✅

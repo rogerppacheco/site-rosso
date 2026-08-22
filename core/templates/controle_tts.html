@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Controle de TT's - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.controle-tts-page.area-interna-section { padding: 24px 16px; max-width: 1600px; margin: 0 auto; display: block !important; align-items: stretch !important; justify-content: flex-start !important; }
+        .controle-tts-tabela { width: 100%; display: block; margin-bottom: 2rem; }
+        .controle-tts-grid-section { width: 100%; display: block; border-top: 1px solid var(--border-color); padding-top: 1.5rem; margin-top: 0.5rem; }
+        .table-controle-tt { width: 100%; }
+        .table-controle-tt thead th { background: var(--accent-primary); color: var(--text-on-accent); font-weight: 600; padding: 10px 12px; }
+        .table-controle-tt tbody tr:nth-child(even) { background: var(--table-stripe-bg); }
+        .table-controle-tt tbody tr:nth-child(odd) { background: var(--bg-card); }
+        .dias-0 { background: var(--badge-success-bg) !important; color: var(--badge-success-text) !important; }
+        .dias-1-7 { background: var(--badge-warning-bg) !important; color: var(--badge-warning-text) !important; }
+        .dias-8-mais { background: var(--badge-danger-bg) !important; color: var(--badge-danger-text) !important; }
+        .grid-mes { overflow-x: auto; margin-top: 16px; width: 100%; min-height: 120px; }
+        .grid-mes table { font-size: 0.8rem; width: 100%; table-layout: auto; }
+        .grid-mes th, .grid-mes td { padding: 4px 6px; text-align: center; white-space: nowrap; }
+        .grid-mes .dia-header { background: var(--bg-secondary); font-weight: 600; min-width: 32px; }
+        .grid-mes .tt-cell { background: var(--bg-card); border: 1px solid var(--border-color); cursor: pointer; }
+        .grid-mes .tratado { background: var(--badge-success-bg) !important; }
+        .grid-mes .nao-vendas { background: var(--badge-danger-bg) !important; }
+        .col-hoje { width: 90px; text-align: center; vertical-align: middle; }
+        .col-hoje .tt-marca-hoje { cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+        .col-hoje .tt-marca-hoje:hover { background: var(--table-stripe-bg); }
+        .nav-tabs .nav-link { font-weight: 600; }
+        .tab-content { padding-top: 1rem; }
+        #proximo-tt-banner { display: none; border-left: 4px solid var(--accent-primary); }
+        #proximo-tt-banner .tt-matricula { font-size: 1.25rem; font-weight: 800; font-family: monospace; }
+        .controle-tts-page .text-dark { color: var(--text-primary) !important; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="area-interna-section controle-tts-page">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 style="font-size: 1.8rem; margin: 0;">Controle de TT's</h1>
+                <p class="text-muted mb-0">Última venda válida e dias sem vender (referência: dia anterior). Ordenado do maior para o menor.</p>
+            </div>
+            <button type="button" class="btn btn-outline-primary" onclick="carregarTabela()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar
+            </button>
+        </div>
+
+        <div class="mb-3 small">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <span class="text-muted">Referência (ontem): <strong id="data-ref" class="text-dark">-</strong></span>
+                <span class="text-muted">Legenda:</span>
+                <span><span class="badge bg-success">0</span> <span class="text-muted">vendeu no dia</span></span>
+                <span><span class="badge bg-warning text-dark">1-7</span> <span class="text-muted">dias sem vender</span></span>
+                <span><span class="badge bg-danger">8+</span> <span class="text-muted">crítico</span></span>
+            </div>
+        </div>
+
+        <!-- Próximo TT da vez: destaque após marcar (venda registrada ou não foi possível) -->
+        <div class="alert alert-primary d-flex align-items-center mb-3 shadow-sm" id="proximo-tt-banner" role="alert">
+            <i class="bi bi-person-check-fill me-2" style="font-size: 1.5rem;"></i>
+            <div class="flex-grow-1">
+                <strong>Próximo TT da vez:</strong>
+                <span class="tt-matricula ms-2" id="proximo-tt-matricula">—</span>
+                <span class="text-muted ms-2" id="proximo-tt-dias"></span>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs mb-0" id="controle-tts-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tab-controle" data-bs-toggle="tab" data-bs-target="#painel-controle" type="button" role="tab">Controle de TT's</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-mes" data-bs-toggle="tab" data-bs-target="#painel-mes" type="button" role="tab">Mês atual – Venda registrada no dia (tratado)</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="controle-tts-tab-content">
+            <!-- Aba 1: Controle de TT's (tabela + coluna Hoje) -->
+            <div class="tab-pane fade show active" id="painel-controle" role="tabpanel">
+                <div class="controle-tts-tabela card-modern">
+                    <div class="table-responsive mb-4">
+                        <table class="table table-controle-tt table-striped table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>MATRÍCULA VENDEDOR</th>
+                                    <th>ÚLTIMA VENDA</th>
+                                    <th class="col-hoje">HOJE</th>
+                                    <th>DIAS SEM VENDER</th>
+                                </tr>
+                            </thead>
+                            <tbody id="corpo-tabela">
+                                <tr><td colspan="4" class="text-center text-muted">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aba 2: Grid do mês -->
+            <div class="tab-pane fade" id="painel-mes" role="tabpanel">
+                <p class="text-muted small mb-2">Clique na célula para alternar: <span class="text-muted">sem marca</span> → <span class="text-success">✓ venda registrada</span> → <span class="text-danger">✗ não foi possível ter vendas</span> → sem marca.</p>
+                <div class="grid-mes" id="grid-mes-container">
+                    <p class="text-muted">Altere para esta aba após carregar os dados na aba Controle de TT's.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        const token = localStorage.getItem('accessToken');
+        if (!token) { window.location.href = '/'; }
+
+        let listaTTs = [];
+        let marcacoesMes = {};
+        let mesAtual = '';
+
+        function getHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
+        }
+
+        function logout() { localStorage.removeItem('accessToken'); window.location.href = '/'; }
+
+        /** Carrega e exibe o "Próximo TT da vez" (para usar ao registrar venda). Chamado ao carregar e após cada marcação. */
+        async function carregarProximoTTBanner() {
+            const banner = document.getElementById('proximo-tt-banner');
+            const matEl = document.getElementById('proximo-tt-matricula');
+            const diasEl = document.getElementById('proximo-tt-dias');
+            if (!banner || !matEl) return;
+            try {
+                const res = await fetch('/api/crm/controle-tts/proximo/', { headers: getHeaders() });
+                if (!res.ok) { banner.style.display = 'none'; return; }
+                const data = await res.json();
+                if (data && data.proximo) {
+                    matEl.textContent = data.proximo.matricula_vendedor || '—';
+                    const d = data.proximo.dias_sem_vender;
+                    diasEl.textContent = d !== null && d !== undefined ? '(' + d + ' dia(s) sem vender)' : '';
+                    banner.style.display = 'flex';
+                } else {
+                    banner.style.display = 'none';
+                }
+            } catch (_) {
+                banner.style.display = 'none';
+            }
+        }
+
+        async function carregarTabela() {
+            const tbody = document.getElementById('corpo-tabela');
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">Carregando...</td></tr>';
+            try {
+                const res = await fetch('/api/crm/controle-tts/', { headers: getHeaders() });
+                if (res.status === 401) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-warning">Sessão expirada. <a href="/">Faça login novamente</a>.</td></tr>';
+                    return;
+                }
+                if (res.status === 403) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Acesso negado. Apenas BackOffice, Diretoria ou Admin.</td></tr>';
+                    return;
+                }
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                document.getElementById('data-ref').textContent = data.data_referencia ? new Date(data.data_referencia + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+                listaTTs = data.itens || [];
+                await carregarMarcacoes();
+                montarTabelaComHoje();
+                await carregarProximoTTBanner();
+            } catch (e) {
+                console.error('Controle TTs erro:', e);
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Erro ao carregar: ' + escapeHtml(e.message) + '. Verifique o console (F12).</td></tr>';
+            }
+        }
+
+        function getHojeISO() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function montarTabelaComHoje() {
+            const tbody = document.getElementById('corpo-tabela');
+            const hojeStr = getHojeISO();
+            let html = '';
+            listaTTs.forEach(item => {
+                const dias = item.dias_sem_vender;
+                let cls = '';
+                if (dias === null || dias === undefined) cls = 'dias-8-mais';
+                else if (dias === 0) cls = 'dias-0';
+                else if (dias >= 1 && dias <= 7) cls = 'dias-1-7';
+                else cls = 'dias-8-mais';
+                const ultimaStr = item.ultima_venda ? new Date(item.ultima_venda + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+                const diasStr = dias !== null && dias !== undefined ? String(dias) : '-';
+                const keyHoje = item.matricula_vendedor + '|' + hojeStr;
+                const tipoHoje = marcacoesMes[keyHoje];
+                html += '<tr><td>' + escapeHtml(item.matricula_vendedor) + '</td><td>' + ultimaStr + '</td>';
+                html += '<td class="col-hoje"><span class="tt-marca-hoje" data-mat="' + escapeHtml(item.matricula_vendedor) + '" data-data="' + hojeStr + '" onclick="handleTratadoClick(this)" title="Clique para alternar: sem marca → venda registrada → não foi possível vendas → sem marca">';
+                if (tipoHoje === 'tratado') html += '<i class="bi bi-check-lg text-success"></i>';
+                else if (tipoHoje === 'nao_vendas') html += '<i class="bi bi-x-lg text-danger"></i>';
+                else html += '<span class="text-muted">-</span>';
+                html += '</span></td><td class="' + cls + '">' + diasStr + '</td></tr>';
+            });
+            if (!html) html = '<tr><td colspan="4" class="text-center text-muted">Nenhum TT encontrado nos últimos 2 meses na base OSAB.</td></tr>';
+            tbody.innerHTML = html;
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        function getMesAtual() {
+            const d = new Date();
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            return y + '-' + m;
+        }
+
+        async function carregarMarcacoes() {
+            mesAtual = getMesAtual();
+            try {
+                const res = await fetch('/api/crm/controle-tts/tratado/?mes=' + mesAtual, { headers: getHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                marcacoesMes = {};
+                (data.marcacoes || []).forEach(m => {
+                    const k = m.matricula_vendedor + '|' + m.data;
+                    marcacoesMes[k] = m.tipo || 'tratado';
+                });
+            } catch (_) {}
+        }
+
+        function handleTratadoClick(el) {
+            const mat = el.getAttribute('data-mat');
+            const dataStr = el.getAttribute('data-data');
+            if (mat && dataStr) toggleTratado(mat, dataStr);
+        }
+
+        /** Ciclo: sem marca → tratado (venda registrada) → nao_vendas (não foi possível) → sem marca */
+        function proximoTipo(current) {
+            if (!current || current === 'nao_vendas') return null;
+            if (current === 'tratado') return 'nao_vendas';
+            return 'tratado';
+        }
+
+        async function toggleTratado(matricula, dataStr) {
+            const key = matricula + '|' + dataStr;
+            const atual = marcacoesMes[key];
+            const proximo = atual ? proximoTipo(atual) : 'tratado';
+            try {
+                if (proximo === null) {
+                    const res = await fetch('/api/crm/controle-tts/tratado/?matricula_vendedor=' + encodeURIComponent(matricula) + '&data=' + dataStr, {
+                        method: 'DELETE',
+                        headers: getHeaders()
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    delete marcacoesMes[key];
+                } else {
+                    const res = await fetch('/api/crm/controle-tts/tratado/', {
+                        method: 'POST',
+                        headers: getHeaders(),
+                        body: JSON.stringify({ matricula_vendedor: matricula, data: dataStr, tipo: proximo })
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    marcacoesMes[key] = proximo;
+                }
+                const hojeStr = getHojeISO();
+                if (dataStr === hojeStr && listaTTs.length) montarTabelaComHoje();
+                const tabMes = document.getElementById('painel-mes');
+                if (tabMes && tabMes.classList.contains('show')) montarGridMes();
+                await carregarProximoTTBanner();
+            } catch (e) {
+                alert('Erro ao atualizar: ' + e.message);
+            }
+        }
+
+        function montarGridMes() {
+            const container = document.getElementById('grid-mes-container');
+            if (!container) return;
+            if (!listaTTs.length) {
+                container.innerHTML = '<p class="text-muted">Nenhum TT para exibir. Carregue os dados na aba Controle de TT\'s.</p>';
+                return;
+            }
+            container.innerHTML = '<p class="text-muted"><span class="spinner-border spinner-border-sm me-2" role="status"></span>Carregando grid do mês...</p>';
+            carregarMarcacoes()
+                .then(() => {
+                    try {
+                        const d = new Date();
+                        const ano = d.getFullYear();
+                        const mes = d.getMonth();
+                        const ultimoDia = new Date(ano, mes + 1, 0).getDate();
+                        let html = '<table class="table table-bordered table-sm"><thead><tr><th>TT</th>';
+                        for (let dia = 1; dia <= ultimoDia; dia++) {
+                            const dataStr = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
+                            html += '<th class="dia-header" title="' + dataStr + '">' + dia + '</th>';
+                        }
+                        html += '</tr></thead><tbody>';
+                        listaTTs.forEach(item => {
+                            const mat = item.matricula_vendedor;
+                            html += '<tr><td class="fw-bold">' + escapeHtml(mat) + '</td>';
+                            for (let dia = 1; dia <= ultimoDia; dia++) {
+                                const dataStr = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
+                                const key = mat + '|' + dataStr;
+                                const tipo = marcacoesMes[key];
+                                const cls = tipo === 'tratado' ? 'tratado' : (tipo === 'nao_vendas' ? 'nao-vendas' : '');
+                                html += '<td class="tt-cell ' + cls + '" data-mat="' + escapeHtml(mat) + '" data-data="' + dataStr + '" onclick="handleTratadoClick(this)" title="Clique para alternar: sem marca → venda registrada → não foi possível vendas → sem marca">';
+                                if (tipo === 'tratado') html += '<i class="bi bi-check-lg text-success"></i>';
+                                else if (tipo === 'nao_vendas') html += '<i class="bi bi-x-lg text-danger"></i>';
+                                else html += '<span class="text-muted">-</span>';
+                                html += '</td>';
+                            }
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        container.innerHTML = html;
+                    } catch (err) {
+                        console.error('Erro ao montar grid:', err);
+                        container.innerHTML = '<p class="text-danger">Erro ao montar grid dos dias. ' + escapeHtml(String(err.message)) + '</p>';
+                    }
+                })
+                .catch(() => {
+                    container.innerHTML = '<p class="text-muted">Grid do mês. Clique nas células para marcar venda registrada no dia.</p>';
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            let perfil = '';
+            try {
+                const decoded = jwt_decode(token);
+                perfil = (decoded && (decoded.user_role || decoded.perfil || decoded.grupo)) || '';
+            } catch (e) {
+                console.warn('Token inválido ou expirado:', e);
+            }
+            if (perfil && !['BackOffice', 'Diretoria', 'Admin'].includes(perfil)) {
+                document.getElementById('corpo-tabela').innerHTML = '<tr><td colspan="4" class="text-center text-danger">Acesso negado. Apenas BackOffice, Diretoria ou Admin.</td></tr>';
+                return;
+            }
+            carregarTabela();
+            document.getElementById('tab-mes').addEventListener('shown.bs.tab', function () {
+                if (listaTTs.length) montarGridMes();
+            });
+        });
+    </script>
+{% endblock %}

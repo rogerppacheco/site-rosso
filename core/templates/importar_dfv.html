@@ -1,0 +1,725 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Importar Base DFV - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+        .import-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #198754;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            background: var(--bg-card);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover {
+            border-color: #146c43;
+            background: #f0fff4;
+            transform: scale(1.02);
+        }
+
+        .upload-zone.dragging {
+            border-color: #198754;
+            background: #e6ffed;
+        }
+
+        .upload-zone i {
+            font-size: 4rem;
+            color: #198754;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        .btn-upload {
+            font-size: 1.1rem;
+            padding: 12px 30px;
+            margin-top: 20px;
+        }
+
+        .info-card {
+            background: var(--bg-card);
+            border-left: 4px solid #198754;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .required-columns {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .column-tag {
+            display: inline-block;
+            background: #198754;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 5px;
+            font-family: monospace;
+        }
+
+        .spinner-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner-content {
+            text-align: center;
+            color: white;
+        }
+
+        .spinner-border {
+            width: 4rem;
+            height: 4rem;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 2px solid #f0f0f0;
+        }
+
+        .progress-bar {
+            height: 30px;
+            font-weight: bold;
+            background: linear-gradient(90deg, #198754, #157347);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            text-align: center;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .importar-page .bg-white { background-color: var(--bg-card) !important; }
+        .importar-page .bg-light { background-color: var(--bg-secondary) !important; }
+        .importar-page .text-dark { color: var(--text-primary) !important; }
+        .importar-page .info-card,
+        .importar-page .upload-zone,
+        .importar-page .progress-container,
+        .importar-page .filter-card { border: 1px solid var(--border-color); color: var(--text-primary); }
+
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/importacoes/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="importar-page"><div class="import-container">
+        <div class="text-center mb-4">
+            <h2 class="fw-bold text-dark">Importar Base DFV</h2>
+            <p class="text-muted">Upload da base de endereços para validação de faturamento e viabilidade</p>
+        </div>
+
+        <!-- Informações Importantes -->
+        <div class="info-card card-modern">
+            <h5 class="text-success mb-3"><i class="bi bi-info-circle"></i> Instruções</h5>
+            <ul class="mb-0">
+                <li>Envie o arquivo CSV contendo informações de endereços e viabilidade</li>
+                <li>O arquivo deve estar em formato <strong>CSV (separado por vírgula)</strong></li>
+                <li>O sistema processará automaticamente a base de dados</li>
+                <li>A consulta de fachada no WhatsApp já usa Power BI; a base local só consome espaço no banco</li>
+            </ul>
+
+            <div class="required-columns">
+                <strong class="text-dark">Colunas esperadas:</strong><br>
+                <span class="column-tag">UF</span>
+                <span class="column-tag">MUNICIPIO</span>
+                <span class="column-tag">LOGRADOURO</span>
+                <span class="column-tag">CEP</span>
+                <span class="column-tag">TIPO_VIABILIDADE</span>
+            </div>
+        </div>
+
+        <!-- Status / exclusão da base local -->
+        <div class="alert alert-warning border-0 shadow-sm" id="statusBaseDFV" role="status">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <strong><i class="bi bi-database"></i> Base local DFV no banco</strong>
+                    <div class="small text-muted mt-1" id="statusBaseDFVTexto">Carregando quantidade de registros...</div>
+                </div>
+                <button type="button" class="btn btn-outline-danger" id="btnExcluirBaseDFV" disabled>
+                    <i class="bi bi-trash"></i> Excluir base do banco
+                </button>
+            </div>
+        </div>
+
+        <!-- Zona de Upload -->
+        <div class="upload-zone card-modern" id="uploadZone">
+            <input type="file" id="fileInput" accept=".csv" style="display: none;">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <h4 class="text-dark">Arraste o arquivo aqui</h4>
+            <p class="text-muted">ou clique para selecionar</p>
+            <p class="text-muted mb-0"><small>Formato aceito: .csv</small></p>
+            <div id="fileInfo" class="mt-3" style="display: none;">
+                <div class="alert alert-info d-inline-block">
+                    <i class="bi bi-file-earmark-check"></i> <strong id="fileName"></strong> 
+                    <span class="ms-2">(<span id="fileSize"></span>)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button class="btn btn-success btn-upload" id="btnUpload" disabled>
+                <i class="bi bi-upload"></i> Processar Arquivo
+            </button>
+            <a href="/importacoes/" class="btn btn-outline-secondary btn-upload ms-2">
+                <i class="bi bi-arrow-left"></i> Cancelar
+            </a>
+        </div>
+
+        <div id="resultadoLimpezaDFV" class="mt-3" style="display: none;"></div>
+
+        <!-- Barra de Progresso -->
+        <div class="progress-container card-modern" id="progressContainer">
+            <div class="progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar bg-success" id="progressBar" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">
+                <span id="progressPercent">0%</span> - <span id="progressMessage">Preparando...</span>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="resultadoImportacao" class="mt-4" style="display: none;"></div>
+
+        <!-- Histórico de Importações -->
+        <div class="mt-5">
+            <h4 class="mb-3 text-dark fw-bold">
+                <i class="bi bi-hourglass-split"></i> Histórico de Importações
+            </h4>
+            <div class="table-responsive bg-white rounded shadow-sm">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Status</th>
+                            <th>Data/Hora</th>
+                            <th>Duração</th>
+                            <th>Registros</th>
+                            <th>Sucesso</th>
+                            <th>Erros</th>
+                            <th>Usuário</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historicoDFV">
+                        <tr><td colspan="8" class="text-center text-muted py-4">Carregando histórico...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="spinner-overlay" id="loadingOverlay">
+        <div class="spinner-content">
+            <div class="spinner-border text-light" role="status"></div>
+            <h4 class="mt-3">Processando base de dados...</h4>
+            <p>Aguarde enquanto importamos os endereços</p>
+        </div>
+    </div>
+
+</main>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const btnUpload = document.getElementById('btnUpload');
+        const fileInfo = document.getElementById('fileInfo');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressMessage = document.getElementById('progressMessage');
+        let selectedFile = null;
+        let refreshIntervalId = null;
+
+        // Carregar histórico ao iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarHistoricoDFV();
+            carregarStatusBaseDFV();
+            // Auto-refresh a cada 3 segundos
+            refreshIntervalId = setInterval(carregarHistoricoDFV, 3000);
+        });
+
+        function formatarNumeroBR(valor) {
+            return Number(valor || 0).toLocaleString('pt-BR');
+        }
+
+        async function carregarStatusBaseDFV() {
+            const texto = document.getElementById('statusBaseDFVTexto');
+            const btn = document.getElementById('btnExcluirBaseDFV');
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/crm/import/dfv/limpar/', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    texto.textContent = data.error || 'Sem permissão para ver o tamanho da base (apenas Admin/Diretoria).';
+                    btn.disabled = true;
+                    return;
+                }
+
+                const total = data.total_registros || 0;
+                const logs = data.total_logs || 0;
+                let msg = `${formatarNumeroBR(total)} registros na tabela DFV`;
+                if (logs > 0) {
+                    msg += ` · ${formatarNumeroBR(logs)} logs de importação`;
+                }
+                if (data.importacao_em_andamento) {
+                    msg += ' · importação em andamento (exclusão bloqueada)';
+                }
+                texto.textContent = msg;
+                btn.disabled = total === 0 && logs === 0 || data.importacao_em_andamento;
+            } catch (error) {
+                texto.textContent = 'Não foi possível carregar o status da base.';
+                btn.disabled = true;
+            }
+        }
+
+        document.getElementById('btnExcluirBaseDFV').addEventListener('click', async () => {
+            const btn = document.getElementById('btnExcluirBaseDFV');
+            const resultado = document.getElementById('resultadoLimpezaDFV');
+
+            const ok1 = confirm(
+                'Isso vai APAGAR permanentemente toda a base local DFV (fachadas) do banco de dados.\n\n' +
+                'A consulta de fachada no WhatsApp continua via Power BI.\n\nDeseja continuar?'
+            );
+            if (!ok1) return;
+
+            const confirmacao = prompt(
+                'Digite exatamente EXCLUIR DFV para confirmar a exclusão da base no banco:'
+            );
+            if (confirmacao !== 'EXCLUIR DFV') {
+                alert('Exclusão cancelada. Confirmação inválida.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Excluindo...';
+
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/crm/import/dfv/limpar/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        confirmacao: 'EXCLUIR DFV',
+                        incluir_logs: true,
+                    }),
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (response.ok) {
+                    resultado.innerHTML = `
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <h5><i class="bi bi-check-circle"></i> Base excluída</h5>
+                            <p class="mb-0">${data.mensagem || 'Base DFV removida com sucesso.'}</p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
+                    carregarHistoricoDFV();
+                    carregarStatusBaseDFV();
+                } else {
+                    resultado.innerHTML = `
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h5><i class="bi bi-x-circle"></i> Erro ao excluir</h5>
+                            <p class="mb-0">${data.error || 'Falha ao excluir a base DFV.'}</p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
+                    carregarStatusBaseDFV();
+                }
+                resultado.style.display = 'block';
+            } catch (error) {
+                resultado.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <h5><i class="bi bi-x-circle"></i> Erro ao conectar</h5>
+                        <p class="mb-0">${error.message}</p>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                resultado.style.display = 'block';
+                carregarStatusBaseDFV();
+            } finally {
+                btn.innerHTML = '<i class="bi bi-trash"></i> Excluir base do banco';
+            }
+        });
+
+        async function carregarHistoricoDFV() {
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/crm/logs-dfv/', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    console.error('[DFV] Erro ao buscar logs:', response.status, response.statusText);
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                // Debug: logar dados recebidos para verificar se estão atualizando
+                const logsProcessando = data.logs?.filter(l => l.status === 'PROCESSANDO') || [];
+                if (logsProcessando.length > 0) {
+                    logsProcessando.forEach(log => {
+                        const salvos = log.sucesso || 0;
+                        const processadas = log.total_processadas || 0;
+                        const total = log.total_registros || 0;
+                        
+                        // Detectar fase atual
+                        let fase = 'Desconhecida';
+                        if (processadas === 0 && salvos === 0) {
+                            fase = 'Iniciando...';
+                        } else if (processadas < total && salvos === 0) {
+                            const percent = Math.round((processadas / total) * 100);
+                            fase = `Preparando objetos: ${processadas}/${total} (${percent}%)`;
+                        } else if (processadas >= total && salvos === 0) {
+                            // Fase de remoção de duplicados
+                            if (log.mensagem && log.mensagem.includes('Removendo duplicados')) {
+                                const match = log.mensagem.match(/Removendo duplicados\.\.\.\s*(\d+)\/(\d+)\s*lotes\s*\((\d+)\s*removidos\)/);
+                                if (match) {
+                                    const loteAtual = match[1];
+                                    const totalLotes = match[2];
+                                    const removidos = match[3];
+                                    const percentLotes = Math.round((parseInt(loteAtual) / parseInt(totalLotes)) * 100);
+                                    fase = `Removendo duplicados: Lote ${loteAtual}/${totalLotes} (${percentLotes}%) - ${removidos} removidos até agora`;
+                                } else {
+                                    fase = `Removendo duplicados: ${log.mensagem}`;
+                                }
+                            } else {
+                                fase = 'Removendo duplicados... (aguardando progresso)';
+                            }
+                        } else if (salvos > 0 && salvos < total) {
+                            const percent = Math.round((salvos / total) * 100);
+                            fase = `Criando registros: ${salvos}/${total} (${percent}%)`;
+                        } else if (salvos >= total) {
+                            fase = `Finalizando: ${salvos}/${total} (100%)`;
+                        }
+                        
+                        console.log(`[DFV] Log ${log.id} (${log.nome_arquivo}): ${fase}`);
+                        if (log.mensagem) {
+                            console.log(`[DFV]   Mensagem: ${log.mensagem}`);
+                        } else {
+                            console.log(`[DFV]   Mensagem: (não disponível)`);
+                        }
+                        // Log completo para debug (apenas quando está na fase de remoção)
+                        if (processadas >= total && salvos === 0) {
+                            console.log(`[DFV]   Debug completo:`, {
+                                id: log.id,
+                                mensagem: log.mensagem || '(null)',
+                                sucesso: log.sucesso,
+                                processadas: log.total_processadas,
+                                total: log.total_registros,
+                                status: log.status
+                            });
+                        }
+                    });
+                }
+                
+                if (data.success && data.logs) {
+                    const historico = document.getElementById('historicoDFV');
+                    
+                    if (data.logs.length === 0) {
+                        historico.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Nenhuma importação realizada</td></tr>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    data.logs.forEach(log => {
+                        // Para status PROCESSANDO, mostrar progresso de salvamento no banco (sucesso)
+                        let statusBadge = getBadgeStatus(log.status);
+                        const dataFormatada = log.iniciado_em || '-';
+                        const duracao = log.duracao_segundos ? `${log.duracao_segundos}s` : '-';
+                        let registrosDisplay = log.total_registros || 0;
+                        
+                        // Se está processando, mostrar progresso de salvamento no banco no status
+                        if (log.status === 'PROCESSANDO' && log.total_registros > 0) {
+                            const salvos = log.sucesso || 0;
+                            const processadas = log.total_processadas || 0;
+                            const percent = Math.round((salvos / log.total_registros) * 100);
+                            
+                            // Se processadas = total mas sucesso ainda é 0, está na fase de remoção de duplicados ou início da criação
+                            if (processadas >= log.total_registros && salvos === 0) {
+                                // Verificar se há mensagem de progresso da remoção de duplicados
+                                if (log.mensagem && log.mensagem.includes('Removendo duplicados')) {
+                                    // Extrair informações da mensagem (ex: "Removendo duplicados... 3/10 lotes (150 removidos)")
+                                    const match = log.mensagem.match(/Removendo duplicados\.\.\.\s*(\d+)\/(\d+)\s*lotes/);
+                                    if (match) {
+                                        const loteAtual = match[1];
+                                        const totalLotes = match[2];
+                                        const percentLotes = Math.round((parseInt(loteAtual) / parseInt(totalLotes)) * 100);
+                                        statusBadge = `<span class="badge bg-warning"><i class="bi bi-hourglass-split"></i> Removendo duplicados: ${loteAtual}/${totalLotes} lotes (${percentLotes}%)</span>`;
+                                    } else {
+                                        statusBadge = `<span class="badge bg-warning"><i class="bi bi-hourglass-split"></i> ${log.mensagem}</span>`;
+                                    }
+                                } else {
+                                    // Verificar se já passou muito tempo (mais de 2 minutos) desde o início
+                                    // Se sim, provavelmente travou ou está demorando muito na remoção
+                                    const agora = new Date();
+                                    const iniciado = new Date(log.iniciado_em);
+                                    const minutosDecorridos = (agora - iniciado) / (1000 * 60);
+                                    
+                                    if (minutosDecorridos > 2) {
+                                        statusBadge = `<span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> Removendo duplicados... (${Math.round(minutosDecorridos)}min)</span>`;
+                                    } else {
+                                        statusBadge = `<span class="badge bg-warning"><i class="bi bi-hourglass-split"></i> Removendo duplicados...</span>`;
+                                    }
+                                }
+                            } 
+                            // Se sucesso > 0, está criando registros no banco
+                            else if (salvos > 0) {
+                                statusBadge = `<span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando: ${salvos}/${log.total_registros} (${percent}%)</span>`;
+                            }
+                            // Se sucesso = total, tudo foi salvo (aguardando finalização)
+                            else if (salvos >= log.total_registros) {
+                                statusBadge = `<span class="badge bg-success"><i class="bi bi-check-circle"></i> Finalizando: ${salvos}/${log.total_registros} (100%)</span>`;
+                            }
+                        }
+                        
+                        // Coluna SUCESSO: mostrar total_processadas (processados sem erros)
+                        let sucessoDisplay = log.sucesso || 0;
+                        if (log.status === 'PROCESSANDO' && log.total_registros > 0) {
+                            // Mostrar total_processadas (o que foi processado até agora)
+                            const processadas = log.total_processadas || 0;
+                            const percentProcessadas = processadas > 0 ? Math.round((processadas / log.total_registros) * 100) : 0;
+                            
+                            if (processadas > 0) {
+                                sucessoDisplay = `${processadas} / ${log.total_registros} (${percentProcessadas}%)`;
+                            } else {
+                                sucessoDisplay = `${log.sucesso || 0} / ${log.total_registros} (0%)`;
+                            }
+                        } else if (log.status !== 'PROCESSANDO') {
+                            // Se não está processando, mostrar sucesso final
+                            const sucessoFinal = log.sucesso || 0;
+                            const totalFinal = log.total_registros || 0;
+                            if (totalFinal > 0) {
+                                const percentFinal = Math.round((sucessoFinal / totalFinal) * 100);
+                                sucessoDisplay = `${sucessoFinal} / ${totalFinal} (${percentFinal}%)`;
+                            } else {
+                                sucessoDisplay = sucessoFinal;
+                            }
+                        }
+                        
+                        html += `
+                            <tr>
+                                <td><strong>${log.nome_arquivo}</strong></td>
+                                <td>${statusBadge}</td>
+                                <td>${dataFormatada}</td>
+                                <td>${duracao}</td>
+                                <td>${registrosDisplay}</td>
+                                <td><span class="badge bg-success">${sucessoDisplay}</span></td>
+                                <td><span class="badge bg-danger">${log.erros || 0}</span></td>
+                                <td>${log.usuario_nome || 'Sistema'}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    historico.innerHTML = html;
+                    
+                    // Parar auto-refresh se não há importação PROCESSANDO
+                    const temProcessando = data.logs.some(log => log.status === 'PROCESSANDO');
+                    if (!temProcessando && refreshIntervalId) {
+                        clearInterval(refreshIntervalId);
+                        refreshIntervalId = null;
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar histórico:', error);
+            }
+        }
+
+        function getBadgeStatus(status) {
+            const badges = {
+                'PROCESSANDO': '<span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>',
+                'SUCESSO': '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Sucesso</span>',
+                'ERRO': '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>',
+                'PARCIAL': '<span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> Parcial</span>'
+            };
+            return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
+        }
+
+        // Eventos de drag & drop
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragging');
+        });
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragging');
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragging');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileSelect(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            const validExtensions = ['.csv'];
+            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            
+            if (!validExtensions.includes(fileExtension)) {
+                alert('Formato inválido! Use .csv');
+                return;
+            }
+
+            selectedFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            fileInfo.style.display = 'block';
+            btnUpload.disabled = false;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function atualizarProgresso(percent, message) {
+            progressBar.style.width = percent + '%';
+            progressPercent.textContent = percent + '%';
+            progressMessage.textContent = message;
+        }
+
+        btnUpload.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            // Mostrar apenas a barra de progresso
+            progressContainer.style.display = 'block';
+            atualizarProgresso(10, 'Iniciando upload...');
+
+            try {
+                const token = localStorage.getItem('accessToken');
+                atualizarProgresso(30, 'Enviando arquivo...');
+                
+                const response = await fetch('/api/crm/importar-dfv/', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                atualizarProgresso(70, 'Processando em segundo plano...');
+                
+                // Verificar se a resposta é JSON válido
+                let data;
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    throw new Error('Servidor retornou resposta inválida. Tente novamente ou contate o administrador.');
+                }
+
+                if (response.ok) {
+                    atualizarProgresso(100, 'Importação iniciada!');
+                    setTimeout(() => {
+                        document.getElementById('resultadoImportacao').innerHTML = `
+                            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                                <h5><i class="bi bi-hourglass-split"></i> Importação em Processamento</h5>
+                                <p class="mb-0">O arquivo está sendo importado em segundo plano. Atualize a página em alguns minutos para ver o resultado no histórico.</p>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        `;
+                        document.getElementById('resultadoImportacao').style.display = 'block';
+                        progressContainer.style.display = 'none';
+                        
+                        // Limpar arquivo selecionado
+                        selectedFile = null;
+                        fileInfo.style.display = 'none';
+                        btnUpload.disabled = true;
+                        fileInput.value = '';
+                        
+                        // Reiniciar auto-refresh do histórico
+                        if (refreshIntervalId) clearInterval(refreshIntervalId);
+                        refreshIntervalId = setInterval(carregarHistoricoDFV, 3000);
+                        carregarHistoricoDFV();
+                    }, 500);
+                } else {
+                    document.getElementById('resultadoImportacao').innerHTML = `
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h5><i class="bi bi-x-circle"></i> Erro na Importação</h5>
+                            <p class="mb-0">${data.error || 'Erro desconhecido'}</p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
+                    document.getElementById('resultadoImportacao').style.display = 'block';
+                    progressContainer.style.display = 'none';
+                }
+            } catch (error) {
+                document.getElementById('resultadoImportacao').innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <h5><i class="bi bi-x-circle"></i> Erro ao conectar</h5>
+                        <p class="mb-0">Erro: ${error.message}</p>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                document.getElementById('resultadoImportacao').style.display = 'block';
+                progressContainer.style.display = 'none';
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('accessToken');
+            window.location.href = '/';
+        }
+    </script>
+{% endblock %}

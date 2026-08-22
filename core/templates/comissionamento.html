@@ -1,0 +1,1283 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Gestão de Comissionamento{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.comissionamento-page .table thead th { 
+            font-size: 0.8rem; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px; 
+            vertical-align: middle;
+            background-color: var(--bg-secondary); 
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .money-col { 
+            font-family: 'Consolas', 'Monaco', monospace; 
+            font-weight: 600; 
+            white-space: nowrap;
+        }
+        .border-left-strong { border-left: 2px solid var(--border-color) !important; }
+        
+        .btn-filter { background-color: var(--accent-primary); color: var(--text-on-accent); }
+        .btn-filter:hover { filter: brightness(0.95); color: var(--text-on-accent); }
+
+        .btn-toggle-detalhe {
+            width: 24px; height: 24px; 
+            padding: 0; 
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .btn-toggle-detalhe:hover { background-color: var(--bg-secondary); }
+
+        .filter-row th { background-color: var(--bg-secondary) !important; padding: 5px !important; }
+        .filter-input { font-size: 0.75rem; border: 1px solid var(--border-color); border-radius: 2px; padding: 4px; width: 100%; background: var(--bg-card); color: var(--text-primary); }
+        .filter-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--accent-primary) 25%, transparent); }
+        .extrato-comissao-table .filter-row select.filter-input { padding: 2px 4px; }
+        .extrato-comissao-table th { white-space: nowrap; }
+        .extrato-valor-referencia { color: var(--text-secondary); font-style: italic; }
+        .extrato-valor-antecipada { color: var(--color-info); }
+        .extrato-valor-churn { color: var(--color-danger); }
+        .comissionamento-page .bg-white { background-color: var(--bg-card) !important; }
+        .comissionamento-page .bg-light { background-color: var(--bg-secondary) !important; }
+        .comissionamento-page .text-dark { color: var(--text-primary) !important; }
+
+        /* Extrato: cores por status (sem table-striped — conflita com linhas semânticas) */
+        .extrato-comissao-table tr.extrato-data-row.table-success.extrato-row-adiantada {
+            --bs-table-bg: #cfe8d6;
+            background-color: #cfe8d6 !important;
+        }
+        .extrato-comissao-table tr.extrato-bloco-row td {
+            font-size: 0.8rem;
+            letter-spacing: 0.03em;
+        }
+
+        /* Dark mode — extrato legível com fundos escuros tintados */
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table {
+            --bs-table-bg: var(--table-bg);
+            --bs-table-color: var(--text-primary);
+            --bs-table-border-color: var(--table-row-border);
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table thead.table-light,
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table thead.table-light th {
+            --bs-table-bg: var(--table-header-bg);
+            --bs-table-color: var(--text-primary);
+            background-color: var(--table-header-bg) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--table-row-border) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table .filter-row th {
+            background-color: var(--bg-secondary) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-bloco-row.table-secondary,
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-bloco-row.table-secondary td {
+            --bs-table-bg: var(--table-header-bg);
+            --bs-table-color: var(--text-primary);
+            background-color: var(--table-header-bg) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--table-row-border) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-success,
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-success > td {
+            --bs-table-bg: var(--badge-success-bg);
+            --bs-table-color: var(--text-primary);
+            --bs-table-striped-bg: var(--badge-success-bg);
+            background-color: var(--badge-success-bg) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--table-row-border) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-success.extrato-row-adiantada,
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-success.extrato-row-adiantada > td {
+            --bs-table-bg: rgba(52, 211, 153, 0.22);
+            background-color: rgba(52, 211, 153, 0.22) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-danger,
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-danger > td {
+            --bs-table-bg: var(--badge-danger-bg);
+            --bs-table-color: var(--text-primary);
+            background-color: var(--badge-danger-bg) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--table-row-border) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-warning,
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table tr.extrato-data-row.table-warning > td {
+            --bs-table-bg: var(--badge-warning-bg);
+            --bs-table-color: var(--text-primary);
+            background-color: var(--badge-warning-bg) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--table-row-border) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table .text-muted {
+            color: var(--text-secondary) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table .text-danger {
+            color: var(--color-danger) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table .text-info {
+            color: var(--color-info) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-comissao-table .text-primary {
+            color: var(--accent-secondary) !important;
+        }
+        [data-theme="dark"] .comissionamento-page .extrato-valor-referencia {
+            color: var(--text-secondary) !important;
+        }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="area-interna-section comissionamento-page">
+        <div class="card-modern system-container" style="max-width: 1600px;"> 
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="fw-bold text-dark"><i class="bi bi-wallet2"></i> Gestão de Comissionamento</h2>
+                    <p class="text-muted mb-0">Fechamento mensal e histórico financeiro.</p>
+                </div>
+                <div class="d-flex gap-2 bg-white p-2 rounded shadow-sm border">
+                    <select class="form-select border-0 bg-light" id="filtro-mes">
+                        <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+                        <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+                        <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+                        <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+                    </select>
+                    <select class="form-select border-0 bg-light" id="filtro-ano">
+                        <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
+                    </select>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs mb-4" id="comissaoTabs">
+                <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-folha-excel" onclick="carregarFolhaExcel()">Folha (formato Excel)</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-adiantamentos-esteira" onclick="carregarAdiantamentosEsteira()">Adiantamentos (esteira)</a></li>
+                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-historico" onclick="carregarHistoricoPagamentos()">Histórico de Pagamentos</a></li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="tab-folha-excel">
+                    <div class="mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-muted mb-0 small fw-bold">Vendedor com venda no mês:</label>
+                            <select id="folha-excel-vendedor" class="form-select form-select-sm" style="width: auto; min-width: 200px;" onchange="renderizarCardFolhaVendedor()">
+                                <option value="">— Selecione —</option>
+                            </select>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-muted mb-0 small fw-bold">Envio em lote:</label>
+                            <select id="folha-excel-vendedores-multi" class="form-select form-select-sm" style="min-width: 260px;" multiple size="3" title="Selecione um ou mais vendedores"></select>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="carregarFolhaExcel()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+                        <div class="d-flex flex-wrap align-items-stretch gap-1" style="min-height: 2.25rem;">
+                            <button type="button" class="btn btn-sm btn-success px-2 d-flex align-items-center justify-content-center" style="min-height: 2.25rem;" id="btn-enviar-whatsapp-folha" onclick="enviarFolhaExtratoWhatsApp()" title="Envia um único PDF (folha + extrato) para o WhatsApp do vendedor">
+                                <i class="bi bi-whatsapp"></i> WhatsApp
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger px-2 d-flex align-items-center justify-content-center" style="min-height: 2.25rem;" id="btn-exportar-pdf-folha" onclick="exportarFolhaExtratoPdf()" title="Baixar PDF (folha + extrato); vários vendedores = ZIP">
+                                <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success px-2 d-flex align-items-center justify-content-center" style="min-height: 2.25rem;" id="btn-exportar-excel-resumo" onclick="exportarResumoComissionamentoXlsx()" title="Baixar resumo em Excel com todos os vendedores do mês">
+                                <i class="bi bi-file-earmark-excel"></i> Excel Resumo
+                            </button>
+                            <button type="button" class="btn btn-sm btn-success px-2 d-flex align-items-center justify-content-center" style="min-height: 2.25rem;" id="btn-exportar-excel-extrato" onclick="exportarExtratoComissionamentoXlsx()" title="Baixar extrato de vendas (mesma tabela da tela)">
+                                <i class="bi bi-table"></i> Excel Extrato
+                            </button>
+                        </div>
+                    </div>
+                    <div id="folha-excel-container"></div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-adiantamentos-esteira">
+                    <div class="card card-modern border-0 shadow-sm">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 text-primary fw-bold"><i class="bi bi-box-arrow-in-down"></i> O que foi lançado na esteira (Instaladas)</h6>
+                            <p class="small text-muted mb-0 mt-1">Período: mesmo mês/ano selecionado no topo da página. Inclui adiantamento de comissão (lançamento financeiro) e marcações de adiantamento CNPJ feitas pelo botão da esteira.</p>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-4">
+                                <h6 class="small fw-bold text-secondary mb-2">Adiantamento de comissão</h6>
+                                <p class="small text-muted mb-2">Lançamentos financeiros gerados ao marcar adiantamento de comissão na esteira.</p>
+                                <div id="esteira-comissao-container" class="table-responsive border rounded"></div>
+                            </div>
+                            <div>
+                                <h6 class="small fw-bold text-secondary mb-2">Adiantamento CNPJ</h6>
+                                <p class="small text-muted mb-2">Lançamentos financeiros gerados ao marcar adiantamento CNPJ na esteira (mesmo critério do adiantamento de comissão: agregado por vendedor e data).</p>
+                                <div id="esteira-cnpj-container" class="table-responsive border rounded"></div>
+                                <div id="esteira-cnpj-legado-container" class="mt-3 small"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-historico">
+                    <div class="card card-modern border-0 shadow-sm">
+                        <div class="card-body">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Mês/Ano</th>
+                                        <th>Total Pago (Equipe)</th>
+                                        <th>Total Recebido (Ciclo)</th>
+                                        <th>Diferença (Recebido - Pago)</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-historico"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal fade" id="modalEmail" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Enviar Extrato por E-mail</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p>O sistema enviará o extrato individual (PDF e Tabela) para cada consultor selecionado.</p>
+            <div class="mb-3">
+                <label class="form-label">Destinatários</label>
+                <input type="text" class="form-control bg-light" id="email-consultor-nome" readonly>
+                <input type="hidden" id="email-consultores-ids">
+            </div>
+            <div class="mb-3" id="div-email-destino">
+                <label class="form-label">E-mail de Destino (Opcional)</label>
+                <input type="email" class="form-control" id="email-destino-input" placeholder="nome@exemplo.com">
+                <small class="text-muted">Se vazio, usa o e-mail do cadastro do consultor.</small>
+            </div>
+            <div id="div-aviso-massa" class="alert alert-info d-none">
+                <small><i class="bi bi-info-circle"></i> Como você selecionou múltiplos consultores, o sistema usará <b>obrigatoriamente</b> o e-mail cadastrado no perfil de cada um.</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarEnvioEmail()">
+                <span id="btn-email-text">Enviar Agora</span>
+                <span id="btn-email-spinner" class="spinner-border spinner-border-sm d-none"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        const apiUrl = '/api/crm/comissionamento/'; 
+        const token = localStorage.getItem('accessToken');
+        if(!token) window.location.href = '/';
+
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const hoje = new Date();
+            document.getElementById('filtro-mes').value = hoje.getMonth() + 1;
+            document.getElementById('filtro-ano').value = hoje.getFullYear();
+        });
+
+        // --- FOLHA FORMATO EXCEL (dropdown = vendedores com venda no mês, um card por vez) ---
+        let folhaExcelCache = { dados: null, periodo: '' };
+
+        function blocoResumoCnpjMei(r) {
+            const cv = r.cnpj_comissao_visual || {};
+            const mei = Number(cv.qtd_cnpj_mei || 0);
+            const nmei = Number(cv.qtd_cnpj_nmei || 0);
+            const cpf = Number(cv.qtd_cpf || 0);
+            if (!mei && !nmei) return '';
+            return `<div class="px-3 pt-3 pb-0">
+                <div class="alert alert-info py-2 px-3 small mb-0">
+                    <strong>Comissão por tipo de cliente</strong>
+                    <span class="d-block mt-1 text-muted">
+                        CNPJ <strong>MEI</strong> entra nas linhas <strong>PAP</strong> (mesma tabela que CPF).
+                        CNPJ <strong>NMEI</strong> entra nas linhas <strong>CNPJ</strong>. Adiant. CNPJ só para NMEI.
+                    </span>
+                    <span class="d-block mt-2">
+                        ${cpf ? `<span class="badge bg-secondary me-1">CPF ${cpf}</span>` : ''}
+                        ${mei ? `<span class="badge bg-primary me-1">CNPJ MEI ${mei} → PAP</span>` : ''}
+                        ${nmei ? `<span class="badge bg-dark me-1">CNPJ NMEI ${nmei} → CNPJ</span>` : ''}
+                    </span>
+                </div>
+            </div>`;
+        }
+
+        function rotuloPlanoComMei(p) {
+            const q = Number(p.qtd_cnpj_mei || 0);
+            let nome = p.plano || '';
+            if (q > 0 && /PAP/i.test(nome)) {
+                nome += ` <span class="text-muted fw-normal small" title="Vendas com CNPJ classificado MEI, pagas pela tabela PAP">(${q} CNPJ MEI)</span>`;
+            }
+            return nome;
+        }
+
+        function badgeMeiExtrato(e) {
+            const m = (e.classificacao_mei || '-').toString().toUpperCase();
+            if (m === 'MEI') return '<span class="badge bg-primary" title="CNPJ MEI — tabela PAP">MEI</span>';
+            if (m === 'NMEI') return '<span class="badge bg-dark" title="CNPJ NMEI — tabela CNPJ">NMEI</span>';
+            return '<span class="text-muted">-</span>';
+        }
+
+        function fmtValorComissaoExtrato(e) {
+            if (e.valor_comissao == null || e.valor_comissao === '') return '<span class="text-muted">—</span>';
+            const cod = (e.comissao_tipo_codigo || '').toLowerCase();
+            let cls = 'money-col fw-bold';
+            if (cod === 'antecipada' || (e.comissao_tipo || '').toLowerCase().includes('antecipada')) cls += ' extrato-valor-antecipada';
+            else if (cod === 'referencia') cls += ' extrato-valor-referencia';
+            else if (cod === 'churn') cls += ' extrato-valor-churn';
+            return `<span class="${cls}">${fmtMoney(e.valor_comissao)}</span>`;
+        }
+
+        function fmtTipoComissaoExtrato(e) {
+            const txt = e.comissao_tipo || '—';
+            const cod = (e.comissao_tipo_codigo || '').toLowerCase();
+            let cls = 'small';
+            if (txt.includes('sábado')) cls += ' text-info';
+            else if (txt.includes('esteira')) cls += ' text-primary';
+            else if (cod === 'churn') cls += ' text-danger';
+            else if (cod === 'a_pagar') cls += ' fw-bold';
+            else if (cod === 'referencia') cls += ' text-muted';
+            return `<span class="${cls}">${txt}</span>`;
+        }
+
+        function montarTabelaExtrato(v) {
+            const extratoLista = (v.extrato || []);
+            const normaliza = (txt) => (txt || '').toString().trim().toUpperCase();
+            const parseBrDateToSort = (dt) => {
+                const s = (dt || '').toString().trim();
+                const p = s.split('/');
+                if (p.length !== 3) return '';
+                const [dd, mm, yyyy] = p;
+                if (!dd || !mm || !yyyy) return '';
+                return `${yyyy.padStart(4, '0')}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+            };
+            const blocoInfo = (e) => {
+                const situacao = normaliza(e.situacao);
+                const isChurn = normaliza(e.churn) === 'SIM';
+                const isCancelada = situacao.includes('CANCELADA');
+                if (situacao === 'INSTALADA' && !isChurn) return { ordem: 0, titulo: 'INSTALADAS', statusGrupo: 'INSTALADA' };
+                if (situacao === 'INSTALADA' && isChurn) return { ordem: 1, titulo: 'INSTALADAS COM CHURN', statusGrupo: 'INSTALADA (CHURN)' };
+                if (isCancelada) return { ordem: 2, titulo: 'CANCELADAS', statusGrupo: situacao || 'CANCELADA' };
+                return { ordem: 3, titulo: 'DEMAIS STATUS', statusGrupo: situacao || '-' };
+            };
+            const blocos = [
+                { ordem: 0, titulo: 'INSTALADAS', itens: [] },
+                { ordem: 1, titulo: 'INSTALADAS COM CHURN', itens: [] },
+                { ordem: 2, titulo: 'CANCELADAS', itens: [] },
+                { ordem: 3, titulo: 'DEMAIS STATUS', itens: [] }
+            ];
+            extratoLista.forEach(e => {
+                const b = blocoInfo(e);
+                blocos[b.ordem].itens.push({ ...e, _statusGrupo: b.statusGrupo });
+            });
+
+            const cols = [
+                { key: 'nome', label: 'NOME', filter: 'text' },
+                { key: 'dacc', label: 'DACC', filter: 'select' },
+                { key: 'cnpj', label: 'CNPJ', filter: 'select' },
+                { key: 'classificacao_mei', label: 'MEI/NMEI', filter: 'select' },
+                { key: 'plano', label: 'PLANO', filter: 'text' },
+                { key: 'dt_pedido', label: 'DT PEDIDO', filter: 'text' },
+                { key: 'dt_inst', label: 'DT INST', filter: 'text' },
+                { key: 'os', label: 'OS', filter: 'text' },
+                { key: 'situacao', label: 'SITUAÇÃO', filter: 'text' },
+                { key: 'churn', label: 'CHURN', filter: 'select' },
+                { key: 'adiantada', label: 'ADIANT.', filter: 'select' },
+                { key: 'valor_comissao', label: 'COMISSÃO', filter: 'text', align: 'end' },
+                { key: 'comissao_tipo', label: 'TIPO COMISSÃO', filter: 'text' },
+            ];
+
+            let html = `<div class="p-2 border-top small text-muted fw-bold d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span>Extrato (${extratoLista.length} vendas)</span>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportarExtratoComissionamentoXlsx()" title="Baixar extrato em Excel (mesmas colunas da tabela)">
+                        <i class="bi bi-file-earmark-excel"></i> Excel
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm extrato-limpar-filtros">Limpar filtros</button>
+                </div>
+            </div>
+            <div class="table-responsive"><table class="table table-sm mb-0 small extrato-comissao-table"><thead class="table-light">
+                <tr>${cols.map(c => `<th class="${c.align === 'end' ? 'text-end' : ''}">${c.label}</th>`).join('')}</tr>
+                <tr class="filter-row">${cols.map(c => {
+                    if (c.filter === 'select') {
+                        let opts = '<option value="">Todos</option>';
+                        if (c.key === 'classificacao_mei') {
+                            opts += '<option value="MEI">MEI</option><option value="NMEI">NMEI</option><option value="-">-</option>';
+                        } else {
+                            opts += '<option value="SIM">SIM</option><option value="NÃO">NÃO</option><option value="-">-</option>';
+                        }
+                        return `<th><select class="filter-input extrato-filter-input" data-col="${c.key}">${opts}</select></th>`;
+                    }
+                    return `<th><input type="text" class="filter-input extrato-filter-input" data-col="${c.key}" placeholder="Filtrar..." autocomplete="off"></th>`;
+                }).join('')}</tr>
+            </thead><tbody>`;
+
+            blocos.forEach(b => {
+                if (!b.itens.length) return;
+                html += `<tr class="table-secondary extrato-bloco-row" data-bloco="${b.ordem}"><td colspan="${cols.length}" class="fw-bold">${b.titulo} — ${b.itens.length} venda(s)</td></tr>`;
+                const itensOrdenados = [...b.itens].sort((a, b2) => {
+                    const d1 = parseBrDateToSort(a.dt_pedido) || '9999-99-99';
+                    const d2 = parseBrDateToSort(b2.dt_pedido) || '9999-99-99';
+                    if (d1 !== d2) return d1.localeCompare(d2);
+                    return (a.nome || '').localeCompare(b2.nome || '');
+                });
+                itensOrdenados.forEach(e => {
+                    const isChurn = normaliza(e.churn) === 'SIM';
+                    const isAdiant = normaliza(e.adiantada) === 'SIM';
+                    const situacao = normaliza(e.situacao);
+                    const isCancelada = situacao.includes('CANCELADA');
+                    const isInstalada = situacao === 'INSTALADA';
+                    const isVerde = isInstalada && !isChurn;
+                    const rowClass = (isChurn || isCancelada)
+                        ? 'table-danger'
+                        : (isVerde ? 'table-success' : 'table-warning');
+                    const rowExtraClass = (isVerde && isAdiant) ? ' extrato-row-adiantada' : '';
+                    const meiTxt = (e.classificacao_mei || '-').toString().toUpperCase();
+                    const dataAttrs = cols.map(c => {
+                        let val = c.key === 'classificacao_mei' ? meiTxt : (e[c.key] != null ? String(e[c.key]) : '');
+                        if (c.key === 'valor_comissao' && e.valor_comissao != null) val = String(e.valor_comissao);
+                        return `data-${c.key}="${(val || '').replace(/"/g, '&quot;')}"`;
+                    }).join(' ');
+                    html += `<tr class="extrato-data-row ${rowClass}${rowExtraClass}" data-bloco="${b.ordem}" ${dataAttrs}>
+                        <td>${e.nome || ''}</td>
+                        <td>${e.dacc || ''}</td>
+                        <td>${e.cnpj || ''}</td>
+                        <td class="text-center">${badgeMeiExtrato(e)}</td>
+                        <td>${e.plano || ''}</td>
+                        <td>${e.dt_pedido || ''}</td>
+                        <td>${e.dt_inst || ''}</td>
+                        <td>${e.os || ''}</td>
+                        <td>${e.situacao || ''}</td>
+                        <td>${e.churn || ''}</td>
+                        <td class="text-center">${e.adiantada || '-'}</td>
+                        <td class="text-end">${fmtValorComissaoExtrato(e)}</td>
+                        <td>${fmtTipoComissaoExtrato(e)}</td>
+                    </tr>`;
+                });
+            });
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        function aplicarFiltrosExtrato(cardEl) {
+            if (!cardEl) return;
+            const table = cardEl.querySelector('.extrato-comissao-table');
+            if (!table) return;
+            const filtros = {};
+            table.querySelectorAll('.extrato-filter-input').forEach(inp => {
+                const col = inp.dataset.col;
+                const val = (inp.value || '').trim().toUpperCase();
+                if (val) filtros[col] = val;
+            });
+            const dataRows = table.querySelectorAll('tbody tr.extrato-data-row');
+            dataRows.forEach(tr => {
+                let visivel = true;
+                for (const [col, val] of Object.entries(filtros)) {
+                    const cell = (tr.dataset[col] || '').toUpperCase();
+                    if (col === 'classificacao_mei') {
+                        if (cell !== val && !(val === '-' && (cell === '' || cell === '-'))) { visivel = false; break; }
+                    } else if (!cell.includes(val)) {
+                        visivel = false;
+                        break;
+                    }
+                }
+                tr.style.display = visivel ? '' : 'none';
+            });
+            table.querySelectorAll('tbody tr.extrato-bloco-row').forEach(blocoTr => {
+                const bloco = blocoTr.dataset.bloco;
+                const alguma = [...table.querySelectorAll(`tbody tr.extrato-data-row[data-bloco="${bloco}"]`)]
+                    .some(r => r.style.display !== 'none');
+                blocoTr.style.display = alguma ? '' : 'none';
+            });
+        }
+
+        function initExtratoFiltros(container) {
+            if (!container) return;
+            container.querySelectorAll('.extrato-comissao-table').forEach(table => {
+                const card = table.closest('.card');
+                table.querySelectorAll('.extrato-filter-input').forEach(inp => {
+                    inp.addEventListener('input', () => aplicarFiltrosExtrato(card));
+                    inp.addEventListener('change', () => aplicarFiltrosExtrato(card));
+                });
+                const btnLimpar = card && card.querySelector('.extrato-limpar-filtros');
+                if (btnLimpar) {
+                    btnLimpar.onclick = () => {
+                        table.querySelectorAll('.extrato-filter-input').forEach(inp => { inp.value = ''; });
+                        aplicarFiltrosExtrato(card);
+                    };
+                }
+            });
+        }
+
+        function montarCardFolha(v) {
+            const r = v.resumo || {};
+            const porPlano = r.por_plano || [];
+            const totalInstaladosFaixa = r.qtd_instalada_faixa_complemento != null
+                ? r.qtd_instalada_faixa_complemento
+                : (r.total_qtd_vendas_folha != null ? r.total_qtd_vendas_folha : null);
+            const origemManual = (r.origem_valores === 'manual')
+                || (String(r.faixa_aplicada || '').toLowerCase().includes('vendedor'))
+                || (String(r.faixa_aplicada || '').toUpperCase() === 'MANUAL');
+            const badgeOrigem = origemManual
+                ? `<span class="badge bg-success" title="Valores unitários vindos de Governança → Regras por Vendedor (usar valor manual = SIM)">Origem: Regras por vendedor</span>`
+                : `<span class="badge bg-primary" title="Valores unitários da tabela Regras por faixas">Faixa: ${r.faixa_aplicada || '-'}</span>`;
+            const badgeFaixaRef = (origemManual && r.faixa_referencia)
+                ? `<span class="badge border text-secondary" title="Faixa de volume apenas informativa (não define o valor unitário)">Volume: ${r.faixa_referencia}</span>`
+                : '';
+            let html = `<div class="card border shadow-sm mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span class="fw-bold">${v.vendedor_nome}</span>
+                    <div class="d-flex align-items-center flex-wrap gap-1">
+                        ${badgeOrigem}
+                        ${badgeFaixaRef}
+                        ${totalInstaladosFaixa != null ? `<span class="badge bg-secondary" title="Total de vendas instaladas no mês (base da faixa de volume)">Instalados: ${totalInstaladosFaixa}</span>` : ''}
+                        ${r.faixa_complemento_sabado && !origemManual && r.faixa_complemento_sabado !== r.faixa_aplicada ? `<span class="badge bg-info" title="Faixa usada no complemento do adiantamento sábado (total instaladas: ${r.qtd_instalada_faixa_complemento || '?'})">Compl. sábado: ${r.faixa_complemento_sabado}</span>` : ''}
+                    </div>
+                </div>
+                ${blocoResumoCnpjMei(r)}
+                ${(r.alertas_folha && r.alertas_folha.length) ? (function(){
+                    const linhas = r.alertas_folha.map(a =>
+                        `<li><strong>#${a.venda_id}</strong> OS ${a.os || '—'} — ${a.nome || 'Cliente'} (${a.situacao || '—'})</li>`
+                    ).join('');
+                    return `<div class="px-3 pt-2"><div class="alert alert-warning py-2 px-3 small mb-0">
+                        <strong><i class="bi bi-exclamation-triangle"></i> Atenção — adiantamento sábado sem data de abertura da O.S.</strong>
+                        <ul class="mb-0 mt-1">${linhas}</ul>
+                        <span class="text-muted">Corrija a data de abertura no cadastro da venda para o estorno entrar na folha.</span>
+                    </div></div>`;
+                })() : ''}
+                <div class="card-body p-0">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light"><tr><th>PLANO</th><th class="text-center">QTD A PAGAR</th><th class="text-center">QTD ANTECIPADA</th><th class="text-end">VALOR JÁ ADIANT.</th><th class="text-end">VALOR UNIT.</th><th class="text-end">VALOR TOTAL</th><th class="text-end">COMISSÃO</th></tr></thead>
+                        <tbody>`;
+            let sumQtdAnt = 0, sumValAdiant = 0, sumValComplemento = 0, sumValorTotalInst = 0;
+            porPlano.forEach(p => {
+                const qtdAnt = p.qtd_antecipada || 0;
+                const valAdiant = p.valor_total_antecipado != null ? p.valor_total_antecipado : 0;
+                const valComp = p.valor_total_complemento_sabado != null ? p.valor_total_complemento_sabado : 0;
+                sumQtdAnt += qtdAnt;
+                sumValAdiant += valAdiant;
+                sumValComplemento += valComp;
+                if (p.qtd_instalada_a_pagar > 0 || qtdAnt > 0 || p.valor_total_instalados > 0 || valAdiant > 0 || valComp > 0) {
+                    sumValorTotalInst += Number(p.valor_total_instalados || 0);
+                    const valTotalSab = (valAdiant + valComp);
+                    const colAdiant = qtdAnt > 0
+                        ? (valComp !== 0
+                            ? `${fmtMoney(valAdiant)} <span class="text-muted small">+ ${fmtMoney(valComp)} comp.</span>`
+                            : fmtMoney(valAdiant))
+                        : '—';
+                    html += `<tr><td>${rotuloPlanoComMei(p)}</td><td class="text-center">${p.qtd_instalada_a_pagar}</td><td class="text-center">${qtdAnt}</td><td class="text-end text-info">${colAdiant}</td><td class="text-end">${p.valor_unitario_instalados != null ? fmtMoney(p.valor_unitario_instalados) : '-'}</td><td class="text-end">${fmtMoney(p.valor_total_instalados)}</td><td class="text-end fw-bold">${fmtMoney(p.comissao_total)}</td></tr>`;
+                }
+            });
+            const totalQtdPagar = r.total_qtd_instalada_a_pagar != null ? r.total_qtd_instalada_a_pagar : 0;
+            const totalQtdVendasFolha = r.total_qtd_vendas_folha != null ? r.total_qtd_vendas_folha : (totalQtdPagar + sumQtdAnt);
+            const complementoSabTotal = r.complemento_sabado_total != null ? r.complemento_sabado_total : sumValComplemento;
+            const colTotalAdiant = sumQtdAnt > 0
+                ? (sumValComplemento !== 0
+                    ? `${fmtMoney(sumValAdiant)} <span class="text-muted small">+ ${fmtMoney(sumValComplemento)} comp.</span>`
+                    : fmtMoney(sumValAdiant))
+                : '—';
+            html += `<tr class="table-light fw-bold"><td>TOTAL</td><td class="text-center">${totalQtdPagar}</td><td class="text-center">${sumQtdAnt}</td><td class="text-end text-info">${colTotalAdiant}</td><td class="text-end">—</td><td class="text-end">${fmtMoney(sumValorTotalInst)}</td><td class="text-end">${fmtMoney(r.comissao_total_geral || 0)}</td></tr></tbody></table>
+                <div class="px-3 py-2 border-top bg-light small d-flex justify-content-between flex-wrap gap-2">
+                    <span><strong>Total vendas a pagar:</strong> ${totalQtdPagar}</span>
+                    <span><strong>Total vendas antecipadas:</strong> ${sumQtdAnt}</span>
+                    <span class="text-primary fw-bold"><strong>Total vendas no mês (pagas):</strong> ${totalQtdVendasFolha}</span>
+                </div>
+                <div class="p-3 border-top bg-white">
+                    <div class="row small mb-2">
+                        <div class="col">Comissão (a pagar): <span class="fw-bold">${fmtMoney(r.comissao_total_geral || 0)}</span></div>
+                        ${complementoSabTotal !== 0 ? `<div class="col">Complemento sábado: <span class="text-success fw-bold">+ ${fmtMoney(complementoSabTotal)}</span></div>` : ''}
+                        <div class="col">Descontos: <span class="text-danger fw-bold">- ${fmtMoney(r.total_descontos || 0)}</span></div>
+                        <div class="col">Bônus: <span class="text-success fw-bold">+ ${fmtMoney(r.total_bonus || 0)}</span></div>
+                        <div class="col"><strong>LÍQUIDO A PAGAR: <span class="text-success fs-6">${fmtMoney(r.liquido || 0)}</span></strong></div>
+                    </div>
+                    ${r.desconta_boleto_pap === false ? '<div class="px-3 pb-2"><div class="alert alert-warning py-1 px-2 small mb-0">Regras por vendedor: <strong>boleto não desconta no líquido</strong>. A linha de boleto abaixo mostra o valor cheio (informativo); o total de descontos já está sem esse valor.</div></div>' : ''}
+                    ${(r.detalhes_descontos && r.detalhes_descontos.length) ? (function(){
+                        const list = r.detalhes_descontos;
+                        const folhaBoleto = list.filter(d => (d.tipo_exibicao || '').toLowerCase() === 'folha_boleto_vendas');
+                        const folhaAntecip = list.filter(d => (d.tipo_exibicao || '').toLowerCase() === 'folha_antecipacao_instalacao');
+                        const adiant = list.filter(d => (d.tipo_exibicao || '').toLowerCase() === 'adiant_cnpj');
+                        const churnM0 = list.filter(d => (d.tipo_exibicao || '').toLowerCase() === 'churn_m0');
+                        const churnM1 = list.filter(d => (d.tipo_exibicao || '').toLowerCase() === 'churn_m1');
+                        const tiposAgrupados = new Set(['folha_boleto_vendas', 'folha_antecipacao_instalacao', 'adiant_cnpj', 'adiant_comissao', 'churn_m0', 'churn_m1', 'boleto', 'antecipacao_instalacao', 'processamento_auto_misto']);
+                        const outros = list.filter(d => !tiposAgrupados.has((d.tipo_exibicao || '').toLowerCase()));
+                        const linha = (d) => { const q = (d.quantidade != null && d.quantidade !== '') ? d.quantidade : 1; return `<div class="d-flex justify-content-between text-danger"><span>${d.motivo || 'Desconto'}${q > 0 ? ' (' + q + ' un.)' : ''}</span><span>- ${fmtMoney(d.valor)}</span></div>`; };
+                        let bloco = '<div class="small border-top pt-2 mt-2"><strong class="text-muted">Lançamentos descontados</strong>';
+                        if (r.qtd_a_descontar != null && r.qtd_a_descontar > 0) bloco += '<div class="mt-1 text-muted fw-bold">QTD A DESCONTAR: ' + r.qtd_a_descontar + '</div>';
+                        bloco += '<div class="mt-1">';
+                        if (folhaBoleto.length) folhaBoleto.forEach(d => { bloco += linha(d); });
+                        if (folhaAntecip.length) folhaAntecip.forEach(d => { bloco += linha(d); });
+                        if (adiant.length) { bloco += '<div class="mb-1 mt-2"><span class="text-muted fw-bold small">Adiant. CNPJ</span>'; adiant.forEach(d => { bloco += linha(d); }); bloco += '</div>'; }
+                        if (churnM0.length) { bloco += '<div class="mb-1"><span class="text-muted fw-bold small">Desconto Churn M0</span>'; churnM0.forEach(d => { bloco += linha(d); }); bloco += '</div>'; }
+                        if (churnM1.length) { bloco += '<div class="mb-1"><span class="text-muted fw-bold small">Desconto Churn M-1</span>'; churnM1.forEach(d => { bloco += linha(d); }); bloco += '</div>'; }
+                        if (outros.length) { bloco += '<div class="mb-1"><span class="text-muted fw-bold small">Outros</span>'; outros.forEach(d => { bloco += linha(d); }); bloco += '</div>'; }
+                        bloco += '</div></div>';
+                        return bloco;
+                    })() : ''}
+                    ${(r.info_comissao_adiantada && r.info_comissao_adiantada.quantidade_total > 0) ? (function(){
+                        const i = r.info_comissao_adiantada;
+                        const porOrigem = i.por_origem || {};
+                        const linhaRef = (label, key) => {
+                            const d = porOrigem[key] || {};
+                            const qtd = Number(d.quantidade || 0);
+                            const val = Number(d.valor_total || 0);
+                            if (qtd <= 0 && val <= 0) return '';
+                            return `<div class="d-flex justify-content-between text-info mt-1"><span><i class="bi bi-info-circle"></i> ${label} <strong>(${qtd} un.)</strong></span><span class="fw-bold">${fmtMoney(val)}</span></div>`;
+                        };
+                        let b = '<div class="small border-top pt-2 mt-2"><strong class="text-muted">Referência — não entra em descontos</strong>';
+                        b += linhaRef('Adiantamento sábado', 'adiantamento_sabado');
+                        b += linhaRef('Sábado — quitado na instalação', 'adiantamento_sabado_quitado_instalacao');
+                        b += linhaRef('Adiantamento na esteira / instalados', 'adiantamento_esteira_instalados');
+                        b += linhaRef('Não classificado', 'adiantamento_nao_classificado');
+                        b += `<div class="d-flex justify-content-between text-info mt-1 border-top pt-1"><span>Total pago no sábado <strong>(${i.quantidade_total} un.)</strong></span><span class="fw-bold">${fmtMoney(i.valor_total)}</span></div>`;
+                        const compSab = (i.complemento_sabado || {});
+                        if (Number(compSab.valor_complemento || 0) !== 0) {
+                            b += `<div class="d-flex justify-content-between text-success mt-1"><span><i class="bi bi-plus-circle"></i> Complemento sábado pendente <strong>(${compSab.quantidade || 0} un.)</strong>${compSab.faixa_nome ? ' — faixa <strong>' + compSab.faixa_nome + '</strong>' : ''}</span><span class="fw-bold">+ ${fmtMoney(compSab.valor_complemento || 0)}</span></div>`;
+                            b += `<div class="d-flex justify-content-between text-primary mt-1"><span>Total venda sábado (pago + complemento)</span><span class="fw-bold">${fmtMoney(compSab.valor_alvo || 0)}</span></div>`;
+                            const det = compSab.detalhes_vendas || [];
+                            if (det.length) {
+                                b += '<div class="small text-muted ms-2 mt-1">Detalhe por venda (MEI usa tabela PAP):</div>';
+                                det.forEach(d => {
+                                    b += `<div class="small text-muted ms-3">#${d.venda_id} OS ${d.os || '-'} | ${d.chave || d.plano} | MEI: ${d.classificacao_mei || '-'} | pago ${fmtMoney(d.pago)} → alvo ${fmtMoney(d.alvo)} = <strong>${d.complemento >= 0 ? '+' : ''}${fmtMoney(d.complemento)}</strong></div>`;
+                                });
+                            }
+                        }
+                        if (i.por_plano && i.por_plano.length) {
+                            i.por_plano.forEach(row => {
+                                if (row.qtd > 0) b += `<div class="small text-muted ms-2">${row.plano}: ${row.qtd} un. → ${fmtMoney(row.valor_total)}</div>`;
+                            });
+                        }
+                        b += '</div>';
+                        return b;
+                    })() : ''}
+                    ${(r.detalhes_bonus && r.detalhes_bonus.length) ? (function(){
+                        const list = r.detalhes_bonus;
+                        let bloco = '<div class="small border-top pt-2 mt-2"><strong class="text-muted">Bônus / premiação</strong><div class="mt-1">';
+                        list.forEach(b => {
+                            bloco += `<div class="d-flex justify-content-between text-success fw-bold"><span><i class="bi bi-trophy-fill"></i> ${b.motivo || 'Bônus/Premiação'}</span><span>+ ${fmtMoney(b.valor)}</span></div>`;
+                        });
+                        bloco += '</div></div>';
+                        return bloco;
+                    })() : ''}
+                </div>
+                ${montarTabelaExtrato(v)}
+            </div></div>`;
+            return html;
+        }
+
+        function renderizarCardFolhaVendedor() {
+            const container = document.getElementById('folha-excel-container');
+            const sel = document.getElementById('folha-excel-vendedor');
+            if (!container || !folhaExcelCache.dados) return;
+            const vendedorId = sel && sel.value ? sel.value : '';
+            if (!vendedorId) {
+                container.innerHTML = `<div class="text-muted text-center py-4">Selecione um vendedor no dropdown acima.</div>`;
+                return;
+            }
+            const v = folhaExcelCache.dados.vendedores.find(x => String(x.vendedor_id) === String(vendedorId));
+            if (!v) {
+                container.innerHTML = `<div class="alert alert-warning">Vendedor não encontrado.</div>`;
+                return;
+            }
+            container.innerHTML = `<div class="mb-3 fw-bold text-secondary">Período: ${folhaExcelCache.periodo}</div>` + montarCardFolha(v);
+            initExtratoFiltros(container);
+        }
+
+        async function carregarFolhaExcel(tentativa = 0) {
+            const container = document.getElementById('folha-excel-container');
+            const selVendedor = document.getElementById('folha-excel-vendedor');
+            const selMulti = document.getElementById('folha-excel-vendedores-multi');
+            if (!container) return;
+            const mes = document.getElementById('filtro-mes').value;
+            const ano = document.getElementById('filtro-ano').value;
+            const msgLoad = tentativa > 0
+                ? 'Folha pronta no cache — recarregando...'
+                : 'Carregando folha (primeira carga do mês pode levar até 1–2 min)...';
+            container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">${msgLoad}</p></div>`;
+            if (selVendedor) selVendedor.innerHTML = '<option value="">— Selecione —</option>';
+            if (selMulti) selMulti.innerHTML = '';
+            try {
+                const res = await axios.get(`/api/crm/comissionamento/folha/?ano=${ano}&mes=${mes}`, { timeout: 180000 });
+                const dados = res.data;
+                if (dados && dados.erro) {
+                    throw Object.assign(new Error(dados.erro), { response: { data: dados, status: 503 } });
+                }
+                folhaExcelCache = { dados, periodo: dados.periodo || `${mes}/${ano}` };
+
+                if (!dados.vendedores || !dados.vendedores.length) {
+                    container.innerHTML = '<div class="alert alert-info">Nenhum dado de folha para este mês.</div>';
+                    return;
+                }
+                const comVendas = dados.vendedores.filter(v => {
+                    const r = v.resumo || {};
+                    const pp = r.por_plano || [];
+                    const adiant = r.info_comissao_adiantada || {};
+                    const temVendaNoMes =
+                        pp.some(
+                            p =>
+                                (p.qtd_instalada_a_pagar || 0) > 0 ||
+                                (p.qtd_antecipada || 0) > 0
+                        ) || (adiant.quantidade_total || 0) > 0;
+                    const comissao = r.comissao_total_geral || 0;
+                    const bonus = r.total_bonus || 0;
+                    const desc = r.total_descontos || 0;
+                    return temVendaNoMes || comissao > 0 || bonus > 0 || desc > 0;
+                });
+                if (selVendedor) {
+                    comVendas.forEach(v => {
+                        const opt = document.createElement('option');
+                        opt.value = v.vendedor_id;
+                        opt.textContent = v.vendedor_nome || ('ID ' + v.vendedor_id);
+                        selVendedor.appendChild(opt);
+                        if (selMulti) {
+                            const opt2 = document.createElement('option');
+                            opt2.value = v.vendedor_id;
+                            opt2.textContent = v.vendedor_nome || ('ID ' + v.vendedor_id);
+                            selMulti.appendChild(opt2);
+                        }
+                    });
+                    if (comVendas.length > 0) selVendedor.value = comVendas[0].vendedor_id;
+                }
+                renderizarCardFolhaVendedor();
+            } catch (err) {
+                const data = err.response?.data || {};
+                const status = err.response?.status;
+                const retryEm = data.retry_after_seconds || 15;
+                if ((status === 503 || data.retry_after_seconds) && tentativa < 2) {
+                    container.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Gerando folha em segundo plano... nova tentativa em ${retryEm}s</p></div>`;
+                    await new Promise(r => setTimeout(r, retryEm * 1000));
+                    return carregarFolhaExcel(tentativa + 1);
+                }
+                const msg = data.erro || data.error || err.message || 'Erro de rede';
+                container.innerHTML = `<div class="alert alert-danger">Erro ao carregar folha: ${msg}</div>`;
+            }
+        }
+
+        async function enviarFolhaExtratoWhatsApp() {
+            const vendedorId = document.getElementById('folha-excel-vendedor')?.value;
+            const selMulti = document.getElementById('folha-excel-vendedores-multi');
+            const idsMulti = selMulti ? Array.from(selMulti.selectedOptions).map(o => parseInt(o.value, 10)).filter(Boolean) : [];
+            const idsEnvio = idsMulti.length > 0 ? idsMulti : (vendedorId ? [parseInt(vendedorId, 10)] : []);
+            const ano = document.getElementById('filtro-ano')?.value;
+            const mes = document.getElementById('filtro-mes')?.value;
+            if (!idsEnvio.length) {
+                alert('Selecione um vendedor no dropdown ou marque um/mais vendedores no campo de envio em lote.');
+                return;
+            }
+            const btn = document.getElementById('btn-enviar-whatsapp-folha');
+            if (!btn) return;
+            const origText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+            try {
+                const res = await axios.post(`${apiUrl}enviar-folha-extrato-whatsapp/`, {
+                    vendedor_id: vendedorId ? parseInt(vendedorId, 10) : null,
+                    vendedores_ids: idsEnvio,
+                    ano: parseInt(ano, 10),
+                    mes: parseInt(mes, 10),
+                    fechar_mes: true
+                });
+                if (res.data && res.data.ok) {
+                    const erros = (res.data.erros || []);
+                    const msgErros = erros.length ? `\nFalhas: ${erros.join(' | ')}` : '';
+                    alert((res.data.mensagem || 'Envio concluído.') + msgErros);
+                    await carregarDados();
+                    await carregarHistoricoPagamentos();
+                } else {
+                    alert(res.data?.mensagem || res.data?.error || 'Resposta inesperada.');
+                }
+            } catch (err) {
+                const msg = err.response?.data?.mensagem || err.response?.data?.error || err.message || 'Erro ao enviar.';
+                alert('Erro: ' + msg);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        }
+
+        function nomeMesPdfFechamento(m) {
+            const meses = ['JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+            const i = parseInt(m, 10) - 1;
+            return (i >= 0 && i < meses.length) ? meses[i] : String(m);
+        }
+        function nomeArquivoPdfExportFallback(mes, idsEnvio) {
+            const mesNome = nomeMesPdfFechamento(mes);
+            if (idsEnvio.length === 1) {
+                const id0 = String(idsEnvio[0]);
+                let rotulo = '';
+                const selV = document.getElementById('folha-excel-vendedor');
+                if (selV && String(selV.value) === id0 && selV.selectedOptions && selV.selectedOptions[0]) {
+                    rotulo = selV.selectedOptions[0].textContent.trim();
+                }
+                if (!rotulo) {
+                    const selM = document.getElementById('folha-excel-vendedores-multi');
+                    if (selM) {
+                        const o = Array.from(selM.options).find(x => String(x.value) === id0);
+                        if (o && o.textContent) rotulo = o.textContent.trim();
+                    }
+                }
+                if (!rotulo && folhaExcelCache.dados && folhaExcelCache.dados.vendedores) {
+                    const v = folhaExcelCache.dados.vendedores.find(x => String(x.vendedor_id) === id0);
+                    if (v && v.vendedor_nome) rotulo = String(v.vendedor_nome).trim();
+                }
+                if (!rotulo) rotulo = 'vendedor';
+                const u = rotulo.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim() || 'vendedor';
+                return `FECHAMENTO VENDAS - ${mesNome} ${u}.pdf`;
+            }
+            return `FECHAMENTO VENDAS - ${mesNome} MULTIPLOS.zip`;
+        }
+
+        async function exportarFolhaExtratoPdf() {
+            const vendedorId = document.getElementById('folha-excel-vendedor')?.value;
+            const selMulti = document.getElementById('folha-excel-vendedores-multi');
+            const idsMulti = selMulti ? Array.from(selMulti.selectedOptions).map(o => parseInt(o.value, 10)).filter(Boolean) : [];
+            const idsEnvio = idsMulti.length > 0 ? idsMulti : (vendedorId ? [parseInt(vendedorId, 10)] : []);
+            const ano = document.getElementById('filtro-ano')?.value;
+            const mes = document.getElementById('filtro-mes')?.value;
+            if (!idsEnvio.length) {
+                alert('Selecione um vendedor no dropdown ou marque um/mais vendedores no campo de envio em lote.');
+                return;
+            }
+            const btn = document.getElementById('btn-exportar-pdf-folha');
+            if (!btn) return;
+            const origText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Gerando...';
+            try {
+                const res = await axios.post(
+                    `${apiUrl}exportar-folha-extrato-pdf/`,
+                    {
+                        vendedor_id: vendedorId ? parseInt(vendedorId, 10) : null,
+                        vendedores_ids: idsEnvio,
+                        ano: parseInt(ano, 10),
+                        mes: parseInt(mes, 10)
+                    },
+                    { responseType: 'blob', timeout: 120000 }
+                );
+                const cd = res.headers['content-disposition'] || '';
+                let filename = nomeArquivoPdfExportFallback(mes, idsEnvio);
+                const mStar = /filename\*=UTF-8''([^;\n]+)/i.exec(cd);
+                const mQuoted = /filename="([^"]+)"/i.exec(cd);
+                if (mStar && mStar[1]) {
+                    filename = decodeURIComponent(mStar[1].trim());
+                } else if (mQuoted && mQuoted[1]) {
+                    filename = mQuoted[1].trim();
+                }
+                const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                const warn = res.headers['x-export-warnings'];
+                if (warn) {
+                    console.warn(warn);
+                }
+            } catch (err) {
+                let msg = err.message || 'Erro ao exportar.';
+                if (err.response && err.response.data instanceof Blob) {
+                    try {
+                        const t = await err.response.data.text();
+                        const j = JSON.parse(t);
+                        msg = j.error || j.detail || msg;
+                    } catch (_) {
+                        msg = 'Falha ao gerar o arquivo.';
+                    }
+                } else if (err.response?.data?.error) {
+                    msg = err.response.data.error;
+                }
+                alert('Erro: ' + msg);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        }
+
+        async function exportarExtratoComissionamentoXlsx() {
+            const vendedorId = document.getElementById('folha-excel-vendedor')?.value;
+            const selMulti = document.getElementById('folha-excel-vendedores-multi');
+            const idsMulti = selMulti ? Array.from(selMulti.selectedOptions).map(o => parseInt(o.value, 10)).filter(Boolean) : [];
+            const idsEnvio = idsMulti.length > 0 ? idsMulti : (vendedorId ? [parseInt(vendedorId, 10)] : []);
+            const ano = document.getElementById('filtro-ano')?.value;
+            const mes = document.getElementById('filtro-mes')?.value;
+            if (!idsEnvio.length) {
+                alert('Selecione um vendedor no dropdown ou marque um/mais vendedores no campo de envio em lote.');
+                return;
+            }
+            const btn = document.getElementById('btn-exportar-excel-extrato');
+            const origText = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            }
+            try {
+                const res = await axios.post(
+                    `${apiUrl}exportar-extrato-excel/`,
+                    {
+                        vendedor_id: vendedorId ? parseInt(vendedorId, 10) : null,
+                        vendedores_ids: idsEnvio,
+                        ano: parseInt(ano, 10),
+                        mes: parseInt(mes, 10)
+                    },
+                    { responseType: 'blob' }
+                );
+                const cd = res.headers['content-disposition'] || '';
+                let filename = idsEnvio.length === 1
+                    ? `extrato_comissao_${String(mes).padStart(2, '0')}_${ano}.xlsx`
+                    : `extratos_comissao_${String(mes).padStart(2, '0')}_${ano}.zip`;
+                const mStar = /filename\*=UTF-8''([^;\n]+)/i.exec(cd);
+                const mQuoted = /filename="([^"]+)"/i.exec(cd);
+                if (mStar && mStar[1]) {
+                    filename = decodeURIComponent(mStar[1].trim());
+                } else if (mQuoted && mQuoted[1]) {
+                    filename = mQuoted[1].trim();
+                }
+                const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                let msg = err.message || 'Erro ao exportar extrato.';
+                if (err.response && err.response.data instanceof Blob) {
+                    try {
+                        const t = await err.response.data.text();
+                        const j = JSON.parse(t);
+                        msg = j.error || j.detail || msg;
+                    } catch (_) {
+                        msg = 'Falha ao gerar o arquivo.';
+                    }
+                } else if (err.response?.data?.error) {
+                    msg = err.response.data.error;
+                }
+                alert('Erro: ' + msg);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origText;
+                }
+            }
+        }
+
+        async function exportarResumoComissionamentoXlsx() {
+            const ano = document.getElementById('filtro-ano')?.value;
+            const mes = document.getElementById('filtro-mes')?.value;
+            const btn = document.getElementById('btn-exportar-excel-resumo');
+            if (!btn) return;
+            const origText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            try {
+                const res = await axios.post(
+                    `${apiUrl}exportar-resumo-excel/`,
+                    { ano: parseInt(ano, 10), mes: parseInt(mes, 10) },
+                    { responseType: 'blob' }
+                );
+                const cd = res.headers['content-disposition'] || '';
+                let filename = `comissionamento_resumo_${String(mes).padStart(2, '0')}_${ano}.xlsx`;
+                const mQuoted = /filename="([^"]+)"/i.exec(cd);
+                if (mQuoted && mQuoted[1]) filename = mQuoted[1].trim();
+                const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                let msg = err.message || 'Erro ao exportar Excel.';
+                if (err.response && err.response.data instanceof Blob) {
+                    try {
+                        const t = await err.response.data.text();
+                        const j = JSON.parse(t);
+                        msg = j.error || j.detail || msg;
+                    } catch (_) {
+                        msg = 'Falha ao gerar o arquivo.';
+                    }
+                } else if (err.response?.data?.error) {
+                    msg = err.response.data.error;
+                }
+                alert('Erro: ' + msg);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        }
+
+        // --- HISTÓRICO DE PAGAMENTOS (carrega ao abrir a aba) ---
+        async function carregarHistoricoPagamentos() {
+            const mes = document.getElementById('filtro-mes').value;
+            const ano = document.getElementById('filtro-ano').value;
+            const tbody = document.getElementById('tbody-historico');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div> Carregando...</td></tr>';
+            try {
+                const res = await axios.get(`${apiUrl}?ano=${ano}&mes=${mes}`);
+                const dados = res.data;
+                renderizarHistorico(dados.historico_pagamentos || []);
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger p-4">Erro ao carregar histórico: ${error.message}</td></tr>`;
+            }
+        }
+
+        async function carregarAdiantamentosEsteira() {
+            const c1 = document.getElementById('esteira-comissao-container');
+            const c2 = document.getElementById('esteira-cnpj-container');
+            const c2leg = document.getElementById('esteira-cnpj-legado-container');
+            if (!c1 || !c2) return;
+            const mes = document.getElementById('filtro-mes').value;
+            const ano = document.getElementById('filtro-ano').value;
+            const loading = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary"></div> Carregando...</div>';
+            c1.innerHTML = loading;
+            c2.innerHTML = loading;
+            if (c2leg) c2leg.innerHTML = '';
+            try {
+                const res = await axios.get(`${apiUrl}adiantamentos-esteira/?ano=${ano}&mes=${mes}`);
+                const d = res.data || {};
+                const com = d.adiantamento_comissao || [];
+                const cnpjLanc = d.adiantamento_cnpj || [];
+                const cnpjLegado = d.marcacoes_cnpj_esteira || [];
+
+                if (com.length === 0) {
+                    c1.innerHTML = '<div class="text-center py-3 text-muted small">Nenhum lançamento de adiantamento de comissão da esteira neste mês.</div>';
+                } else {
+                    let h = '<table class="table table-sm table-hover mb-0"><thead class="table-light"><tr><th>Data</th><th>Vendedor</th><th class="text-end">Valor</th><th class="text-center">Qtd vendas</th><th>IDs vendas</th><th>Criado por</th></tr></thead><tbody>';
+                    com.forEach(row => {
+                        const ids = (row.venda_ids && row.venda_ids.length) ? row.venda_ids.join(', ') : '—';
+                        h += `<tr><td>${row.data ? row.data.split('T')[0].split('-').reverse().join('/') : ''}</td><td>${row.vendedor_nome || ''}</td><td class="text-end money-col">${fmtMoney(row.valor)}</td><td class="text-center">${row.quantidade_vendas != null ? row.quantidade_vendas : '—'}</td><td class="small text-break" style="max-width:180px;">${ids}</td><td class="small">${row.criado_por || '—'}</td></tr>`;
+                    });
+                    h += '</tbody></table>';
+                    c1.innerHTML = h;
+                }
+
+                if (cnpjLanc.length === 0) {
+                    c2.innerHTML = '<div class="text-center py-3 text-muted small">Nenhum lançamento financeiro de adiantamento CNPJ da esteira neste mês.</div>';
+                } else {
+                    let h = '<table class="table table-sm table-hover mb-0"><thead class="table-light"><tr><th>Data</th><th>Vendedor</th><th class="text-end">Valor</th><th class="text-center">Qtd vendas</th><th>IDs vendas</th><th>Criado por</th></tr></thead><tbody>';
+                    cnpjLanc.forEach(row => {
+                        const ids = (row.venda_ids && row.venda_ids.length) ? row.venda_ids.join(', ') : '—';
+                        h += `<tr><td>${row.data ? row.data.split('T')[0].split('-').reverse().join('/') : ''}</td><td>${row.vendedor_nome || ''}</td><td class="text-end money-col">${fmtMoney(row.valor)}</td><td class="text-center">${row.quantidade_vendas != null ? row.quantidade_vendas : '—'}</td><td class="small text-break" style="max-width:180px;">${ids}</td><td class="small">${row.criado_por || '—'}</td></tr>`;
+                    });
+                    h += '</tbody></table>';
+                    c2.innerHTML = h;
+                }
+
+                if (c2leg && cnpjLegado.length > 0) {
+                    let h = '<p class="text-muted mb-1 fw-bold">Marcações antigas (sem lançamento no mês)</p><table class="table table-sm table-hover mb-0 border"><thead class="table-light"><tr><th>Data marcação</th><th>Vendedor</th><th>Cliente</th><th>OS</th><th class="text-end">Valor parâm.</th></tr></thead><tbody>';
+                    cnpjLegado.forEach(row => {
+                        const dm = row.data_marcacao ? new Date(row.data_marcacao).toLocaleString('pt-BR') : '—';
+                        h += `<tr><td>${dm}</td><td>${row.vendedor_nome || ''}</td><td>${(row.cliente || '').substring(0, 48)}</td><td>${row.os || '—'}</td><td class="text-end money-col">${fmtMoney(row.valor_parametro_cnpj)}</td></tr>`;
+                    });
+                    h += '</tbody></table>';
+                    c2leg.innerHTML = h;
+                }
+            } catch (e) {
+                const msg = e.response?.data?.error || e.message || 'Erro de rede';
+                c1.innerHTML = `<div class="alert alert-danger mb-0">${msg}</div>`;
+                c2.innerHTML = '';
+                if (c2leg) c2leg.innerHTML = '';
+            }
+        }
+
+        // --- FUNÇÕES GERAIS (HISTÓRICO, PDF, ZAP) ---
+        function renderizarTabela(lista) {
+            const tbody = document.getElementById('tbody-consultores');
+            tbody.innerHTML = '';
+            let totBruta = 0, totLiq = 0;
+
+            if (lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Nenhum dado encontrado.</td></tr>';
+                return;
+            }
+
+            lista.forEach(c => {
+                totBruta += c.comissao_bruta;
+                totLiq += c.valor_liquido;
+
+                const trMaster = document.createElement('tr');
+                trMaster.className = 'border-bottom';
+                trMaster.innerHTML = `
+                    <td class="text-center"><input type="checkbox" class="form-check-input check-consultor" value="${c.consultor_id}"></td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <button class="btn btn-icon btn-icon-neutral btn-toggle-detalhe me-2" 
+                                    type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${c.consultor_id}"
+                                    onclick="this.querySelector('i').classList.toggle('bi-plus-lg'); this.querySelector('i').classList.toggle('bi-dash-lg');"
+                                    aria-label="Expandir ou recolher detalhes">
+                                <i class="bi bi-plus-lg text-primary small" aria-hidden="true"></i>
+                            </button>
+                            <span class="fw-bold text-dark">${c.consultor_nome}</span>
+                        </div>
+                    </td>
+                    <td class="text-center">${c.qtd_instaladas}</td>
+                    <td class="text-center text-muted">${c.meta}</td>
+                    <td class="text-center"><span class="badge ${c.atingimento_pct >= 100 ? 'bg-success' : 'bg-secondary'}">${c.atingimento_pct}%</span></td>
+                    <td class="money-col text-end text-primary">${fmtMoney(c.comissao_bruta)}</td>
+                    <td class="money-col text-end text-danger small">${c.total_descontos > 0 ? '- '+fmtMoney(c.total_descontos) : '-'}</td>
+                    <td class="money-col text-end text-success bg-light border-start fw-bold">${fmtMoney(c.valor_liquido)}</td>
+                `;
+                tbody.appendChild(trMaster);
+
+                const trDetail = document.createElement('tr');
+                trDetail.className = 'bg-light';
+                
+                let htmlPlanos = c.detalhes_planos.map(p => `<tr><td class="ps-3 small fw-bold">${p.plano}</td><td class="text-center">${p.qtd}</td><td class="text-end small">${fmtMoney(p.unitario)}</td><td class="text-end fw-bold pe-3">${fmtMoney(p.total)}</td></tr>`).join('');
+                if (c.detalhes_planos.length === 0) htmlPlanos = '<tr><td colspan="4" class="text-center small text-muted">Nenhuma venda.</td></tr>';
+
+                let htmlDescontos = c.detalhes_descontos.map(d => `<div class="d-flex justify-content-between small mb-1 text-danger"><span>${d.motivo}</span><span>- ${fmtMoney(d.valor)}</span></div>`).join('');
+                if (c.detalhes_descontos.length === 0) htmlDescontos = '<div class="text-muted small fst-italic">Sem descontos.</div>';
+
+                let htmlBonus = (c.detalhes_bonus || []).map(b => `<div class="d-flex justify-content-between small mb-1 text-success fw-bold"><span><i class="bi bi-trophy-fill"></i> ${b.motivo}</span><span>+ ${fmtMoney(b.valor)}</span></div>`).join('');
+
+                trDetail.innerHTML = `
+                    <td colspan="8" class="p-0 border-0">
+                        <div class="collapse" id="collapse-${c.consultor_id}">
+                            <div class="row g-0">
+                                <div class="col-md-8 border-end">
+                                    <div class="p-3">
+                                        <h6 class="text-uppercase text-muted small fw-bold mb-2">Detalhamento</h6>
+                                        <table class="table table-sm table-borderless mb-0 bg-white shadow-sm"><tbody>${htmlPlanos}</tbody></table>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 bg-white">
+                                    <div class="p-3 h-100">
+                                        <h6 class="text-uppercase text-muted small fw-bold mb-3">Fechamento</h6>
+                                        <div class="d-flex justify-content-between small mb-2"><span class="text-secondary">Bruto</span><span class="fw-bold text-primary">${fmtMoney(c.comissao_bruta)}</span></div>
+                                        <div class="my-2">${htmlBonus}</div>
+                                        <div class="border-top border-bottom py-2 my-2 bg-light px-2 rounded">${htmlDescontos}</div>
+                                        <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top"><span class="fw-bold text-success small">A RECEBER</span><span class="fs-5 fw-bold text-success">${fmtMoney(c.valor_liquido)}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>`;
+                tbody.appendChild(trDetail);
+            });
+            document.getElementById('tfoot-totais').innerHTML = `<tr><td colspan="5" class="text-end small">TOTAIS:</td><td class="text-end text-primary">${fmtMoney(totBruta)}</td><td></td><td class="text-end text-success">${fmtMoney(totLiq)}</td></tr>`;
+        }
+
+        function renderizarHistorico(lista) {
+            const tbody = document.getElementById('tbody-historico');
+            tbody.innerHTML = '';
+            lista.forEach(h => {
+                const diff = Number(h.diferenca_pago_recebido || 0);
+                const anoMes = (h.ano_mes || '').split('/');
+                const mesRef = parseInt(anoMes[0], 10);
+                const anoRef = parseInt(anoMes[1], 10);
+                tbody.innerHTML += `<tr><td class="fw-bold">${h.ano_mes}</td><td class="text-success fw-bold">${fmtMoney(h.total_pago_equipe)}</td><td class="text-primary">${fmtMoney(h.total_recebido_ciclo)}</td><td class="${diff >= 0 ? 'text-primary' : 'text-danger'} fw-bold">${fmtMoney(diff)}</td><td><span class="badge ${h.status === 'Fechado' ? 'bg-success' : 'bg-warning'}">${h.status}</span></td><td><button class="btn btn-sm btn-light border" onclick="verHistoricoDetalhe(${anoRef}, ${mesRef})">Ver</button></td></tr>`;
+            });
+        }
+
+        async function verHistoricoDetalhe(ano, mes) {
+            try {
+                const res = await axios.get(`${apiUrl}historico-detalhe/?ano=${ano}&mes=${mes}`);
+                const itens = res.data?.itens || [];
+                if (!itens.length) {
+                    alert('Não há itens de pagamento fechados para este período.');
+                    return;
+                }
+                let html = `Pagamentos por vendedor (${res.data?.periodo || (mes + '/' + ano)})\n\n`;
+                itens.forEach(it => {
+                    html += `${it.vendedor_nome} | Pago: ${fmtMoney(it.total_pago)} | Recebido: ${fmtMoney(it.total_recebido)} | Dif: ${fmtMoney(it.diferenca)}\n`;
+                });
+                alert(html);
+            } catch (e) {
+                alert('Erro ao carregar detalhe do histórico: ' + (e.response?.data?.error || e.message));
+            }
+        }
+
+        function atualizarBotoesAcao(status, dados) {
+            const div = document.getElementById('botoes-acao-fechamento');
+            const msg = document.getElementById('status-fechamento-msg');
+            const totalLiq = dados.reduce((acc, cur) => acc + cur.valor_liquido, 0);
+
+            if (status === 'Fechado') {
+                msg.innerHTML = '<i class="bi bi-lock-fill text-success"></i> Mês Fechado e Pago.';
+                div.innerHTML = `<button class="btn btn-outline-secondary btn-lg" onclick="reabrirMes()"><i class="bi bi-unlock"></i> Reabrir Mês</button>`;
+            } else {
+                msg.innerHTML = '<i class="bi bi-unlock text-warning"></i> Mês Aberto.';
+                div.innerHTML = `<button class="btn btn-success btn-lg" onclick="fecharPagamentoMes(${totalLiq})"><i class="bi bi-check-circle-fill"></i> Fechar Pagamento</button>`;
+            }
+        }
+
+        async function fecharPagamentoMes(total) {
+            if(!confirm("Fechar pagamento do mês?")) return;
+            try { await axios.post(`${apiUrl}fechar/`, { ano: document.getElementById('filtro-ano').value, mes: document.getElementById('filtro-mes').value, total_pago: total }); alert("Fechado!"); carregarDados(); } catch(e) { alert("Erro: " + e.message); }
+        }
+
+        async function reabrirMes() {
+            if(!confirm("Reabrir mês?")) return;
+            try { await axios.post(`${apiUrl}reabrir/`, { ano: document.getElementById('filtro-ano').value, mes: document.getElementById('filtro-mes').value }); alert("Reaberto!"); carregarDados(); } catch(e) { alert("Erro: " + e.message); }
+        }
+
+        // Funções PDF/Email/Zap mantidas (abreviadas aqui, mas completas no arquivo original anterior se necessário)
+        async function gerarPDFSelecionados() {
+            const checks = document.querySelectorAll('.check-consultor:checked');
+            if(checks.length === 0) return alert("Selecione alguém.");
+            const ids = Array.from(checks).map(c => c.value);
+            try {
+                const res = await axios.post(`${apiUrl}pdf/`, { ano: document.getElementById('filtro-ano').value, mes: document.getElementById('filtro-mes').value, consultores: ids }, { responseType: 'blob' });
+                const url = window.URL.createObjectURL(new Blob([res.data]));
+                const link = document.createElement('a'); link.href = url; link.download = `Extrato.pdf`; document.body.appendChild(link); link.click();
+            } catch(e) { alert("Erro PDF."); }
+        }
+
+        async function enviarComissaoWhatsapp() {
+            const checks = document.querySelectorAll('.check-consultor:checked');
+            if(checks.length === 0) return alert("Selecione alguém.");
+            if(!confirm("Enviar Zap?")) return;
+            const ids = Array.from(checks).map(c => c.value);
+            try { alert("Enviando..."); await axios.post(`${apiUrl}whatsapp/`, { ano: document.getElementById('filtro-ano').value, mes: document.getElementById('filtro-mes').value, consultores: ids }); alert("Enviado."); } catch(e) { alert("Erro Zap."); }
+        }
+
+        function abrirModalEmail() {
+            const checks = document.querySelectorAll('.check-consultor:checked');
+            if(checks.length === 0) return alert("Selecione alguém.");
+            document.getElementById('email-consultores-ids').value = JSON.stringify(Array.from(checks).map(c => c.value));
+            document.getElementById('email-consultor-nome').value = `${checks.length} selecionados`;
+            new bootstrap.Modal(document.getElementById('modalEmail')).show();
+        }
+
+        async function confirmarEnvioEmail() {
+            try {
+                await axios.post(`${apiUrl}email/`, { 
+                    ano: document.getElementById('filtro-ano').value, mes: document.getElementById('filtro-mes').value, 
+                    consultores: JSON.parse(document.getElementById('email-consultores-ids').value), 
+                    email_destino: document.getElementById('email-destino-input').value 
+                });
+                alert("E-mail enviado!");
+                bootstrap.Modal.getInstance(document.getElementById('modalEmail')).hide();
+            } catch(e) { alert("Erro email: " + e.message); }
+        }
+
+        function toggleTodos(source) { document.querySelectorAll('.check-consultor').forEach(c => c.checked = source.checked); }
+        function fmtMoney(val) { return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+    </script>
+{% endblock %}

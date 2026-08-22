@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Conhecimento IA - Alimentar o bot com PDFs e planilhas{% endblock %}
+
+{% block extra_css %}
+<style>
+        .conhecimento-ia-page .container-ia { max-width: 900px; margin: 0 auto; padding: 20px; }
+        .conhecimento-ia-page .upload-zone {
+            border: 3px dashed var(--accent-primary);
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            background: var(--bg-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .conhecimento-ia-page .upload-zone:hover { border-color: var(--accent-primary); background: var(--bg-card); }
+        .conhecimento-ia-page .doc-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; margin-bottom: 12px; background: var(--bg-card); }
+        .conhecimento-ia-page .doc-card.inativo { opacity: 0.6; }
+        .conhecimento-ia-page .bg-light { background-color: var(--bg-secondary) !important; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/" class="nav-button">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<div class="container-ia conhecimento-ia-page">
+        <h2 class="mb-2"><i class="bi bi-robot text-primary me-2"></i>Conhecimento IA</h2>
+        <p class="text-muted mb-4">Envie PDFs, planilhas e apresentações ou adicione sites. O texto extraído é usado pela IA do bot WhatsApp para responder dúvidas dos vendedores.</p>
+
+        <div class="card card-modern mb-4">
+            <div class="card-header"><i class="bi bi-link-45deg me-2"></i>Adicionar site</div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">Informe a URL de uma página. Opcionalmente, marque "Crawlar site" para buscar também as páginas linkadas do mesmo domínio (até 30 páginas).</p>
+                <div class="input-group mb-2">
+                    <input type="url" class="form-control" id="inputUrl" placeholder="https://exemplo.com.br/pagina">
+                    <span class="input-group-text">
+                        <input type="checkbox" class="form-check-input me-1" id="checkCrawlar" title="Buscar também páginas linkadas do mesmo domínio (até 30)">
+                        <label class="form-check-label" for="checkCrawlar">Crawlar site</label>
+                    </span>
+                    <button class="btn btn-primary" type="button" id="btnAddUrl"><i class="bi bi-search me-1"></i>Buscar e salvar</button>
+                </div>
+                <div id="urlResult" style="display:none"></div>
+            </div>
+        </div>
+
+        <h5 class="mb-3">Sites adicionados</h5>
+        <div id="listaUrls" class="mb-4">Carregando...</div>
+
+        <hr class="my-4">
+        <h5 class="mb-3">Documentos (PDF, Excel, PowerPoint)</h5>
+        <div class="upload-zone mb-4" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept=".pdf,.xls,.xlsx,.ppt,.pptx" style="display:none">
+            <i class="bi bi-cloud-upload display-4 text-primary"></i>
+            <p class="mt-2 mb-0">Clique ou arraste um arquivo (PDF, Excel ou PowerPoint)</p>
+            <small class="text-muted">Máx. 50 MB. O texto é extraído automaticamente.</small>
+        </div>
+        <div id="uploadResult" style="display:none"></div>
+
+        <h5 class="mt-4 mb-3">Documentos enviados</h5>
+        <div id="listaDocs">Carregando...</div>
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script>
+        const API_BASE_URL = window.location.origin;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!localStorage.getItem('accessToken')) { window.location.href = '/'; return; }
+            carregarDocs();
+            carregarUrls();
+            document.getElementById('btnAddUrl').addEventListener('click', adicionarUrl);
+        });
+
+        document.getElementById('fileInput').addEventListener('change', async function() {
+            const file = this.files[0];
+            if (!file) return;
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (!['pdf','xls','xlsx','ppt','pptx'].includes(ext)) {
+                alert('Use apenas PDF, Excel (xls/xlsx) ou PowerPoint (ppt/pptx).');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('arquivo', file);
+            formData.append('titulo', file.name);
+
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-primary btn-sm';
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando e extraindo texto...';
+            document.getElementById('uploadResult').style.display = 'block';
+            document.getElementById('uploadResult').innerHTML = '';
+            document.getElementById('uploadResult').appendChild(btn);
+
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/upload/`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') },
+                    body: formData
+                });
+                const data = await r.json();
+                if (r.ok && data.sucesso) {
+                    document.getElementById('uploadResult').innerHTML = '<div class="alert alert-success">Documento enviado. Texto extraído: ' + (data.tem_conteudo ? 'Sim' : 'Não (tente Reprocessar)') + '</div>';
+                    carregarDocs();
+                } else {
+                    document.getElementById('uploadResult').innerHTML = '<div class="alert alert-danger">' + (data.error || 'Erro ao enviar') + '</div>';
+                }
+            } catch (e) {
+                document.getElementById('uploadResult').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>';
+            }
+            document.getElementById('fileInput').value = '';
+        });
+
+        async function carregarDocs() {
+            const el = document.getElementById('listaDocs');
+            el.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/list/`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') }
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Erro ao carregar');
+                const docs = data.resultados || [];
+                if (docs.length === 0) {
+                    el.innerHTML = '<p class="text-muted">Nenhum documento ainda. Envie um PDF, Excel ou PowerPoint acima.</p>';
+                    return;
+                }
+                el.innerHTML = docs.map(d => `
+                    <div class="doc-card ${d.ativo ? '' : 'inativo'}">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                <strong>${escapeHtml(d.titulo)}</strong>
+                                <span class="badge bg-secondary ms-2">${d.tipo}</span>
+                                ${d.tem_conteudo ? '<span class="badge bg-success ms-1">Texto OK</span>' : '<span class="badge bg-warning ms-1">Sem texto</span>'}
+                                ${!d.ativo ? '<span class="badge bg-light text-dark ms-1">Inativo</span>' : ''}
+                                <br><small class="text-muted">${d.nome_original} · ${d.data_upload ? new Date(d.data_upload).toLocaleString('pt-BR') : ''}</small>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" onclick="reprocessar(${d.id})" title="Reextrair texto">Reprocessar</button>
+                                <button class="btn btn-outline-${d.ativo ? 'warning' : 'success'}" onclick="toggleAtivo(${d.id})">${d.ativo ? 'Desativar' : 'Ativar'}</button>
+                                <button class="btn btn-outline-danger" onclick="excluir(${d.id}, '${escapeHtml(d.titulo).replace(/'/g, "\\'")}')">Excluir</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                el.innerHTML = '<div class="alert alert-danger">' + e.message + '</div>';
+            }
+        }
+
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        async function reprocessar(id) {
+            if (!confirm('Reextrair o texto deste arquivo?')) return;
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/reprocessar/${id}/`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') }
+                });
+                const data = await r.json();
+                if (r.ok && data.sucesso) alert('Concluído. Texto extraído: ' + (data.tem_conteudo ? 'Sim' : 'Não'));
+                else alert(data.error || 'Erro');
+                carregarDocs();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function toggleAtivo(id) {
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/toggle-ativo/${id}/`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') }
+                });
+                const data = await r.json();
+                if (r.ok) carregarDocs();
+                else alert(data.error || 'Erro');
+            } catch (e) { alert(e.message); }
+        }
+
+        async function excluir(id, titulo) {
+            if (!confirm('Excluir "' + titulo + '"?')) return;
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/delete/${id}/`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') }
+                });
+                const data = await r.json();
+                if (r.ok) carregarDocs();
+                else alert(data.error || 'Erro');
+            } catch (e) { alert(e.message); }
+        }
+
+        async function adicionarUrl() {
+            const url = document.getElementById('inputUrl').value.trim();
+            if (!url) { alert('Informe a URL'); return; }
+            const crawlar = document.getElementById('checkCrawlar').checked;
+            const btn = document.getElementById('btnAddUrl');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando...';
+            document.getElementById('urlResult').style.display = 'block';
+            document.getElementById('urlResult').innerHTML = '';
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/urls/add/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('accessToken'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url, crawlar_site: crawlar })
+                });
+                const data = await r.json();
+                if (r.ok && data.sucesso) {
+                    document.getElementById('urlResult').innerHTML = '<div class="alert alert-success">Site adicionado: ' + escapeHtml(data.titulo) + '</div>';
+                    document.getElementById('inputUrl').value = '';
+                    carregarUrls();
+                } else {
+                    document.getElementById('urlResult').innerHTML = '<div class="alert alert-danger">' + (data.error || 'Erro') + '</div>';
+                }
+            } catch (e) {
+                document.getElementById('urlResult').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>';
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-search me-1"></i>Buscar e salvar';
+        }
+
+        async function carregarUrls() {
+            const el = document.getElementById('listaUrls');
+            el.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/urls/`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') }
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Erro ao carregar');
+                const urls = data.resultados || [];
+                if (urls.length === 0) {
+                    el.innerHTML = '<p class="text-muted">Nenhum site ainda. Use o formulário acima para adicionar uma URL.</p>';
+                    return;
+                }
+                el.innerHTML = urls.map(u => `
+                    <div class="doc-card ${u.ativo ? '' : 'inativo'}">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                <strong>${escapeHtml(u.titulo || u.url)}</strong>
+                                ${u.tem_conteudo ? '<span class="badge bg-success ms-1">Texto OK</span>' : '<span class="badge bg-warning ms-1">Sem texto</span>'}
+                                ${!u.ativo ? '<span class="badge bg-light text-dark ms-1">Inativo</span>' : ''}
+                                <br><small class="text-muted"><a href="${escapeHtml(u.url)}" target="_blank" rel="noopener">${escapeHtml(u.url)}</a> · ${u.data_upload ? new Date(u.data_upload).toLocaleString('pt-BR') : ''}</small>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" onclick="reprocessarUrl(${u.id})" title="Buscar novamente">Reprocessar</button>
+                                <button class="btn btn-outline-${u.ativo ? 'warning' : 'success'}" onclick="toggleUrlAtivo(${u.id})">${u.ativo ? 'Desativar' : 'Ativar'}</button>
+                                <button class="btn btn-outline-danger" onclick="excluirUrl(${u.id}, '${escapeHtml(u.titulo || u.url).replace(/'/g, "\\'")}')">Excluir</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                el.innerHTML = '<div class="alert alert-danger">' + e.message + '</div>';
+            }
+        }
+
+        async function reprocessarUrl(id) {
+            if (!confirm('Buscar novamente o conteúdo do site?')) return;
+            const crawlar = document.getElementById('checkCrawlar').checked;
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/urls/reprocessar/${id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('accessToken'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ crawlar_site: crawlar })
+                });
+                const data = await r.json();
+                if (r.ok && data.sucesso) alert('Concluído. Texto extraído: ' + (data.tem_conteudo ? 'Sim' : 'Não'));
+                else alert(data.error || 'Erro');
+                carregarUrls();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function toggleUrlAtivo(id) {
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/urls/toggle-ativo/${id}/`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') }
+                });
+                const data = await r.json();
+                if (r.ok) carregarUrls();
+                else alert(data.error || 'Erro');
+            } catch (e) { alert(e.message); }
+        }
+
+        async function excluirUrl(id, titulo) {
+            if (!confirm('Excluir "' + titulo + '"?')) return;
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/crm/conhecimento-ia/urls/delete/${id}/`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('accessToken') }
+                });
+                const data = await r.json();
+                if (r.ok) carregarUrls();
+                else alert(data.error || 'Erro');
+            } catch (e) { alert(e.message); }
+        }
+
+        function logout() { localStorage.removeItem('accessToken'); window.location.href = '/'; }
+    </script>
+{% endblock %}

@@ -1,0 +1,37 @@
+# Cria/atualiza o serviço site-record-scheduler no Railway.
+# Uma vez: GitHub → Settings → Secrets → RAILWAY_TOKEN (token de conta em railway.app/account/tokens)
+# Depois: Actions → "Railway scheduler setup" → Run workflow
+
+name: Railway scheduler setup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile.scheduler
+      - railway.scheduler.toml
+      - scripts/railway_setup_scheduler.sh
+      - .github/workflows/railway-scheduler-setup.yml
+
+jobs:
+  setup-scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Railway scheduler service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::warning::Secret RAILWAY_TOKEN não configurado. Pule este job ou adicione o token em GitHub → Settings → Secrets."
+            exit 0
+          fi
+          chmod +x scripts/railway_setup_scheduler.sh
+          bash scripts/railway_setup_scheduler.sh

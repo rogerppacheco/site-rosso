@@ -1,0 +1,17 @@
+# Serviço Railway dedicado PAP (Playwright). Não usar no serviço web.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.pap"
+
+[deploy]
+startCommand = "python manage.py run_pap_worker"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Volume persistente para cookies/JWT das sessões PAP (não versionar no Git).
+[[mounts]]
+source = "pap-sessions"
+destination = "/data/pap_sessions"
+
+[env]
+PAP_SESSIONS_DIR = "/data/pap_sessions"

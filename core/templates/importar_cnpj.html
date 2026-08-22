@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Importar CNPJ Receita Federal - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+        .import-container { max-width: 900px; margin: 40px auto; padding: 20px; }
+        .upload-zone {
+            position: relative;
+            border: 3px dashed #0d6efd;
+            border-radius: 15px;
+            padding: 50px 20px;
+            text-align: center;
+            background: var(--bg-card);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-zone:hover { border-color: #0a58ca; background: #f0f7ff; }
+        .upload-zone.dragging { border-color: #0d6efd; background: #e7f1ff; }
+        .upload-zone i { font-size: 3.5rem; color: #0d6efd; display: block; margin-bottom: 15px; }
+        .info-card {
+            background: var(--bg-card);
+            border-left: 4px solid #0d6efd;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .alert-warning-custom { background: #fff3cd; border-left: 4px solid #ffc107; }
+        .filter-card { background: var(--bg-secondary); padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+
+        .importar-page .bg-white { background-color: var(--bg-card) !important; }
+        .importar-page .bg-light { background-color: var(--bg-secondary) !important; }
+        .importar-page .text-dark { color: var(--text-primary) !important; }
+        .importar-page .info-card,
+        .importar-page .upload-zone,
+        .importar-page .progress-container,
+        .importar-page .filter-card { border: 1px solid var(--border-color); color: var(--text-primary); }
+
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/importacoes/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="importar-page"><div class="import-container">
+        <div class="text-center mb-4">
+            <h2 class="fw-bold text-dark"><i class="bi bi-building"></i> Importar CNPJ Receita Federal</h2>
+            <p class="text-muted">Arquivos ESTABELE (Estabelecimentos) - Layout oficial 30 colunas</p>
+        </div>
+
+        <div class="info-card card-modern">
+            <h5 class="text-primary mb-3"><i class="bi bi-info-circle"></i> Instruções</h5>
+            <ul class="mb-2">
+                <li>Arquivos no formato oficial da Receita Federal: <code>K3241.K03200Y0.D60214.ESTABELE</code></li>
+                <li>Layout: 30 colunas, separador <strong>;</strong>, sem cabeçalho</li>
+                <li>Todas as colunas são importadas: CNPJ, nome fantasia, endereço, CNAE, situação cadastral, etc.</li>
+                <li>Processamento em streaming — suporta arquivos grandes</li>
+            </ul>
+            <div class="alert alert-warning-custom rounded p-3">
+                <strong><i class="bi bi-exclamation-triangle"></i> Arquivos &gt; 500 MB — use o comando no servidor</strong><br>
+                Upload via navegador costuma falhar ou travar em arquivos muito grandes. Para arquivos &gt; 500 MB:<br>
+                <code>python manage.py importar_cnpj "C:\caminho\arquivo.ESTABELE" --cnae 8112500 --municipio 4123</code><br>
+                O progresso aparece no terminal. O histórico abaixo só mostra importações concluídas ou em andamento.
+            </div>
+        </div>
+
+        <div class="alert alert-warning border-0 shadow-sm" id="statusBaseCNPJ" role="status">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <strong><i class="bi bi-database"></i> Base local CNPJ no banco</strong>
+                    <div class="small text-muted mt-1" id="statusBaseCNPJTexto">Carregando quantidade de registros...</div>
+                </div>
+                <button type="button" class="btn btn-outline-danger" id="btnExcluirBaseCNPJ" disabled>
+                    <i class="bi bi-trash"></i> Excluir base do banco
+                </button>
+            </div>
+        </div>
+
+        <!-- Filtros opcionais -->
+        <div class="filter-card card-modern">
+            <h6 class="fw-bold mb-2"><i class="bi bi-funnel"></i> Filtros opcionais (reduz volume)</h6>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="aplicarFiltros">
+                <label class="form-check-label" for="aplicarFiltros">Aplicar filtros durante a importação</label>
+            </div>
+            <div class="row g-2" id="camposFiltro" style="opacity: 0.6;">
+                <div class="col-md-4">
+                    <label class="form-label small">CNAE Fiscal (ex: 8112500)</label>
+                    <input type="text" id="cnaeFiscal" class="form-control form-control-sm" placeholder="Opcional">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Cód. Município (ex: 4123 = BH)</label>
+                    <input type="text" id="codigoMunicipio" class="form-control form-control-sm" placeholder="Opcional">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Situação (02=Ativa)</label>
+                    <input type="text" id="situacaoCadastral" class="form-control form-control-sm" placeholder="02">
+                </div>
+            </div>
+        </div>
+
+        <div class="upload-zone card-modern" id="uploadZone">
+            <input type="file" id="fileInput" accept=".ESTABELE,.estabele,.csv,.CSV" style="display:none;">
+            <label for="fileInput" class="d-block mb-0" style="cursor:pointer;">
+                <i class="bi bi-file-earmark-binary"></i>
+                <h4 class="text-dark">Arraste o arquivo ESTABELE aqui</h4>
+                <p class="text-muted">ou clique para selecionar</p>
+                <p class="text-muted mb-0"><small>Formatos: .ESTABELE, .csv</small></p>
+            </label>
+            <div id="avisoGrande" class="alert alert-danger mt-2" style="display:none;">
+                Arquivo &gt; 500 MB — o upload pode falhar. Prefira: <code>python manage.py importar_cnpj "caminho\arquivo.ESTABELE"</code>
+            </div>
+            <div id="fileInfo" class="mt-3" style="display: none;">
+                <div class="alert alert-info d-inline-block">
+                    <i class="bi bi-file-earmark-check"></i> <strong id="fileName"></strong>
+                    <span class="ms-2">(<span id="fileSize"></span>)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button class="btn btn-primary btn-lg" id="btnUpload" disabled>
+                <i class="bi bi-upload"></i> Importar Arquivo
+            </button>
+            <a href="/importacoes/" class="btn btn-outline-secondary btn-lg ms-2">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+
+        <div id="resultadoLimpezaCNPJ" class="mt-3" style="display: none;"></div>
+
+        <div class="progress-container card-modern mt-4" id="progressContainer" style="display: none;">
+            <div class="progress" style="height: 25px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width: 0%"></div>
+            </div>
+            <p class="mt-2 mb-0 text-center"><span id="progressMessage">Iniciando...</span></p>
+        </div>
+
+        <div id="resultadoImportacao" class="mt-4" style="display: none;"></div>
+
+        <div class="mt-5">
+            <h4 class="mb-3 text-dark fw-bold"><i class="bi bi-clock-history"></i> Histórico</h4>
+            <div class="table-responsive bg-white rounded shadow-sm">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                            <th>Duração</th>
+                            <th>Linhas</th>
+                            <th>Importados</th>
+                            <th>Erros</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historicoCNPJ">
+                        <tr><td colspan="8" class="text-center text-muted py-4">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const btnUpload = document.getElementById('btnUpload');
+        const fileInfo = document.getElementById('fileInfo');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressMessage = document.getElementById('progressMessage');
+        const aplicarFiltros = document.getElementById('aplicarFiltros');
+        const camposFiltro = document.getElementById('camposFiltro');
+        let selectedFile = null;
+        let refreshIntervalId = null;
+
+        aplicarFiltros.addEventListener('change', () => {
+            camposFiltro.style.opacity = aplicarFiltros.checked ? '1' : '0.6';
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarHistorico();
+            carregarStatusBaseCNPJ();
+            refreshIntervalId = setInterval(carregarHistorico, 3000);
+        });
+
+        function formatarNumeroBR(valor) {
+            return Number(valor || 0).toLocaleString('pt-BR');
+        }
+
+        async function carregarStatusBaseCNPJ() {
+            const texto = document.getElementById('statusBaseCNPJTexto');
+            const btn = document.getElementById('btnExcluirBaseCNPJ');
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/crm/import/cnpj/limpar/', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    texto.textContent = data.error || 'Sem permissão para ver o tamanho da base (apenas Admin/Diretoria).';
+                    btn.disabled = true;
+                    return;
+                }
+
+                const total = data.total_registros || 0;
+                const logs = data.total_logs || 0;
+                let msg = `${formatarNumeroBR(total)} registros na tabela CNPJ`;
+                if (logs > 0) {
+                    msg += ` · ${formatarNumeroBR(logs)} logs de importação`;
+                }
+                if (data.importacao_em_andamento) {
+                    msg += ' · importação em andamento (exclusão bloqueada)';
+                }
+                texto.textContent = msg;
+                btn.disabled = (total === 0 && logs === 0) || data.importacao_em_andamento;
+            } catch (error) {
+                texto.textContent = 'Não foi possível carregar o status da base.';
+                btn.disabled = true;
+            }
+        }
+
+        document.getElementById('btnExcluirBaseCNPJ').addEventListener('click', async () => {
+            const btn = document.getElementById('btnExcluirBaseCNPJ');
+            const resultado = document.getElementById('resultadoLimpezaCNPJ');
+
+            const ok1 = confirm(
+                'Isso vai APAGAR permanentemente toda a base local CNPJ (ESTABELE) do banco de dados.\n\n' +
+                'Consultas pontuais de CNPJ continuam via API.\n\n' +
+                'A aba "CNPJ por Cidade/Bairro" do CDOI deixa de ter dados locais.\n\nDeseja continuar?'
+            );
+            if (!ok1) return;
+
+            const confirmacao = prompt(
+                'Digite exatamente EXCLUIR CNPJ para confirmar a exclusão da base no banco:'
+            );
+            if (confirmacao !== 'EXCLUIR CNPJ') {
+                alert('Exclusão cancelada. Confirmação inválida.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Excluindo...';
+
+            try {
+                const token = localStorage.getItem('accessToken');
+                const response = await fetch('/api/crm/import/cnpj/limpar/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        confirmacao: 'EXCLUIR CNPJ',
+                        incluir_logs: true,
+                    }),
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (response.ok) {
+                    resultado.innerHTML = `
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <h5><i class="bi bi-check-circle"></i> Base excluída</h5>
+                            <p class="mb-0">${data.mensagem || 'Base CNPJ removida com sucesso.'}</p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
+                    carregarHistorico();
+                    carregarStatusBaseCNPJ();
+                } else {
+                    resultado.innerHTML = `
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h5><i class="bi bi-x-circle"></i> Erro ao excluir</h5>
+                            <p class="mb-0">${data.error || 'Falha ao excluir a base CNPJ.'}</p>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    `;
+                    carregarStatusBaseCNPJ();
+                }
+                resultado.style.display = 'block';
+            } catch (error) {
+                resultado.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <h5><i class="bi bi-x-circle"></i> Erro ao conectar</h5>
+                        <p class="mb-0">${error.message}</p>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                resultado.style.display = 'block';
+                carregarStatusBaseCNPJ();
+            } finally {
+                btn.innerHTML = '<i class="bi bi-trash"></i> Excluir base do banco';
+            }
+        });
+
+        async function carregarHistorico() {
+            try {
+                const token = localStorage.getItem('accessToken');
+                const res = await fetch('/api/crm/logs-importacao-cnpj/?limit=15', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const tbody = document.getElementById('historicoCNPJ');
+                if (!data.logs || data.logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Nenhuma importação</td></tr>';
+                    return;
+                }
+                const badges = {
+                    'PROCESSANDO': '<span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>',
+                    'SUCESSO': '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Sucesso</span>',
+                    'ERRO': '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>',
+                    'PARCIAL': '<span class="badge bg-warning">Parcial</span>'
+                };
+                let html = '';
+                data.logs.forEach(log => {
+                    let statusBadge = badges[log.status] || log.status;
+                    if (log.status === 'PROCESSANDO' && log.total_linhas > 0) {
+                        const imp = log.total_importadas || 0;
+                        const pct = Math.round((imp / log.total_linhas) * 100);
+                        statusBadge = `<span class="badge bg-info">${imp.toLocaleString()}/${log.total_linhas.toLocaleString()} (${pct}%)</span>`;
+                    }
+                    html += `<tr>
+                        <td><strong>${log.nome_arquivo}</strong></td>
+                        <td>${statusBadge}</td>
+                        <td>${log.iniciado_em ? new Date(log.iniciado_em).toLocaleString('pt-BR') : '-'}</td>
+                        <td>${log.duracao_segundos ? log.duracao_segundos + 's' : '-'}</td>
+                        <td>${(log.total_linhas || 0).toLocaleString()}</td>
+                        <td><span class="badge bg-success">${(log.total_importadas || 0).toLocaleString()}</span></td>
+                        <td><span class="badge bg-danger">${(log.total_erros || 0).toLocaleString()}</span></td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+                const temProc = data.logs.some(l => l.status === 'PROCESSANDO');
+                if (!temProc && refreshIntervalId) {
+                    clearInterval(refreshIntervalId);
+                    refreshIntervalId = null;
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragging'); });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragging'));
+        uploadZone.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragging');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', e => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        const LIMITE_MB = 500;
+        function handleFile(file) {
+            const nome = file.name.toUpperCase();
+            if (!nome.includes('ESTABELE') && !nome.endsWith('.CSV')) {
+                alert('Arquivo deve ser ESTABELE ou CSV da Receita Federal.');
+                return;
+            }
+            selectedFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatSize(file.size);
+            fileInfo.style.display = 'block';
+            btnUpload.disabled = false;
+            const mb = file.size / (1024*1024);
+            if (mb > LIMITE_MB) {
+                const aviso = document.getElementById('avisoGrande');
+                if (aviso) aviso.style.display = 'block';
+            }
+        }
+
+        function formatSize(b) {
+            if (b < 1024) return b + ' B';
+            if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+            return (b/(1024*1024)).toFixed(1) + ' MB';
+        }
+
+        btnUpload.addEventListener('click', () => {
+            if (!selectedFile) return;
+            const fd = new FormData();
+            fd.append('file', selectedFile);
+            if (aplicarFiltros.checked) {
+                fd.append('aplicar_filtros', 'true');
+                const cnae = document.getElementById('cnaeFiscal').value.trim();
+                const mun = document.getElementById('codigoMunicipio').value.trim();
+                const sit = document.getElementById('situacaoCadastral').value.trim() || '02';
+                if (cnae) fd.append('cnae_fiscal', cnae);
+                if (mun) fd.append('codigo_municipio', mun);
+                fd.append('situacao_cadastral', sit);
+            }
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressBar.classList.remove('bg-danger');
+            progressBar.classList.add('bg-primary');
+            progressMessage.textContent = 'Enviando arquivo (0%)...';
+            const token = localStorage.getItem('accessToken');
+            const xhr = new XMLHttpRequest();
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = pct + '%';
+                    progressMessage.textContent = `Enviando arquivo (${pct}%)...`;
+                } else {
+                    progressMessage.textContent = `Enviando... ${(e.loaded/(1024*1024)).toFixed(1)} MB`;
+                }
+            });
+            xhr.addEventListener('load', () => {
+                progressBar.style.width = '100%';
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                        progressMessage.textContent = 'Importação iniciada! Acompanhe no histórico abaixo.';
+                        selectedFile = null;
+                        fileInfo.style.display = 'none';
+                        document.getElementById('avisoGrande').style.display = 'none';
+                        btnUpload.disabled = true;
+                        carregarHistorico();
+                    } else {
+                        progressMessage.textContent = 'Erro: ' + (data.error || xhr.statusText);
+                        progressBar.classList.remove('bg-primary');
+                        progressBar.classList.add('bg-danger');
+                    }
+                } catch (e) {
+                    progressMessage.textContent = 'Erro ao processar resposta.';
+                    progressBar.classList.add('bg-danger');
+                }
+            });
+            xhr.addEventListener('error', () => {
+                progressMessage.textContent = 'Erro de conexão. Arquivo muito grande? Use: python manage.py importar_cnpj "caminho"';
+                progressBar.classList.add('bg-danger');
+            });
+            xhr.addEventListener('abort', () => {
+                progressMessage.textContent = 'Upload cancelado.';
+            });
+            xhr.open('POST', '/api/crm/importar-cnpj/');
+            xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+            xhr.send(fd);
+        });
+    </script>
+{% endblock %}

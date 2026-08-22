@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Boas Vindas - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+        .boas-vindas-page .tool-container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .boas-vindas-page .stat-mini { font-size: 1.1rem; font-weight: 600; }
+        .boas-vindas-page .retorno-item { border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+        .boas-vindas-page .retorno-item:hover { border-color: var(--accent-primary); background: var(--bg-secondary); }
+        .boas-vindas-page .chat-msg { border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; max-width: 85%; }
+        .boas-vindas-page .chat-msg.entrada { background: color-mix(in srgb, var(--color-info) 15%, var(--bg-card)); margin-left: 0; }
+        .boas-vindas-page .chat-msg.saida { background: color-mix(in srgb, var(--color-success) 15%, var(--bg-card)); margin-left: auto; }
+        .boas-vindas-page .chat-container { max-height: 300px; overflow-y: auto; }
+        .boas-vindas-page .badge-status { font-size: 0.75rem; }
+        .boas-vindas-page .bg-light { background-color: var(--bg-secondary) !important; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/" class="nav-button">Área Interna</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<div class="tool-container boas-vindas-page">
+        <h2 class="mb-3"><i class="bi bi-chat-heart-fill text-success"></i> Boas Vindas</h2>
+        <p class="text-muted mb-4">Instalações do dia anterior e envio de boas-vindas. Retornos dos clientes para tratamento pelo BO.</p>
+
+        <div class="row g-2 mb-4" id="painel-custos-wa">
+            <div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Custo / msg Utility</div><div class="stat-mini" id="custo-utility">—</div></div></div>
+            <div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Gasto hoje</div><div class="stat-mini" id="custo-hoje">—</div></div></div>
+            <div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Gasto no mês</div><div class="stat-mini" id="custo-mes">—</div></div></div>
+            <div class="col-md-3"><div class="p-3 bg-success bg-opacity-25 rounded"><div class="small text-muted">Total gasto (Número B)</div><div class="stat-mini" id="custo-total">—</div></div></div>
+            <div class="col-12"><p class="small text-muted mb-0" id="custo-nota"></p></div>
+        </div>
+
+        <ul class="nav nav-tabs mb-4" id="tab-main" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-instalacoes" type="button"><i class="bi bi-calendar-check"></i> Instalações</button></li>
+            <li class="nav-item"><button class="nav-link" id="btn-tab-retornos" data-bs-toggle="tab" data-bs-target="#tab-retornos" type="button"><i class="bi bi-chat-dots"></i> Retornos</button></li>
+        </ul>
+
+        <div class="tab-content">
+            <!-- Aba Instalações -->
+            <div class="tab-pane fade show active" id="tab-instalacoes" role="tabpanel">
+                <div class="card card-modern">
+                    <div class="d-flex flex-wrap gap-3 align-items-center mb-4">
+                        <div>
+                            <label class="form-label fw-bold">Data das instalações</label>
+                            <input type="date" id="data-instalacoes" class="form-control" style="width:180px;">
+                        </div>
+                        <div class="align-self-end">
+                            <button type="button" class="btn btn-outline-primary" id="btn-carregar-instalacoes"><i class="bi bi-arrow-clockwise"></i> Carregar</button>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-4">
+                        <div class="col-md-4"><div class="p-3 bg-light rounded"><span class="stat-mini" id="stat-total">0</span> total</div></div>
+                        <div class="col-md-4"><div class="p-3 bg-warning bg-opacity-25 rounded"><span class="stat-mini" id="stat-pendentes">0</span> pendentes</div></div>
+                        <div class="col-md-4"><div class="p-3 bg-success bg-opacity-25 rounded"><span class="stat-mini" id="stat-enviados">0</span> enviados</div></div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-success" id="btn-agendar-boas-vindas" disabled><i class="bi bi-clock-history"></i> Agendar na fila (envio automático até 16h)</button>
+                        <button type="button" class="btn btn-outline-success ms-2" id="btn-enviar-1-agora" disabled title="Enviar 1 mensagem agora (manual)"><i class="bi bi-send"></i> Enviar 1 agora</button>
+                        <span id="envio-status" class="ms-2 small text-muted"></span>
+                    </div>
+                    <div id="fila-status" class="alert alert-info py-2 small" style="display:none;">
+                        <i class="bi bi-info-circle"></i> <span id="fila-status-text">—</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead><tr><th>Cliente</th><th>Telefone</th><th>Vendedor</th><th>Plano</th><th>Status</th></tr></thead>
+                            <tbody id="tabela-instalacoes"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aba Retornos -->
+            <div class="tab-pane fade" id="tab-retornos" role="tabpanel">
+                <div class="card card-modern">
+                    <p class="text-muted small mb-3">Clientes que receberam boas-vindas e enviaram mensagem. Clique para ver o chat e atribuir status.</p>
+                    <div id="lista-retornos"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Detalhe/Tratamento -->
+        <div class="modal fade" id="modal-detalhe" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-chat-text"></i> Chat e Tratamento</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <strong id="detalhe-cliente">—</strong> · <span id="detalhe-telefone">—</span> · Venda #<span id="detalhe-venda">—</span>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Mensagens do cliente</label>
+                            <div id="chat-mensagens" class="chat-container p-2 border rounded"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Sugestão da IA</label>
+                            <span id="detalhe-sugestao-ia" class="badge bg-secondary">—</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" id="btn-atualizar-sugestao"><i class="bi bi-arrow-repeat"></i></button>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label fw-bold">Status (BO)</label>
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <select id="select-status" class="form-select" style="width:220px;"></select>
+                                <button type="button" class="btn btn-primary" id="btn-salvar-status"><i class="bi bi-check"></i> Salvar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script>
+        const API_BASE = '/api/crm';
+        function apiFetch(path, opts = {}) {
+            const token = localStorage.getItem('accessToken');
+            const h = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+            if (token) h['Authorization'] = 'Bearer ' + token;
+            return fetch(API_BASE + path, { ...opts, headers: h }).then(r => {
+                if (r.status === 401) { logout(); throw new Error('Sessão expirada'); }
+                if (!r.ok) return r.json().then(j => { throw new Error(j.detail || JSON.stringify(j)); });
+                return r.json();
+            });
+        }
+
+        function hojeMenosUm() {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            return d.toISOString().slice(0, 10);
+        }
+
+        let dadosInstalacoes = null;
+        let detalheBvId = null;
+
+        document.getElementById('data-instalacoes').value = hojeMenosUm();
+
+        document.getElementById('btn-carregar-instalacoes').onclick = async () => {
+            const data = document.getElementById('data-instalacoes').value;
+            if (!data) { alert('Selecione a data.'); return; }
+            try {
+                const r = await apiFetch('/boas-vindas/instalacoes/?data=' + data);
+                dadosInstalacoes = r;
+                document.getElementById('stat-total').textContent = r.total;
+                document.getElementById('stat-pendentes').textContent = r.pendentes;
+                document.getElementById('stat-enviados').textContent = r.enviados;
+                const tbody = document.getElementById('tabela-instalacoes');
+                tbody.innerHTML = (r.items || []).map(i => `
+                    <tr>
+                        <td>${i.cliente}</td>
+                        <td>${i.telefone || '-'}</td>
+                        <td>${i.vendedor}</td>
+                        <td>${i.plano}</td>
+                        <td>${i.boas_vindas_enviado_em ? '<span class="badge bg-success">Enviado</span>' : '<span class="badge bg-warning text-dark">Pendente</span>'}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('btn-agendar-boas-vindas').disabled = r.pendentes === 0;
+                document.getElementById('btn-enviar-1-agora').disabled = r.pendentes === 0;
+                carregarFilaStatus();
+            } catch (e) {
+                alert('Erro: ' + (e.message || e));
+            }
+        };
+
+        async function carregarFilaStatus() {
+            const data = document.getElementById('data-instalacoes').value;
+            if (!data) return;
+            try {
+                const r = await apiFetch('/boas-vindas/fila-status/?data=' + data);
+                const el = document.getElementById('fila-status');
+                const txt = document.getElementById('fila-status-text');
+                if (r.total_fila > 0) {
+                    el.style.display = 'block';
+                    txt.textContent = `Fila: ${r.pendentes} pendente(s), ${r.enviados} enviado(s). O sistema processa automaticamente a cada 5 min até 16h.`;
+                } else {
+                    el.style.display = 'none';
+                }
+            } catch (e) { document.getElementById('fila-status').style.display = 'none'; }
+        }
+
+        document.getElementById('btn-agendar-boas-vindas').onclick = async () => {
+            const data = document.getElementById('data-instalacoes').value;
+            if (!data) { alert('Selecione a data.'); return; }
+            const btn = document.getElementById('btn-agendar-boas-vindas');
+            const status = document.getElementById('envio-status');
+            btn.disabled = true;
+            try {
+                const r = await apiFetch('/boas-vindas/agendar/', { method: 'POST', body: JSON.stringify({ data }) });
+                status.textContent = r.detail || `${r.agendados} agendados.`;
+                status.className = 'ms-2 small text-success';
+                document.getElementById('btn-carregar-instalacoes').click();
+            } catch (e) {
+                status.textContent = 'Erro: ' + (e.message || e);
+                status.className = 'ms-2 small text-danger';
+            }
+            btn.disabled = false;
+        };
+
+        document.getElementById('btn-enviar-1-agora').onclick = async () => {
+            const data = document.getElementById('data-instalacoes').value;
+            if (!data) { alert('Selecione a data.'); return; }
+            const btn = document.getElementById('btn-enviar-1-agora');
+            const status = document.getElementById('envio-status');
+            btn.disabled = true;
+            try {
+                const r = await apiFetch('/boas-vindas/enviar/', { method: 'POST', body: JSON.stringify({ data, offset: 0, limite: 1 }) });
+                status.textContent = r.enviados ? `1 enviada. Restam ${r.restantes}.` : (r.erros?.length ? 'Falha no envio.' : 'Nenhuma pendente.');
+                document.getElementById('btn-carregar-instalacoes').click();
+            } catch (e) {
+                status.textContent = 'Erro: ' + (e.message || e);
+            }
+            btn.disabled = false;
+        };
+
+        async function carregarRetornos() {
+            try {
+                const r = await apiFetch('/boas-vindas/retornos/');
+                const div = document.getElementById('lista-retornos');
+                if (!r.items || r.items.length === 0) {
+                    div.innerHTML = '<p class="text-muted">Nenhum retorno nos últimos 30 dias.</p>';
+                    return;
+                }
+                div.innerHTML = r.items.map(i => `
+                    <div class="retorno-item" data-id="${i.id}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${i.cliente}</strong> · ${i.telefone}<br>
+                                <small class="text-muted">${i.ultima_mensagem}</small>
+                            </div>
+                            <span class="badge badge-status" style="background:${i.status_codigo==='ERRO_VENDAS'?'#dc3545':i.status_codigo==='ERRO_TECNICO'?'#fd7e14':i.status_codigo==='OK'?'#198754':'#6c757d'}">${i.status_nome}</span>
+                        </div>
+                    </div>
+                `).join('');
+                div.querySelectorAll('.retorno-item').forEach(el => {
+                    el.onclick = () => abrirDetalhe(parseInt(el.dataset.id));
+                });
+            } catch (e) {
+                document.getElementById('lista-retornos').innerHTML = '<p class="text-danger">Erro: ' + (e.message || e) + '</p>';
+            }
+        }
+
+        async function abrirDetalhe(id) {
+            detalheBvId = id;
+            try {
+                const r = await apiFetch('/boas-vindas/retornos/' + id + '/');
+                document.getElementById('detalhe-cliente').textContent = r.cliente;
+                document.getElementById('detalhe-telefone').textContent = r.telefone;
+                document.getElementById('detalhe-venda').textContent = r.venda_id;
+                const chat = document.getElementById('chat-mensagens');
+                chat.innerHTML = (r.mensagens || []).map(m => `
+                    <div class="chat-msg ${m.direcao === 'ENTRADA' ? 'entrada' : 'saida'}">${escapeHtml(m.texto)}<br><small class="text-muted">${new Date(m.data_hora).toLocaleString('pt-BR')}</small></div>
+                `).join('') || '<p class="text-muted">Nenhuma mensagem registrada.</p>';
+                document.getElementById('detalhe-sugestao-ia').textContent = r.sugestao_ia || '—';
+                const stList = await apiFetch('/boas-vindas/status/');
+                const sel = document.getElementById('select-status');
+                sel.innerHTML = (stList.items || []).map(s => `<option value="${s.codigo}" ${r.status && r.status.codigo === s.codigo ? 'selected' : ''}>${s.nome}</option>`).join('');
+                new bootstrap.Modal(document.getElementById('modal-detalhe')).show();
+            } catch (e) {
+                alert('Erro: ' + (e.message || e));
+            }
+        }
+
+        function escapeHtml(t) {
+            const d = document.createElement('div');
+            d.textContent = t || '';
+            return d.innerHTML;
+        }
+
+        document.getElementById('btn-atualizar-sugestao').onclick = async () => {
+            if (!detalheBvId) return;
+            const r = await apiFetch('/boas-vindas/retornos/' + detalheBvId + '/');
+            const textos = (r.mensagens || []).filter(m => m.direcao === 'ENTRADA').map(m => m.texto).join('\n');
+            if (!textos) { alert('Sem mensagens para analisar.'); return; }
+            try {
+                const sug = await apiFetch('/boas-vindas/sugestao-ia/', { method: 'POST', body: JSON.stringify({ texto: textos }) });
+                document.getElementById('detalhe-sugestao-ia').textContent = sug.sugestao || '—';
+            } catch (e) {
+                alert('Erro IA: ' + (e.message || e));
+            }
+        };
+
+        document.getElementById('btn-salvar-status').onclick = async () => {
+            if (!detalheBvId) return;
+            const codigo = document.getElementById('select-status').value;
+            try {
+                await apiFetch('/boas-vindas/retornos/' + detalheBvId + '/', {
+                    method: 'POST',
+                    body: JSON.stringify({ status_codigo: codigo })
+                });
+                bootstrap.Modal.getInstance(document.getElementById('modal-detalhe')).hide();
+                carregarRetornos();
+            } catch (e) {
+                alert('Erro: ' + (e.message || e));
+            }
+        };
+
+        document.getElementById('btn-tab-retornos').addEventListener('shown.bs.tab', () => carregarRetornos());
+
+        function fmtBrl(v) {
+            const n = Number(v);
+            if (Number.isNaN(n)) return '—';
+            return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        async function carregarCustosWa() {
+            try {
+                const r = await apiFetch('/whatsapp-oficial/custos/');
+                document.getElementById('custo-utility').textContent = fmtBrl(r.custo_por_msg_utility_brl);
+                document.getElementById('custo-hoje').textContent =
+                    fmtBrl(r.hoje_gasto_brl) + ` (${r.hoje_mensagens || 0} msgs)`;
+                document.getElementById('custo-mes').textContent =
+                    fmtBrl(r.mes_gasto_brl) + ` (${r.mes_mensagens || 0} msgs)`;
+                document.getElementById('custo-total').textContent =
+                    fmtBrl(r.total_gasto_brl) + ` (${r.total_mensagens || 0} msgs)`;
+                document.getElementById('custo-nota').textContent = r.nota || '';
+            } catch (e) {
+                document.getElementById('custo-nota').textContent =
+                    'Custos indisponíveis: ' + (e.message || e);
+            }
+        }
+        carregarCustosWa();
+        document.getElementById('btn-carregar-instalacoes').click();
+    </script>
+{% endblock %}

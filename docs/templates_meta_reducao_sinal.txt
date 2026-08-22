@@ -1,0 +1,97 @@
+Templates Meta para submissão (WhatsAtende / WABA conexão #194)
+Categoria: UTILITY | Idioma: pt_BR | Botões: Quick Reply (máx. 3)
+
+================================================================================
+9. nio_fatura_reducao_sinal_v1
+================================================================================
+Finalidade: avisar que o sinal está reduzido por fatura em aberto e pedir
+previsão de pagamento (atualização de conta / serviço — UTILITY).
+
+Não usar o texto original com “SPC/Serasa”, “prazo de 2 dias antes do
+possível encaminhamento” e “evitarmos essa situação”: a Meta trata como
+ameaça / cobrança abusiva e recusa UTILITY.
+
+Corpo (colar no Manager — cada linha = Enter):
+
+Olá, {{1}}!
+
+{{2}},
+
+Parceiro oficial da Nio Fibra.
+Sua internet está com a velocidade reduzida
+devido a uma pendência de pagamento.
+
+Referência: *{{3}}*
+Valor: *{{4}}*
+Vencimento: *{{5}}*
+
+Precisamos do seu retorno para programar a
+regularização e liberar novamente 100% do
+seu sinal de fibra óptica.
+
+Informe sua previsão de pagamento pelos
+botões abaixo.
+
+SAC: 0800 001 1000 | WhatsApp: 21 3605-1000
+
+Variáveis (CRM):
+  {{1}} = saudação (Bom dia / Boa tarde / Boa noite)
+  {{2}} = primeiro nome
+  {{3}} = referência da fatura (ex.: Agosto/2026)
+  {{4}} = valor (ex.: R$ 99,90)
+  {{5}} = vencimento (ex.: 10/08/2026)
+
+Amostra no Manager (não usar dados reais de cliente):
+  {{1}} Bom dia
+  {{2}} Maria
+  {{3}} Agosto/2026
+  {{4}} R$ 99,90
+  {{5}} 10/08/2026
+
+Botões Quick Reply:
+  1. Informar previsão
+  2. Já paguei
+  3. Falar com suporte
+
+CRM (depois de APPROVED):
+  Informar previsão → pede data na janela 24h (grava promessa de pagamento)
+  Já paguei → pede comprovante / marca análise
+  Falar com suporte → fila humana
+
+================================================================================
+Se a Meta recusar mesmo assim
+================================================================================
+O trecho de “órgãos de proteção ao crédito” NÃO está neste corpo de propósito.
+Se precisar da notificação legal (CDC) de negativação, envie em texto livre
+depois que o cliente responder (janela 24h) — aí não passa pela aprovação
+de template.
+
+Versão extra (só se a operação exigir o aviso de 2 dias NO template).
+Risco alto de recusa. Submeter como nio_fatura_reducao_sinal_v1_2:
+
+Olá, {{1}}!
+
+{{2}},
+
+Parceiro oficial da Nio Fibra.
+Sua internet está com a velocidade reduzida
+devido a uma pendência de pagamento.
+
+Referência: *{{3}}*
+Valor: *{{4}}*
+Vencimento: *{{5}}*
+
+Precisamos do seu retorno para programar a
+regularização e liberar novamente 100% do
+seu sinal de fibra óptica.
+
+Há um prazo de 2 dias para regularização
+antes do possível encaminhamento do débito
+aos órgãos de proteção ao crédito.
+
+Informe sua previsão de pagamento pelos
+botões abaixo.
+
+SAC: 0800 001 1000 | WhatsApp: 21 3605-1000
+
+Mesmas variáveis e mesmos 3 botões.

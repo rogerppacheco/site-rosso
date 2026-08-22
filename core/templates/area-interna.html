@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Área Interna - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Estilos Exclusivos da Área Interna */
+        .area-interna-page {
+            width: 100%;
+            max-width: 100%;
+            padding-bottom: 24px;
+        }
+
+        /* Banner compacto: libera viewport para os módulos */
+        .hero-section {
+            background: var(--bg-card);
+            padding: 14px 20px 12px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .hero-section h2 {
+            color: var(--text-primary);
+            font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+            line-height: 1.3;
+            margin: 0 0 4px;
+        }
+
+        .hero-section p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* Grade centralizada — perfil B (equilibrado) */
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(148px, 156px));
+            gap: 12px;
+            padding: 8px 20px 28px;
+            max-width: 1040px;
+            margin: 0 auto;
+            justify-content: center;
+        }
+
+        .app-card {
+            background: var(--bg-card);
+            border-radius: 14px;
+            padding: 12px 10px;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text-secondary);
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 98px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Oculta o card por padrão até o JS validar o perfil (evita piscar) */
+
+        .app-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--sombra-media);
+            border-color: var(--accent-color);
+        }
+
+        .app-icon {
+            font-size: 1.55rem;
+            margin-bottom: 7px;
+            background: -webkit-linear-gradient(45deg, #4e73df, #224abe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .app-title {
+            font-weight: 600;
+            font-size: 0.74rem;
+            text-transform: uppercase;
+            letter-spacing: 0.25px;
+            color: var(--text-primary);
+            line-height: 1.25;
+            max-width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 10px 16px 8px;
+                margin-bottom: 12px;
+            }
+
+            .hero-section h2 {
+                font-size: 1.1rem;
+            }
+
+            .hero-section p {
+                font-size: 0.8rem;
+            }
+
+            .app-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+                padding: 4px 12px 20px;
+                max-width: 460px;
+            }
+
+            .app-card {
+                height: 92px;
+                padding: 10px 8px;
+                border-radius: 12px;
+            }
+
+            .app-icon {
+                font-size: 1.4rem;
+                margin-bottom: 6px;
+            }
+
+            .app-title {
+                font-size: 0.7rem;
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 1100px) {
+            .app-grid {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 148px));
+                max-width: 900px;
+            }
+
+            .app-card {
+                height: 94px;
+            }
+        }
+
+        /* Gradientes Personalizados para Ícones */
+        .icon-vendas { background: -webkit-linear-gradient(45deg, #4e73df, #224abe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-auditoria { background: -webkit-linear-gradient(45deg, #1cc88a, #13855c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-informa { background: -webkit-linear-gradient(45deg, #f6c23e, #dda20a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-rh { background: -webkit-linear-gradient(45deg, #36b9cc, #258391); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-esteira { background: -webkit-linear-gradient(45deg, #e74a3b, #be2617); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-config { background: -webkit-linear-gradient(45deg, #858796, #60616f); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-import { background: -webkit-linear-gradient(45deg, #6f42c1, #563d7c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-performance { background: -webkit-linear-gradient(45deg, #11cdcd, #0a8a8a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        /* Novo ícone para CDOI (Prédio) */
+        .icon-cdoi { background: -webkit-linear-gradient(45deg, #00c6ff, #0072ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        /* Novo ícone para Bônus M-10 (Cofre de Porco) */
+        .icon-bonus { background: -webkit-linear-gradient(45deg, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        /* Ícone para Record Apoia (Pasta/Repositório) */
+        .icon-apoia { background: -webkit-linear-gradient(45deg, #17a2b8, #138496); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="area-interna-page">
+    <div class="hero-section">
+        <h2 class="fw-bold">Bem-vindo, <span id="user-name" class="text-primary">Colaborador</span>!</h2>
+        <p class="text-muted">Escolha uma ferramenta para começar.</p>
+    </div>
+
+        <div class="app-grid">
+            <!-- A -->
+            <a href="/antecipar-instalacao/" class="app-card card-modern" id="card-antecipar">
+                <i class="bi bi-lightning-charge-fill app-icon icon-performance"></i>
+                <span class="app-title">Antecipar Inst. / Reparo / Inst. física</span>
+            </a>
+
+            <a href="/auditoria/" class="app-card card-modern" id="card-auditoria">
+                <i class="bi bi-headset app-icon icon-auditoria"></i>
+                <span class="app-title">Auditoria</span>
+            </a>
+
+            <a href="/boas-vindas/" class="app-card card-modern" id="card-boas-vindas">
+                <i class="bi bi-chat-heart-fill app-icon icon-bonus"></i>
+                <span class="app-title">Boas Vindas</span>
+            </a>
+
+            <!-- Q -->
+            <a href="{% url 'page_qualidade' %}" class="app-card card-modern" id="card-qualidade">
+                <i class="bi bi-shield-check app-icon icon-auditoria"></i>
+                <span class="app-title">Qualidade</span>
+            </a>
+
+            <!-- C -->
+            <a href="/controle-tts/" class="app-card card-modern" id="card-controle-tts">
+                <i class="bi bi-person-lines-fill app-icon icon-performance"></i>
+                <span class="app-title">Controle de TT's</span>
+            </a>
+
+            <a href="/importacoes/" class="app-card card-modern" id="card-importacoes">
+                <i class="bi bi-cloud-upload-fill app-icon icon-import"></i>
+                <span class="app-title">Central de Importações</span>
+            </a>
+
+            <a href="/comissionamento/" class="app-card card-modern" id="card-comissao">
+                <i class="bi bi-cash-stack app-icon icon-auditoria"></i>
+                <span class="app-title">Comissão</span>
+            </a>
+
+            <!-- E -->
+            <a href="/esteira/" class="app-card card-modern" id="card-esteira">
+                <i class="bi bi-list-check app-icon icon-esteira"></i>
+                <span class="app-title">Esteira</span>
+            </a>
+
+            <!-- G -->
+            <a href="/gestao-acessos/" class="app-card card-modern" id="card-gestao-acessos">
+                <i class="bi bi-person-badge-fill app-icon icon-config"></i>
+                <span class="app-title">Gestão de Acessos</span>
+            </a>
+
+            <a href="/governanca/" class="app-card card-modern" id="card-governanca">
+                <i class="bi bi-gear-fill app-icon icon-config"></i>
+                <span class="app-title">Governança</span>
+            </a>
+
+            <a href="/whatsapp-config/" class="app-card card-modern" id="card-whatsapp-config">
+                <i class="bi bi-whatsapp app-icon icon-config"></i>
+                <span class="app-title">WhatsApp</span>
+            </a>
+
+            <a href="/funil-vendas/" class="app-card card-modern" id="card-funil-vendas">
+                <i class="bi bi-funnel app-icon icon-vendas"></i>
+                <span class="app-title">Funil de vendas</span>
+            </a>
+
+            <!-- P -->
+            <a href="/painel-segunda/" class="app-card card-modern" id="card-painel-segunda">
+                <i class="bi bi-calendar2-week app-icon icon-performance"></i>
+                <span class="app-title">Painel Segunda</span>
+            </a>
+
+            <!-- P (cont.) -->
+            <a href="/painel-performance/" class="app-card card-modern" id="card-performance">
+                <i class="bi bi-speedometer2 app-icon icon-performance"></i>
+                <span class="app-title">Performance</span>
+            </a>
+
+            <a href="/presenca/" class="app-card card-modern" id="card-presenca">
+                <i class="bi bi-calendar-check-fill app-icon icon-rh"></i>
+                <span class="app-title">Presença (RH)</span>
+            </a>
+
+            <!-- R -->
+            <a href="/record-apoia/" class="app-card card-modern" id="card-apoia">
+                <i class="bi bi-folder-fill app-icon icon-apoia"></i>
+                <span class="app-title">{{ SITE_MODULE_PREFIX }} Apoia</span>
+            </a>
+
+            <a href="/conhecimento-ia/" class="app-card card-modern" id="card-conhecimento-ia">
+                <i class="bi bi-robot app-icon icon-apoia"></i>
+                <span class="app-title">Conhecimento IA</span>
+            </a>
+
+            <a href="/record-informa/" class="app-card card-modern" id="card-informa">
+                <i class="bi bi-megaphone-fill app-icon icon-informa"></i>
+                <span class="app-title">{{ SITE_MODULE_PREFIX }} Informa</span>
+            </a>
+
+            <a href="/crm-vendas/" class="app-card card-modern" id="card-vendas">
+                <i class="bi bi-people-fill app-icon icon-vendas"></i>
+                <span class="app-title">{{ SITE_MODULE_PREFIX }} Vendas</span>
+            </a>
+
+            <a href="{% url 'page_cdoi_novo' %}" class="app-card card-modern" id="card-cdoi">
+                <i class="bi bi-building app-icon icon-cdoi"></i>
+                <span class="app-title">{{ SITE_MODULE_PREFIX }} Vertical</span>
+            </a>
+        </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('accessToken');
+            if (!token) { window.location.href = '/'; return; }
+            
+            let userProfile = 'Vendedor'; // Padrão
+            let payload = null;
+            
+            try {
+                payload = jwt_decode(token);
+                const nome = (payload && (payload.user_name || payload.username)) || 'Colaborador';
+                document.getElementById('user-name').innerText = nome.split(' ')[0];
+                
+                // Normaliza o perfil vindo do token
+                userProfile = (payload && (payload.user_role || payload.perfil)) || 'Vendedor';
+            } catch (e) { console.error(e); }
+
+            // --- REGRAS DE VISIBILIDADE (Quem vê o quê) ---
+            // Gestão de Acessos: só quem tem pode_gestao_acessos no cadastro (vem no token)
+            const podeGestaoAcessos = !!(payload && payload.pode_gestao_acessos === true);
+            const vendedorSolo = !!(payload && payload.vendedor_solo === true);
+            const regras = {
+                // Acesso Total
+                'Diretoria': 'all',
+                'Admin': 'all',
+
+                // Acesso Backoffice (inclui Qualidade)
+                'BackOffice': ['card-antecipar', 'card-boas-vindas', 'card-vendas', 'card-informa', 'card-esteira', 'card-auditoria', 'card-performance', 'card-importacoes', 'card-cdoi', 'card-apoia', 'card-conhecimento-ia', 'card-qualidade', 'card-controle-tts', 'card-whatsapp-config'],
+
+                // Qualidade (sem valores de bônus R$ — só Diretoria/Admin na API)
+                'Qualidade': ['card-qualidade', 'card-esteira', 'card-auditoria', 'card-boas-vindas', 'card-vendas', 'card-informa', 'card-importacoes', 'card-apoia', 'card-conhecimento-ia'],
+                'Auditoria': ['card-qualidade', 'card-esteira', 'card-auditoria', 'card-boas-vindas', 'card-vendas', 'card-informa', 'card-importacoes', 'card-apoia', 'card-conhecimento-ia'],
+
+                // Gerente de Contas — somente leitura (Performance, Esteira, Auditoria, FPD)
+                'Gerente de Contas': ['card-performance', 'card-esteira', 'card-auditoria', 'card-qualidade'],
+
+                // Acesso Supervisor (sem Qualidade)
+                'Supervisor': ['card-antecipar', 'card-vendas', 'card-presenca', 'card-cdoi', 'card-apoia', 'card-conhecimento-ia'],
+
+                // Acesso Vendedor (sem Qualidade)
+                'Vendedor': ['card-antecipar', 'card-vendas', 'card-cdoi', 'card-apoia', 'card-conhecimento-ia']
+            };
+
+            let cardsPermitidos = regras[userProfile] || regras['Vendedor'];
+            if (userProfile === 'Vendedor' && vendedorSolo && cardsPermitidos !== 'all' && !cardsPermitidos.includes('card-presenca')) {
+                cardsPermitidos = [...cardsPermitidos, 'card-presenca'];
+            }
+            if (cardsPermitidos !== 'all' && podeGestaoAcessos && !cardsPermitidos.includes('card-gestao-acessos')) {
+                cardsPermitidos = [...(Array.isArray(cardsPermitidos) ? cardsPermitidos : []), 'card-gestao-acessos'];
+            }
+
+            // Aplica a visibilidade
+            const todosCards = document.querySelectorAll('.app-card');
+            todosCards.forEach(card => {
+                if (cardsPermitidos === 'all' || cardsPermitidos.includes(card.id)) {
+                    card.style.display = 'flex'; // Exibe (flex para alinhar ícone e texto)
+                } else {
+                    card.style.display = 'none'; // Mantém oculto
+                }
+            });
+        });
+
+        function logout() { localStorage.removeItem('accessToken'); window.location.href = '/'; }
+    </script>
+{% endblock %}

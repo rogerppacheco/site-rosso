@@ -1,0 +1,2679 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}{{ SITE_MODULE_PREFIX }} Vertical - CDOI{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Estilos específicos para a página CDOI */
+        .cdoi-page .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: var(--sombra-suave);
+        }
+        
+        .cdoi-page .card-header { 
+            background-color: var(--cor-surface); 
+            border-bottom: 1px solid var(--cor-borda); 
+            padding: 1rem; 
+            font-weight: 600; 
+            color: var(--cor-primaria); 
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .status-badge { 
+            font-size: 0.85rem; 
+            padding: 5px 10px; 
+            border-radius: 15px; 
+        }
+        
+        .status-SEM_TRATAMENTO { 
+            background-color: #e2e6ea; 
+            color: #5a5c69; 
+        }
+        
+        .status-EM_CADASTRO { 
+            background-color: #fff3cd; 
+            color: #856404; 
+        }
+        
+        .status-EM_PROJETO { 
+            background-color: #d1ecf1; 
+            color: #0c5460; 
+        }
+        
+        .status-EM_EXECUCAO { 
+            background-color: #cce5ff; 
+            color: #004085; 
+        }
+        
+        .status-CONCLUIDA { 
+            background-color: #d4edda; 
+            color: #155724; 
+        }
+        
+        .status-CANCELADA {
+            background-color: #f8d7da; /* vermelho claro */
+            color: #842029;
+        }
+        
+        .status-ARQUIVADA {
+            background-color: #e2e3e5; /* cinza claro */
+            color: #41464b;
+        }
+        
+        /* Tooltip de imagem ao passar o mouse */
+        .image-preview-icon {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: var(--cor-primaria);
+            position: relative;
+            display: inline-block;
+        }
+        
+        .image-preview-icon:hover {
+            transform: scale(1.1);
+            transition: transform 0.2s;
+        }
+        
+        .image-tooltip {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            left: 50%;
+            top: -210px;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            border: 3px solid var(--cor-primaria);
+            border-radius: 8px;
+            padding: 5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .image-preview-icon:hover .image-tooltip {
+            display: block;
+        }
+        
+        .image-tooltip img {
+            width: 200px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        
+        .no-image-icon {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        /* Personalização das abas */
+        .cdoi-page .nav-tabs .nav-link {
+            color: var(--cor-texto-suave);
+            font-weight: 600;
+            border: none;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .cdoi-page .nav-tabs .nav-link.active {
+            color: var(--cor-primaria);
+            border-bottom: 3px solid var(--cor-primaria);
+            background: transparent;
+        }
+        
+        /* Ajustes para usar melhor o espaço da tela */
+        .cdoi-page .system-container {
+            max-width: 1400px !important;
+            transition: max-width 0.3s ease;
+        }
+
+        /* Quando a aba lista está ativa, expande ainda mais */
+        .tab-pane#lista-content.active ~ * .system-container,
+        body:has(#lista-content.active) .cdoi-page .system-container {
+            max-width: 95% !important;
+        }
+
+        /* Aba Meus Acionamentos - Expansão correta */
+        #lista-content {
+            width: 100%;
+            padding: 0;
+        }
+
+        #lista-content .card {
+            width: 100%;
+            margin: 0;
+            border-radius: 12px;
+        }
+        
+        /* Força largura mínima da tabela em telas grandes */
+        @media (min-width: 1200px) {
+            #lista-content .table {
+                min-width: auto;
+                font-size: 0.9rem;
+            }
+            
+            #lista-content .card {
+                box-shadow: var(--sombra-media);
+            }
+        }
+        
+        /* CORREÇÃO ESPECÍFICA PARA TABELA CDOI - Força comportamento desktop sempre */
+        #lista-content .table-responsive {
+            overflow-x: visible;
+            width: 100%;
+        }
+        
+        #lista-content .table-responsive thead {
+            display: table-header-group !important;
+        }
+
+        #lista-content .table {
+            width: 100%;
+            min-width: auto;
+            margin-bottom: 0;
+            font-size: 0.9rem;
+        }
+
+        #lista-content .table th,
+        #lista-content .table td {
+            padding: 8px 10px;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        
+        /* Colunas específicas podem quebrar linha e são mais largas */
+        #lista-content .table td:nth-child(2),
+        #lista-content .table td:nth-child(3) {
+            white-space: normal;
+            max-width: 200px;
+            min-width: 150px;
+        }
+        
+        /* Colunas de badges e ícones mais estreitas */
+        #lista-content .table th:nth-child(6),
+        #lista-content .table th:nth-child(7),
+        #lista-content .table td:nth-child(6),
+        #lista-content .table td:nth-child(7) {
+            width: 80px;
+            text-align: center;
+        }
+        
+        /* Coluna de Fotos (condensada) */
+        #lista-content .table th:nth-child(8),
+        #lista-content .table td:nth-child(8) {
+            width: 120px;
+            text-align: center;
+        }
+        
+        /* Coluna de telefone pode ser mais estreita */
+        #lista-content .table th:nth-child(5),
+        #lista-content .table td:nth-child(5) {
+            width: 120px;
+        }
+        
+        /* Coluna ID mais estreita */
+        #lista-content .table th:nth-child(1),
+        #lista-content .table td:nth-child(1) {
+            width: 50px;
+        }
+        
+        /* Coluna de Ações - mais compacta */
+        #lista-content .table th:nth-child(11),
+        #lista-content .table td:nth-child(11) {
+            width: 180px;
+            min-width: 180px;
+            max-width: 180px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        
+        /* Botões de ação mais compactos */
+        #lista-content .table td:nth-child(11) .btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            margin: 0 2px;
+        }
+        
+        /* Estilo para as fotos na coluna condensada */
+        #lista-content .table td:nth-child(8) .image-preview-icon {
+            margin: 0;
+        }
+
+        #lista-content .table th {
+            background-color: var(--cor-surface);
+            font-weight: 600;
+            color: var(--cor-primaria);
+            border-bottom: 2px solid var(--cor-borda);
+        }
+
+        #lista-content .table tbody tr {
+            border-bottom: 1px solid var(--cor-borda);
+            transition: background-color 0.2s;
+        }
+
+        #lista-content .table tbody tr:hover {
+            background-color: var(--cor-surface);
+        }
+
+        #lista-content .card {
+            width: 100%;
+        }
+
+        #lista-content .card-body {
+            padding: 0 !important;
+            overflow-x: visible;
+            overflow-y: visible;
+            display: block;
+            width: 100%;
+        }
+
+        #lista-content .card-body.table-responsive {
+            display: block;
+            width: 100%;
+            padding: 0 !important;
+            overflow: visible;
+        }
+
+        /* Garante expansão adequada em telas grandes */
+        @media (min-width: 1200px) {
+            #lista-content .table {
+                font-size: 0.95rem;
+            }
+
+            #lista-content .card-body {
+                overflow-x: auto;
+            }
+            
+            .system-container {
+                max-width: 95% !important;
+            }
+        }
+        
+        #lista-content .table-responsive tbody tr {
+            display: table-row !important;
+            margin-bottom: 0 !important;
+            background-color: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }
+        
+        #lista-content .table-responsive tbody td {
+            display: table-cell !important;
+            border-bottom: 1px solid var(--cor-borda) !important;
+            padding: 1rem 0.75rem !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+        }
+        
+        #lista-content .table-responsive tbody td::before {
+            display: none !important;
+            content: none !important;
+        }
+        
+        #lista-content .table-responsive tbody td:last-child {
+            border-bottom: 1px solid var(--cor-borda) !important;
+            text-align: center !important;
+        }
+
+        /* Extra: força tabela clássica também para .table dentro de #lista-content */
+        #lista-content .table thead { display: table-header-group !important; }
+        #lista-content .table tbody tr {
+            display: table-row !important;
+            margin-bottom: 0 !important;
+            background-color: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }
+        #lista-content .table tbody td {
+            display: table-cell !important;
+            border-bottom: 1px solid var(--cor-borda) !important;
+            padding: 1rem 0.75rem !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            align-items: center !important;
+        }
+        #lista-content .table tbody td::before { display: none !important; }
+        
+        /* Garante que a tabela não vire cards em desktop */
+        @media (min-width: 769px) {
+            .table-responsive {
+                font-size: 0.95rem;
+            }
+            
+            .table-responsive th,
+            .table-responsive td {
+                padding: 1rem 0.75rem;
+                vertical-align: middle;
+            }
+            
+            /* Força comportamento de tabela normal em desktop */
+            .table-responsive thead { display: table-header-group !important; }
+            .table-responsive tbody tr { display: table-row !important; }
+            .table-responsive tbody td { 
+                display: table-cell !important; 
+                border-bottom: 1px solid var(--cor-borda) !important;
+                padding: 1rem 0.75rem !important;
+            }
+            .table-responsive tbody td::before { display: none !important; }
+        }
+        
+        /* Melhora a aparência da tabela */
+        .table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: var(--cor-texto);
+            border-bottom: 2px solid var(--cor-borda);
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+
+        /* Dashboard moderno */
+        .cdoi-page .dashboard-card {
+            border: none;
+            border-radius: 16px;
+            padding: 1.1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+        }
+
+        .dashboard-card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            color: #ffffff;
+        }
+
+        .dashboard-card-icon.bg-azul {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .dashboard-card-icon.bg-verde {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+        }
+
+        .dashboard-card-icon.bg-laranja {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+        }
+
+        .dashboard-card-icon.bg-roxo {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+        }
+
+        .dashboard-card-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+
+        .dashboard-card-value {
+            font-size: 1.7rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .dashboard-status-table table {
+            margin-bottom: 0;
+        }
+
+        .dashboard-status-table th,
+        .dashboard-status-table td {
+            white-space: nowrap;
+        }
+
+        .dashboard-status-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+        }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="area-interna-section cdoi-page">
+        <div class="system-container">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 style="font-size: 1.8rem; margin: 0;"><i class="fa-solid fa-building text-primary"></i> Gestão CDOI</h1>
+                    <p class="text-muted mb-0">Solicitações e acionamentos para condomínios.</p>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs mb-4" id="cdoiTabs" role="tablist">
+                <li class="nav-item"><button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard-content" type="button" onclick="carregarDashboardCdoi()"><i class="bi bi-speedometer2"></i> Dashboard</button></li>
+                <li class="nav-item"><button class="nav-link" id="nova-tab" data-bs-toggle="tab" data-bs-target="#nova-content" type="button"><i class="bi bi-plus-circle"></i> <span id="tab-titulo">Nova Solicitação</span></button></li>
+                {% if can_config %}
+                <li class="nav-item"><button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config-content" type="button" onclick="carregarConfiguracaoCdoi()"><i class="bi bi-gear"></i> Configuração</button></li>
+                {% endif %}
+                <li class="nav-item"><button class="nav-link" id="lista-tab" data-bs-toggle="tab" data-bs-target="#lista-content" type="button" onclick="carregarMeusAcionamentos()"><i class="bi bi-list-ul"></i> Meus Acionamentos</button></li>
+                <li class="nav-item"><button class="nav-link" id="cnpj-tab" data-bs-toggle="tab" data-bs-target="#cnpj-content" type="button" onclick="carregarCnpjMunicipios(); carregarCnpjCnaes(); carregarCnpjUfs(); carregarCnpjBairros(); carregarCnpjEstabelecimentos();"><i class="bi bi-building"></i> CNPJ por Cidade/Bairro</button></li>
+            </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="dashboard-content">
+            <div class="card card-modern">
+                <div class="card-header d-flex justify-content-between">
+                    <span>Dashboard CDOI</span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="carregarDashboardCdoi()">
+                        <i class="bi bi-arrow-clockwise"></i> Atualizar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3" id="dashboard-cards">
+                        <!-- Cards serão preenchidos via JS -->
+                    </div>
+                    <hr>
+                    <div id="dashboard-status" class="table-responsive"></div>
+                </div>
+            </div>
+        </div>
+        {% if can_config %}
+        <div class="tab-pane fade" id="config-content">
+            <div class="card card-modern">
+                <div class="card-header d-flex justify-content-between">
+                    <span>Configuração de Resumo (WhatsApp)</span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="carregarConfiguracaoCdoi()">
+                        <i class="bi bi-arrow-clockwise"></i> Atualizar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="inp_config_destinatarios" class="form-label">Destinatários padrão do resumo</label>
+                        <input type="text" id="inp_config_destinatarios" class="form-control" placeholder="Ex: 31999999999, 31988888888">
+                        <small class="text-muted">Informe números com DDD, separados por vírgula.</small>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="inp_config_ativo" checked>
+                        <label class="form-check-label" for="inp_config_ativo">Ativar envio para destinatários padrão</label>
+                    </div>
+                    <button class="btn btn-primary" type="button" onclick="salvarConfiguracaoCdoi()">
+                        <i class="bi bi-save"></i> Salvar configuração
+                    </button>
+                    <div id="config-feedback" class="form-text mt-2"></div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="tab-pane fade" id="nova-content">
+            <div class="card card-modern">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>Dados do Condomínio</span>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <span id="vtop-status-badge" class="badge bg-secondary d-none" title="Status da automação SmartRiser"></span>
+                        <button type="button" id="btn-vtop-senha-pronta" class="btn btn-sm btn-success d-none" onclick="vtopSenhaPronta()" title="Depois de digitar login e senha no navegador V.tal">
+                            <i class="bi bi-key-fill"></i> Já coloquei a senha
+                        </button>
+                        <button type="button" id="btn-vtop-fechar" class="btn btn-sm btn-outline-secondary d-none" onclick="vtopFecharNavegador()" title="Fecha o navegador sem deslogar (mantém sessão)">
+                            <i class="bi bi-x-circle"></i> Fechar navegador
+                        </button>
+                        <button type="button" id="btn-vtop-smartriser" class="btn btn-sm btn-outline-primary d-none" onclick="vtopAbrirModalCredenciais()" title="Abre o V.top e preenche o SmartRiser com os dados deste CDOI">
+                            <i class="bi bi-building"></i> Preencher SmartRiser
+                        </button>
+                        <button id="btn-cancelar-edicao" class="btn btn-sm btn-outline-danger d-none" onclick="cancelarEdicao()">Cancelar Edição</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form id="form-cdoi">
+                        <input type="hidden" id="edit_mode_id" value="">
+                        <div id="div-criado-por" class="row g-3 mb-4" style="display: none;">
+                            <div class="col-md-12">
+                                <label>Acionado por (Quem criou) *</label>
+                                <select name="criado_por_id" id="inp_criado_por" class="form-select" required>
+                                    <option value="">Carregando usuários...</option>
+                                </select>
+                                <small class="text-muted">Selecione quem acionou esta solicitação</small>
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label>Nome do Condomínio *</label>
+                                <div class="input-group">
+                                    <input type="text" name="nome_condominio" id="inp_nome" class="form-control" required>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('inp_nome')" title="Copiar nome do condomínio">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Nome do Síndico *</label>
+                                <div class="input-group">
+                                    <input type="text" name="nome_sindico" id="inp_sindico" class="form-control" required>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('inp_sindico')" title="Copiar nome do síndico">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Contato (WhatsApp) *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-whatsapp"></i></span>
+                                    <input type="text" name="contato" id="inp_contato" class="form-control" required onblur="validarWhatsapp(this)">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('inp_contato')" title="Copiar contato">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                                <div id="zap-feedback" class="form-text"></div>
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <label>CEP *</label>
+                                <div class="input-group">
+                                    <input type="text" name="cep" id="inp_cep" class="form-control" required onblur="buscarCep(this.value)">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('inp_cep')" title="Copiar CEP">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Cidade/UF</label>
+                                <div class="input-group">
+                                    <input type="text" id="cidade_uf" class="form-control bg-light" readonly>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('cidade_uf')" title="Copiar cidade/UF">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="cidade" id="cidade">
+                                <input type="hidden" name="uf" id="uf">
+                            </div>
+                            <div class="col-md-5">
+                                <label>Logradouro</label>
+                                <div class="input-group">
+                                    <input type="text" name="logradouro" id="logradouro" class="form-control bg-light" readonly>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('logradouro')" title="Copiar logradouro">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <label>Número *</label>
+                                <div class="input-group">
+                                    <input type="text" name="numero" id="inp_numero" class="form-control" required onblur="buscarCoordenadas()" oninput="debounceBuscarCoordenadas()">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('inp_numero')" title="Copiar número">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <label>Bairro</label>
+                                <div class="input-group">
+                                    <input type="text" name="bairro" id="bairro" class="form-control bg-light" readonly>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCampo('bairro')" title="Copiar bairro">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Endereço completo</label>
+                                <button type="button" class="btn btn-outline-primary w-100" onclick="copiarEnderecoCompleto()" title="Copiar endereço completo">
+                                    <i class="bi bi-geo-alt"></i> Copiar endereço completo
+                                </button>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Latitude</label>
+                                <div class="input-group">
+                                    <input type="text" name="latitude" id="inp_lat" class="form-control" placeholder="Ex: -19.920489">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCoordenada('lat')" title="Copiar latitude">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Salvo no banco; editável. Use o botão ao lado para gerar.</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Longitude</label>
+                                <div class="input-group">
+                                    <input type="text" name="longitude" id="inp_long" class="form-control" placeholder="Ex: -44.060309">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="copiarCoordenada('long')" title="Copiar longitude">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Salvo no banco; editável.</small>
+                            </div>
+                            <div class="col-md-12 col-lg-6">
+                                <label class="d-block">&nbsp;</label>
+                                <button type="button" class="btn btn-outline-primary" onclick="gerarCoordenadas()" title="Buscar latitude/longitude pelo endereço preenchido">
+                                    <i class="bi bi-geo-alt-fill"></i> Gerar coordenadas pelo endereço
+                                </button>
+                                <small class="text-muted d-block mt-1">Preencha CEP, logradouro, número e cidade antes.</small>
+                            </div>
+                        </div>
+
+                        <h6 class="text-primary fw-bold mb-3 border-bottom pb-2 d-flex justify-content-between align-items-center">
+                            <span>Documentação</span>
+                        </h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6 file-input-group">
+                                <label>Carta Síndico (Autorização) *</label>
+                                <div id="preview-carta-container" class="mb-2" style="display: none;">
+                                    <div class="alert alert-info d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Foto atual:</strong>
+                                            <a id="link-carta-atual" href="#" target="_blank" class="ms-2">
+                                                <i class="bi bi-file-pdf"></i> Ver arquivo atual
+                                            </a>
+                                        </div>
+                                        <small class="text-muted">Selecione novo arquivo para substituir</small>
+                                    </div>
+                                </div>
+                                <input type="file" name="arquivo_carta" id="input-arquivo-carta" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                                <small class="text-muted">Formato: PDF, JPG, PNG</small>
+                            </div>
+                            <div class="col-md-6 file-input-group">
+                                <label>Fotos Fachada *</label>
+                                <div id="preview-fachada-container" class="mb-2" style="display: none;">
+                                    <div class="alert alert-info d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Foto atual:</strong>
+                                            <a id="link-fachada-atual" href="#" target="_blank" class="ms-2">
+                                                <i class="bi bi-image"></i> Ver foto atual
+                                            </a>
+                                        </div>
+                                        <small class="text-muted">Selecione novo arquivo para substituir</small>
+                                    </div>
+                                </div>
+                                <input type="file" name="arquivo_fachada" id="input-arquivo-fachada" class="form-control" accept="image/*" multiple required>
+                                <small class="text-muted">Formato: JPG, PNG (múltiplas imagens permitidas)</small>
+                            </div>
+                            
+                        </div>
+
+                        <h6 class="text-primary fw-bold mb-3 border-bottom pb-2">Dados Técnicos</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-4">
+                                <label>Infraestrutura</label>
+                                <select name="infraestrutura" id="inp_infra" class="form-select">
+                                    <option value="SUBTERRANEA">Subterrânea</option>
+                                    <option value="AEREA">Aérea (Poste)</option>
+                                    <option value="MISTA">Mista</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 pt-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="possui_shaft" id="inp_shaft">
+                                    <label class="form-check-label fw-bold" for="inp_shaft">Possui Shaft / DG?</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Blocos Cadastrados (apenas em modo edição) -->
+                        <div id="resumo-blocos-cadastrados" class="card bg-info bg-opacity-10 border-info mb-4" style="display: none;">
+                            <div class="card-body">
+                                <h6 class="fw-bold text-info mb-3">
+                                    <i class="bi bi-building"></i> Blocos Cadastrados
+                                </h6>
+                                <div class="row g-2 align-items-end mb-2">
+                                    <div class="col-md-3"><input type="text" id="edit_bloco_nome" class="form-control form-control-sm" placeholder="Nome Bloco"></div>
+                                    <div class="col-md-3"><input type="number" id="edit_bloco_andares" class="form-control form-control-sm" placeholder="Andares"></div>
+                                    <div class="col-md-3"><input type="number" id="edit_bloco_aptos" class="form-control form-control-sm" placeholder="Aptos/Andar"></div>
+                                    <div class="col-md-3"><button type="button" id="btn-bloco-salvar" class="btn btn-secondary btn-sm w-100" onclick="salvarBlocoEditado()">Adicionar</button></div>
+                                </div>
+                                <table class="table table-sm mb-0 bg-white text-center rounded border">
+                                    <thead class="table-info"><tr><th>Bloco</th><th>Andares</th><th>Aptos/Andar</th><th>Total HPs</th><th>Ações</th></tr></thead>
+                                    <tbody id="lista-blocos-cadastrados"></tbody>
+                                    <tfoot class="table-light">
+                                        <tr><td colspan="3" class="text-end fw-bold">Total Geral:</td><td id="total-hps-geral-edit" class="fw-bold">0</td><td></td></tr>
+                                        <tr><td colspan="3" class="text-end text-primary fw-bold">Pré-venda (10%):</td><td id="prevenda-calc-edit" class="text-primary fw-bold">0</td><td></td></tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div id="estrutura-blocos-novo" class="card bg-light border-0 mb-4">
+                            <div class="card-body">
+                                <h6 class="fw-bold">Estrutura de Blocos</h6>
+                                <div class="row g-2 align-items-end mb-2">
+                                    <div class="col-md-3"><input type="text" id="temp_bloco" class="form-control form-control-sm" placeholder="Nome Bloco"></div>
+                                    <div class="col-md-3"><input type="number" id="temp_andares" class="form-control form-control-sm" placeholder="Andares"></div>
+                                    <div class="col-md-3"><input type="number" id="temp_aptos" class="form-control form-control-sm" placeholder="Aptos/Andar"></div>
+                                    <div class="col-md-3"><button type="button" class="btn btn-secondary btn-sm w-100" onclick="addBloco()">Adicionar</button></div>
+                                </div>
+                                <table class="table table-sm mb-0 bg-white text-center rounded border">
+                                    <thead class="table-light"><tr><th>Bloco</th><th>Andares</th><th>Aptos/Andar</th><th>Total HPs</th><th>Ação</th></tr></thead>
+                                    <tbody id="lista-blocos"></tbody>
+                                    <tfoot class="table-light">
+                                        <tr><td colspan="3" class="text-end fw-bold">Total Geral:</td><td id="total-hps-geral" class="fw-bold">0</td><td></td></tr>
+                                        <tr><td colspan="3" class="text-end text-primary fw-bold">Pré-venda (10%):</td><td id="prevenda-calc" class="text-primary fw-bold">0</td><td></td></tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="total_hps_final" id="input_total_hps">
+                        <input type="hidden" name="prevenda_final" id="input_prevenda">
+                        <input type="hidden" name="dados_blocos_json" id="input_blocos_json">
+
+                        <div id="resumoEnvio" class="alert alert-info d-none">
+                            <strong>Resumo enviado:</strong>
+                            <pre id="resumoEnvioTexto" class="mb-0" style="white-space: pre-wrap;"></pre>
+                        </div>
+                        <div class="d-grid">
+                            <button type="button" id="btn-submit" class="btn btn-success btn-lg" onclick="enviarFormulario(this)">
+                                <i class="bi bi-send-fill"></i> Enviar Solicitação
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="lista-content">
+            <div class="card card-modern">
+                <div class="card-header bg-white d-flex justify-content-between">
+                    <h5 class="m-0 text-primary">Histórico</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="carregarMeusAcionamentos()"><i class="bi bi-arrow-clockwise"></i> Atualizar</button>
+                </div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light"><tr><th>ID</th><th>Condomínio</th><th>Endereço</th><th>Síndico</th><th>Telefone</th><th>Total HPs</th><th>Pré-vendas</th><th>Fotos</th><th>Status</th><th>Acionado por</th><th>Ações</th></tr></thead>
+                        <tbody id="tbody-acionamentos"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="cnpj-content">
+            <div class="card card-modern">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap">
+                    <h5 class="m-0 text-primary"><i class="bi bi-building"></i> CNPJ por Cidade e Bairro</h5>
+                    <a href="#" id="btn-download-cnpj" class="btn btn-sm btn-success" onclick="downloadCnpjExcel(); return false;"><i class="bi bi-download"></i> Download Excel</a>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Selecione um ou mais itens em cada filtro. Dados da base Receita Federal importada na Central de Importações.</p>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">CNAE Fiscal Principal</label>
+                            <input type="text" id="cnpj-filtro-cnae-pesquisa" class="form-control form-control-sm mb-1" placeholder="Pesquisar na lista..." title="Digite para filtrar" oninput="filtrarCnpjCnaes()">
+                            <div id="cnpj-box-cnaes" class="border rounded p-2 bg-light" style="max-height: 180px; overflow-y: auto;">
+                                <small class="text-muted">Carregando...</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Município (código)</label>
+                            <input type="text" id="cnpj-filtro-municipio-pesquisa" class="form-control form-control-sm mb-1" placeholder="Pesquisar na lista..." title="Digite para filtrar" oninput="filtrarCnpjMunicipios()">
+                            <div id="cnpj-box-municipios" class="border rounded p-2 bg-light" style="max-height: 180px; overflow-y: auto;">
+                                <small class="text-muted">Carregando...</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">UF</label>
+                            <input type="text" id="cnpj-filtro-uf-pesquisa" class="form-control form-control-sm mb-1" placeholder="Pesquisar na lista..." title="Digite para filtrar" oninput="filtrarCnpjUfs()">
+                            <div id="cnpj-box-ufs" class="border rounded p-2 bg-light" style="max-height: 180px; overflow-y: auto;">
+                                <small class="text-muted">Carregando...</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Bairro</label>
+                            <div class="d-flex gap-1 mb-1">
+                                <input type="text" id="cnpj-filtro-bairro-pesquisa" class="form-control form-control-sm" placeholder="Pesquisar na lista..." title="Digite para filtrar" oninput="filtrarCnpjBairros()">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="carregarCnpjBairros()" title="Atualizar lista (opcional: selecione municípios/UF antes)"><i class="bi bi-arrow-clockwise"></i></button>
+                            </div>
+                            <div id="cnpj-box-bairros" class="border rounded p-2 bg-light" style="max-height: 180px; overflow-y: auto;">
+                                <small class="text-muted">Clique em Atualizar para carregar bairros</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="carregarCnpjEstabelecimentos()"><i class="bi bi-search"></i> Filtrar</button>
+                        <span id="cnpj-total-registros" class="badge bg-secondary ms-2">0</span> registro(s)
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light"><tr><th>CNPJ</th><th>Nome Fantasia</th><th>Logradouro</th><th>Nº</th><th>Bairro</th><th>CEP</th><th>UF</th><th>Município</th><th>CNAE</th><th>Tel</th><th>Viabilidade (DFV)</th></tr></thead>
+                            <tbody id="tbody-cnpj-estabelecimentos"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="modal fade" id="modalStatus" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Atualizar Status</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" id="st-id"><label>Novo Status</label><select id="st-val" class="form-select mb-2"><option value="SEM_TRATAMENTO">Sem tratamento</option><option value="EM_CADASTRO">Em cadastro</option><option value="EM_PROJETO">Em Projeto</option><option value="EM_EXECUCAO">Em Execução</option><option value="CONCLUIDA">Concluída</option><option value="CANCELADA">Cancelada</option><option value="ARQUIVADA">Arquivada</option></select><label>Obs</label><textarea id="st-obs" class="form-control"></textarea></div><div class="modal-footer"><button onclick="salvarStatus()" class="btn btn-primary">Salvar</button></div></div></div></div>
+
+<div class="modal fade" id="modalLinkPreVenda" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-link-45deg"></i> Link de Pré-venda</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">URL do Link:</label>
+                    <div class="input-group">
+                        <input type="text" id="link-prevenda-url" class="form-control" readonly>
+                        <button class="btn btn-outline-secondary" onclick="copiarLinkPreVenda()" title="Copiar link">
+                            <i class="bi bi-clipboard"></i> Copiar
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Imagem/Banner (Opcional - URL ou Upload):</label>
+                    <input type="url" id="link-imagem-url" class="form-control mb-2" placeholder="Cole aqui a URL da imagem">
+                    <input type="file" id="link-imagem-file" class="form-control" accept="image/*">
+                    <small class="text-muted">Ou faça upload de uma imagem para o banner da landing page</small>
+                </div>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> <strong>Como usar:</strong><br>
+                    Compartilhe este link em grupos de WhatsApp, Instagram ou Facebook. 
+                    Quando os clientes acessarem, poderão se cadastrar para pré-venda.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" id="btn-salvar-link-prevenda" onclick="salvarLinkPreVenda()">
+                    <i class="bi bi-save"></i> <span id="btn-salvar-link-text">Salvar/Gerar Link</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalPreVendas" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-people"></i> Pré-vendas do Acionamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="prevendas-loading" class="text-center p-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+                <div id="prevendas-content" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Nome</th>
+                                    <th>WhatsApp</th>
+                                    <th>E-mail</th>
+                                    <th>Bloco</th>
+                                    <th>Apartamento</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-prevendas-modal"></tbody>
+                        </table>
+                    </div>
+                    <div id="prevendas-empty" class="text-center text-muted p-4" style="display: none;">
+                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                        <p class="mt-3">Nenhuma pré-venda cadastrada ainda.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<!-- Modal login V.top (produção: browser no servidor; credenciais só nesta execução) -->
+<div class="modal fade" id="modalVtopLogin" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-shield-lock"></i> Login V.tal / SmartRiser</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Em produção o navegador roda no servidor (não abre na sua tela).
+                    Informe usuário e senha V.tal — usados só nesta execução (não são gravados).
+                    Se a sessão ainda estiver válida, pode deixar em branco e tentar mesmo assim.
+                </p>
+                <div id="vtop-modal-alerta" class="alert alert-warning d-none py-2 small" role="alert"></div>
+                <div class="mb-2">
+                    <label class="form-label" for="vtop_usuario">Usuário V.tal</label>
+                    <input type="text" class="form-control" id="vtop_usuario" autocomplete="username">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" for="vtop_senha">Senha</label>
+                    <input type="password" class="form-control" id="vtop_senha" autocomplete="current-password">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label" for="vtop_bloco">Bloco / complemento</label>
+                    <select class="form-select" id="vtop_bloco">
+                        <option value="">— só testar login (sessão) —</option>
+                    </select>
+                    <div class="form-text">Com bloco: inventário → reusar ou criar obra → Cadastro. Vazio: só valida sessão.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-vtop-modal-iniciar" onclick="vtopIniciarSmartRiser()">
+                    Iniciar SmartRiser
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+    let blocos = [];
+    let blocoEditIndex = null;
+    let regraCdoiConfig = null;
+
+    // --- BLOCOS E PRÉ-VENDA ---
+    function addBloco() {
+        const nome = document.getElementById('temp_bloco').value;
+        const andares = parseInt(document.getElementById('temp_andares').value) || 0;
+        const aptos = parseInt(document.getElementById('temp_aptos').value) || 0;
+        if(!nome || andares <= 0) return;
+        
+        blocos.push({ nome, andares, aptos, total: andares * aptos });
+        atualizarTabelaBlocos();
+        document.getElementById('temp_bloco').value = '';
+        document.getElementById('temp_andares').value = '';
+        document.getElementById('temp_aptos').value = '';
+    }
+
+    function atualizarTabelaBlocos() {
+        const tbody = document.getElementById('lista-blocos');
+        const tbodyEdit = document.getElementById('lista-blocos-cadastrados');
+        if (tbody) tbody.innerHTML = '';
+        if (tbodyEdit) tbodyEdit.innerHTML = '';
+        let total = 0;
+        blocos.forEach((b, i) => {
+            total += b.total;
+            if (tbody) {
+                tbody.innerHTML += `<tr><td>${b.nome}</td><td>${b.andares}</td><td>${b.aptos}</td><td>${b.total}</td><td><i class="bi bi-trash text-danger" onclick="removerBloco(${i})"></i></td></tr>`;
+            }
+            if (tbodyEdit) {
+                tbodyEdit.innerHTML += `<tr><td>${b.nome}</td><td>${b.andares}</td><td>${b.aptos}</td><td>${b.total}</td><td><i class="bi bi-pencil-square text-primary me-2" onclick="editarBloco(${i})"></i><i class="bi bi-trash text-danger" onclick="removerBloco(${i})"></i></td></tr>`;
+            }
+        });
+        
+        // CÁLCULO DE PRÉ-VENDA (30%)
+        const prevenda = Math.ceil(total * 0.1);
+        
+        const totalHpsEl = document.getElementById('total-hps-geral');
+        const prevendaEl = document.getElementById('prevenda-calc');
+        const totalHpsEditEl = document.getElementById('total-hps-geral-edit');
+        const prevendaEditEl = document.getElementById('prevenda-calc-edit');
+        if (totalHpsEl) totalHpsEl.innerText = total;
+        if (prevendaEl) prevendaEl.innerText = prevenda;
+        if (totalHpsEditEl) totalHpsEditEl.innerText = total;
+        if (prevendaEditEl) prevendaEditEl.innerText = prevenda;
+        document.getElementById('input_total_hps').value = total;
+        document.getElementById('input_prevenda').value = prevenda;
+        document.getElementById('input_blocos_json').value = JSON.stringify(blocos);
+    }
+
+    function setModoEdicaoBlocos(isEdit) {
+        const resumo = document.getElementById('resumo-blocos-cadastrados');
+        const estrutura = document.getElementById('estrutura-blocos-novo');
+        if (resumo) resumo.style.display = isEdit ? 'block' : 'none';
+        if (estrutura) estrutura.style.display = isEdit ? 'none' : 'block';
+        if (!isEdit) {
+            blocoEditIndex = null;
+            limparInputsEdicaoBloco();
+            const btnSalvar = document.getElementById('btn-bloco-salvar');
+            if (btnSalvar) btnSalvar.innerText = 'Adicionar';
+        }
+    }
+
+    function limparInputsEdicaoBloco() {
+        const nome = document.getElementById('edit_bloco_nome');
+        const andares = document.getElementById('edit_bloco_andares');
+        const aptos = document.getElementById('edit_bloco_aptos');
+        if (nome) nome.value = '';
+        if (andares) andares.value = '';
+        if (aptos) aptos.value = '';
+    }
+
+    function salvarBlocoEditado() {
+        const nome = (document.getElementById('edit_bloco_nome').value || '').trim();
+        const andares = parseInt(document.getElementById('edit_bloco_andares').value) || 0;
+        const aptos = parseInt(document.getElementById('edit_bloco_aptos').value) || 0;
+        if (!nome || andares <= 0) return;
+
+        const total = andares * aptos;
+        if (blocoEditIndex !== null && blocos[blocoEditIndex]) {
+            blocos[blocoEditIndex] = { nome, andares, aptos, total };
+        } else {
+            blocos.push({ nome, andares, aptos, total });
+        }
+        blocoEditIndex = null;
+        limparInputsEdicaoBloco();
+        const btnSalvar = document.getElementById('btn-bloco-salvar');
+        if (btnSalvar) btnSalvar.innerText = 'Adicionar';
+        atualizarTabelaBlocos();
+    }
+
+    function editarBloco(index) {
+        const bloco = blocos[index];
+        if (!bloco) return;
+        blocoEditIndex = index;
+        document.getElementById('edit_bloco_nome').value = bloco.nome;
+        document.getElementById('edit_bloco_andares').value = bloco.andares;
+        document.getElementById('edit_bloco_aptos').value = bloco.aptos;
+        const btnSalvar = document.getElementById('btn-bloco-salvar');
+        if (btnSalvar) btnSalvar.innerText = 'Salvar edição';
+    }
+
+    function removerBloco(index) {
+        blocos.splice(index, 1);
+        atualizarTabelaBlocos();
+    }
+
+    // --- VALIDAÇÃO WHATSAPP ---
+    async function validarWhatsapp(input) {
+        const feedback = document.getElementById('zap-feedback');
+        const num = input.value.replace(/\D/g, '');
+        if (num.length < 10) return;
+        
+        feedback.innerText = "Verificando...";
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch(`/api/crm/whatsapp/verificar/?numero=${num}`, { headers: {'Authorization': `Bearer ${token}`} });
+            const data = await res.json();
+            if (data.exists) {
+                input.classList.add('is-valid'); input.classList.remove('is-invalid');
+                feedback.innerText = "WhatsApp Válido ✅"; feedback.className = "form-text text-success fw-bold";
+            } else {
+                input.classList.add('is-invalid'); input.classList.remove('is-valid');
+                feedback.innerText = "Sem WhatsApp ❌"; feedback.className = "form-text text-danger fw-bold";
+            }
+        } catch(e) { feedback.innerText = "Erro ao validar."; }
+    }
+
+    // --- CRUD ---
+    async function carregarMeusAcionamentos() {
+        const tbody = document.getElementById('tbody-acionamentos');
+        tbody.innerHTML = '<tr><td colspan="11">Carregando...</td></tr>';
+        const res = await fetch('/api/crm/cdoi/listar/', { headers: {'Authorization': `Bearer ${localStorage.getItem('accessToken')}`} });
+        const lista = await res.json();
+        tbody.innerHTML = '';
+            lista.forEach(i => {
+            let btns = '<div class="d-flex gap-1 justify-content-center">';
+            btns += `<button class="btn btn-sm btn-editar" onclick='editarTudo(${i.id})' title="Editar"><i class="bi bi-pencil-square"></i></button>`;
+            if (i.can_edit) btns += `<button class="btn btn-icon btn-icon-info" onclick='modalStatus(${i.id}, "${i.status_cod}", "${i.observacao}")' title="Atualizar Status" aria-label="Atualizar status"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></button>`;
+            btns += `<button class="btn btn-sm btn-success" onclick='gerarLinkPreVenda(${i.id})' title="Gerar Link de Pré-venda"><i class="bi bi-link-45deg"></i></button>`;
+            btns += `<button class="btn btn-sm btn-info" onclick='verPreVendas(${i.id})' title="Ver Pré-vendas"><i class="bi bi-people"></i></button>`;
+            btns += `<button class="btn btn-sm btn-excluir" onclick='excluir(${i.id})' title="Excluir"><i class="bi bi-trash"></i></button>`;
+            btns += '</div>';
+            
+            const endereco = `${i.logradouro || ''}, ${i.numero || ''} - ${i.bairro || ''}`;
+            const enderecoCompleto = [
+                i.nome || i.nome_condominio || '',
+                endereco,
+                `${i.cidade || ''}/${i.uf || ''}`,
+                i.cep ? `CEP ${i.cep}` : ''
+            ].filter(Boolean).join(' | ');
+            const enderecoCompletoEscapado = enderecoCompleto.replace(/"/g, '&quot;');
+            const telefone = i.contato || '-';
+            const sindico = i.nome_sindico || '-';
+            const totalHps = i.total_hps || 0;
+            const prevenda = i.prevenda || 0;
+            
+            // Função helper para criar HTML de imagem
+            function criarImagemHtml(link, alt) {
+                if (link) {
+                    return `
+                        <span class="image-preview-icon" onclick="window.open('${link}', '_blank')">
+                            <i class="bi bi-image"></i>
+                            <div class="image-tooltip">
+                                <img src="${link}" alt="${alt}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'%3E%3Crect fill=\'%23ddd\' width=\'200\' height=\'200\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' dominant-baseline=\'middle\' text-anchor=\'middle\' font-family=\'sans-serif\' font-size=\'16\' fill=\'%23999\'%3ESem imagem%3C/text%3E%3C/svg%3E'">
+                            </div>
+                        </span>
+                    `;
+                } else {
+                    return '<i class="bi bi-image no-image-icon"></i>';
+                }
+            }
+            
+            const fotoFachadaHtml = criarImagemHtml(i.link_fotos_fachada, 'Foto Fachada');
+            const fotoAutorizacaoHtml = criarImagemHtml(i.link_carta_sindico, 'Foto Autorização');
+            const acionadoPor = i.criado_por_nome || '-';
+            
+            // Combina as duas fotos em uma única célula
+            const fotosHtml = `<div class="d-flex gap-2 justify-content-center align-items-center">${fotoFachadaHtml}${fotoAutorizacaoHtml}</div>`;
+            
+            tbody.innerHTML += `<tr>
+                <td>#${i.id}</td>
+                <td><strong>${i.nome}</strong><br><small class="text-muted">${i.cidade}</small></td>
+                <td>
+                    <small>${endereco}</small><br>
+                    <button type="button" class="btn btn-link btn-sm p-0" onclick="copiarTexto('${enderecoCompletoEscapado}')" title="Copiar endereço completo">
+                        <i class="bi bi-geo-alt"></i> copiar endereço
+                    </button>
+                </td>
+                <td>${sindico}</td>
+                <td>${telefone}</td>
+                <td class="text-center"><span class="badge bg-primary">${totalHps}</span></td>
+                <td class="text-center"><span class="badge bg-success">${prevenda}</span></td>
+                <td class="text-center">${fotosHtml}</td>
+                <td><span class="badge status-badge status-${i.status_cod}">${i.status}</span></td>
+                <td><small>${acionadoPor}</small></td>
+                <td>${btns}</td>
+            </tr>`;
+        });
+    }
+
+    async function carregarUsuariosParaSelect() {
+        const select = document.getElementById('inp_criado_por');
+        if (!select) return;
+        
+        // Verifica se já foi carregado
+        if (select.options.length > 1 && select.options[0].value !== '') {
+            return; // Já carregado
+        }
+        
+        try {
+            const token = localStorage.getItem('accessToken');
+            let todosUsuarios = [];
+            let totalEsperado = null;
+            
+            // Primeiro, tentar carregar todos de uma vez (API pode não paginar)
+            try {
+                const resGrande = await fetch('/api/usuarios/?is_active=true&page_size=50000', {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                
+                if (resGrande.ok) {
+                    const dataGrande = await resGrande.json();
+                    
+                    // Verificar se é array direto ou objeto paginado
+                    if (Array.isArray(dataGrande)) {
+                        todosUsuarios = dataGrande;
+                        totalEsperado = dataGrande.length;
+                        console.log(`[CDOI] API retornou array direto: ${todosUsuarios.length} usuários`);
+                    } else if (dataGrande.results) {
+                        // É objeto paginado
+                        todosUsuarios = dataGrande.results;
+                        totalEsperado = dataGrande.count || dataGrande.results.length;
+                        console.log(`[CDOI] API retornou objeto paginado: ${todosUsuarios.length} de ${totalEsperado} usuários`);
+                        
+                        // Se há mais páginas, continuar carregando
+                        if (dataGrande.next && todosUsuarios.length < totalEsperado) {
+                            console.log(`[CDOI] Há mais páginas, continuando carregamento...`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[CDOI] Erro ao carregar com page_size grande:', e);
+            }
+            
+            // Se a API usa paginação ou se não carregou todos, tentar com paginação explícita
+            if (totalEsperado && todosUsuarios.length < totalEsperado) {
+                console.log(`[CDOI] Carregando páginas restantes via paginação...`);
+                let page = 2; // Começar da página 2 (já carregamos a 1)
+                let hasMore = true;
+                
+                while (hasMore && todosUsuarios.length < totalEsperado) {
+                    try {
+                        const res = await fetch(`/api/usuarios/?is_active=true&page=${page}&page_size=100`, {
+                            headers: {'Authorization': `Bearer ${token}`}
+                        });
+                        
+                        if (!res.ok) {
+                            console.warn(`[CDOI] Erro HTTP ${res.status} na página ${page}`);
+                            hasMore = false;
+                            break;
+                        }
+                        
+                        const data = await res.json();
+                        const usuarios = Array.isArray(data) ? data : (data.results || []);
+                        
+                        if (usuarios.length === 0) {
+                            hasMore = false;
+                            break;
+                        }
+                        
+                        todosUsuarios = todosUsuarios.concat(usuarios);
+                        console.log(`[CDOI] Página ${page}: ${usuarios.length} usuários (total: ${todosUsuarios.length})`);
+                        
+                        // Verificar se há próxima página
+                        if (Array.isArray(data)) {
+                            hasMore = false;
+                        } else if (data.next) {
+                            hasMore = data.next !== null && data.next !== undefined;
+                            page++;
+                        } else {
+                            hasMore = false;
+                        }
+                        
+                        // Limite de segurança
+                        if (page > 200) {
+                            console.warn('[CDOI] Limite de páginas atingido');
+                            hasMore = false;
+                        }
+                    } catch (e) {
+                        console.error(`[CDOI] Erro ao carregar página ${page}:`, e);
+                        hasMore = false;
+                    }
+                }
+            } else if (todosUsuarios.length === 0) {
+                // Se não conseguiu carregar nada, tentar sem filtro is_active
+                console.log('[CDOI] Tentando carregar sem filtro is_active...');
+                try {
+                    const resSemFiltro = await fetch('/api/usuarios/?page_size=50000', {
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    
+                    if (resSemFiltro.ok) {
+                        const dataSemFiltro = await resSemFiltro.json();
+                        const usuariosSemFiltro = Array.isArray(dataSemFiltro) ? dataSemFiltro : (dataSemFiltro.results || []);
+                        
+                        // Filtrar apenas ativos no frontend
+                        todosUsuarios = usuariosSemFiltro.filter(u => u.is_active === true);
+                        console.log(`[CDOI] Carregados ${todosUsuarios.length} usuários ativos (de ${usuariosSemFiltro.length} total)`);
+                    }
+                } catch (e) {
+                    console.error('[CDOI] Erro ao carregar sem filtro:', e);
+                }
+            }
+            
+            // Remover duplicatas (caso tenha carregado o mesmo usuário mais de uma vez)
+            const usuariosUnicos = [];
+            const idsVistos = new Set();
+            todosUsuarios.forEach(u => {
+                if (u.id && !idsVistos.has(u.id)) {
+                    idsVistos.add(u.id);
+                    usuariosUnicos.push(u);
+                }
+            });
+            todosUsuarios = usuariosUnicos;
+            
+            console.log(`[CDOI] Total de usuários únicos carregados: ${todosUsuarios.length}`);
+            
+            if (todosUsuarios.length === 0) {
+                console.error('[CDOI] NENHUM usuário foi carregado! Verifique a API.');
+                select.innerHTML = '<option value="">Erro: Nenhum usuário encontrado</option>';
+                return;
+            }
+            
+            // Ordenar por username
+            todosUsuarios.sort((a, b) => {
+                const usernameA = (a.username || '').toLowerCase();
+                const usernameB = (b.username || '').toLowerCase();
+                return usernameA.localeCompare(usernameB);
+            });
+            
+            select.innerHTML = '<option value="">Selecione quem acionou...</option>';
+            todosUsuarios.forEach(u => {
+                // Mostrar apenas o username
+                const username = u.username || `ID: ${u.id}`;
+                select.add(new Option(username, u.id));
+            });
+            
+            console.log(`[CDOI] ${todosUsuarios.length} usuários adicionados ao select com sucesso`);
+        } catch (e) {
+            console.error('[CDOI] Erro ao carregar usuários:', e);
+            select.innerHTML = '<option value="">Erro ao carregar usuários</option>';
+        }
+    }
+    
+    function editarTudo(item) {
+        const id = item; // Agora 'item' é apenas o ID
+        
+        // Mostra o campo "Acionado por" no modo edição
+        document.getElementById('div-criado-por').style.display = 'block';
+        
+        // Carrega usuários para o select
+        carregarUsuariosParaSelect();
+        
+        fetch(`/api/crm/cdoi/editar/${id}/`, { headers: {'Authorization': `Bearer ${localStorage.getItem('accessToken')}`} })
+            .then(res => {
+                if (!res.ok) throw new Error('Não foi possível carregar os dados para edição.');
+                return res.json();
+            })
+            .then(async d => {
+                document.getElementById('edit_mode_id').value = d.id;
+                document.getElementById('tab-titulo').innerText = `Editando #${d.id}`;
+                document.getElementById('btn-submit').innerHTML = 'Salvar Alterações';
+                document.getElementById('btn-submit').classList.replace('btn-success', 'btn-warning');
+                document.getElementById('btn-cancelar-edicao').classList.remove('d-none');
+                document.getElementById('btn-vtop-smartriser')?.classList.remove('d-none');
+                vtopAtualizarUiStatus(null);
+                
+                // Mostra campos de arquivo no modo edição (mas torná-los opcionais)
+                document.querySelectorAll('.file-input-group').forEach(el => el.style.display = 'block');
+                document.querySelectorAll('.file-input-group input').forEach(el => el.required = false);
+                
+                // Atualiza labels para indicar que é opcional em edição
+                document.querySelectorAll('.file-input-group label').forEach(label => {
+                    const text = label.textContent;
+                    if (!text.includes('(Opcional)')) {
+                        label.textContent = text.replace('*', '') + ' (Opcional)';
+                    }
+                });
+                
+                // Exibe fotos atuais se existirem
+                const previewCartaContainer = document.getElementById('preview-carta-container');
+                const linkCartaAtual = document.getElementById('link-carta-atual');
+                const previewFachadaContainer = document.getElementById('preview-fachada-container');
+                const linkFachadaAtual = document.getElementById('link-fachada-atual');
+                
+                // Foto de autorização (carta)
+                if (d.link_carta_sindico) {
+                    if (previewCartaContainer) previewCartaContainer.style.display = 'block';
+                    if (linkCartaAtual) {
+                        linkCartaAtual.href = d.link_carta_sindico;
+                        linkCartaAtual.innerHTML = '<i class="bi bi-file-pdf"></i> Ver autorização atual';
+                    }
+                } else {
+                    if (previewCartaContainer) previewCartaContainer.style.display = 'none';
+                }
+                
+                // Foto de fachada
+                if (d.link_fotos_fachada) {
+                    if (previewFachadaContainer) previewFachadaContainer.style.display = 'block';
+                    if (linkFachadaAtual) {
+                        linkFachadaAtual.href = d.link_fotos_fachada;
+                        linkFachadaAtual.innerHTML = '<i class="bi bi-image"></i> Ver foto de fachada atual';
+                    }
+                } else {
+                    if (previewFachadaContainer) previewFachadaContainer.style.display = 'none';
+                }
+
+                document.getElementById('inp_nome').value = d.nome_condominio;
+                document.getElementById('inp_cep').value = d.cep;
+                document.getElementById('inp_numero').value = d.numero;
+                document.getElementById('inp_sindico').value = d.nome_sindico;
+                document.getElementById('inp_contato').value = d.contato;
+                document.getElementById('inp_infra').value = d.infraestrutura;
+                document.getElementById('inp_shaft').checked = d.possui_shaft;
+                document.getElementById('inp_lat').value = d.latitude || '';
+                document.getElementById('inp_long').value = d.longitude || '';
+                
+                // Preenche endereço com os dados já salvos (não depende do ViaCEP no servidor)
+                document.getElementById('logradouro').value = d.logradouro || '';
+                document.getElementById('bairro').value = d.bairro || '';
+                document.getElementById('cidade').value = d.cidade || '';
+                document.getElementById('uf').value = d.uf || '';
+                document.getElementById('cidade_uf').value = (d.cidade && d.uf) ? `${d.cidade}-${d.uf}` : ((d.cidade || '') + (d.uf ? '-' + d.uf : ''));
+                
+                // Só chama ViaCEP se faltar endereço (fallback; no servidor pode falhar por rede)
+                if ((!d.logradouro || !d.cidade) && d.cep) {
+                    buscarCep(d.cep);
+                }
+                
+                // Aguarda o select ser populado antes de definir o valor
+                await carregarUsuariosParaSelect();
+                if (d.criado_por_id) {
+                    document.getElementById('inp_criado_por').value = d.criado_por_id;
+                }
+
+                // Debug: verificar blocos retornados
+                console.log('[CDOI] Blocos retornados pela API:', d.blocos);
+                
+                blocos = d.blocos.map(b => ({ nome: b.nome, andares: b.andares, aptos: b.aptos, total: b.total }));
+                setModoEdicaoBlocos(true);
+                atualizarTabelaBlocos();
+                
+                new bootstrap.Tab(document.querySelector('#nova-tab')).show();
+            })
+            .catch(error => {
+                alert(error.message);
+                console.error("Erro ao editar:", error);
+            });
+    }
+
+    function cancelarEdicao() {
+        document.getElementById('form-cdoi').reset();
+        document.getElementById('edit_mode_id').value = '';
+        document.getElementById('tab-titulo').innerText = 'Nova Solicitação';
+        document.getElementById('btn-submit').innerHTML = '<i class="bi bi-send-fill"></i> Enviar Solicitação';
+        document.getElementById('btn-submit').classList.replace('btn-warning', 'btn-success');
+        document.getElementById('btn-cancelar-edicao').classList.add('d-none');
+        document.getElementById('btn-vtop-smartriser')?.classList.add('d-none');
+        document.getElementById('btn-vtop-senha-pronta')?.classList.add('d-none');
+        document.getElementById('btn-vtop-fechar')?.classList.add('d-none');
+        document.getElementById('vtop-status-badge')?.classList.add('d-none');
+        if (window._vtopPollTimer) { clearInterval(window._vtopPollTimer); window._vtopPollTimer = null; }
+        document.querySelectorAll('.file-input-group').forEach(el => el.style.display = 'block');
+        document.querySelectorAll('.file-input-group input').forEach(el => el.required = true);
+        // Restaura labels originais
+        document.querySelectorAll('.file-input-group label').forEach(label => {
+            const text = label.textContent;
+            if (text.includes('(Opcional)')) {
+                label.textContent = text.replace(' (Opcional)', ' *');
+            }
+        });
+        // Esconde previews das fotos
+        const previewCartaContainer = document.getElementById('preview-carta-container');
+        const previewFachadaContainer = document.getElementById('preview-fachada-container');
+        if (previewCartaContainer) previewCartaContainer.style.display = 'none';
+        if (previewFachadaContainer) previewFachadaContainer.style.display = 'none';
+        // Esconde o campo "Acionado por" no modo novo
+        document.getElementById('div-criado-por').style.display = 'none';
+        // Esconde o resumo de blocos e mostra estrutura padrão
+        setModoEdicaoBlocos(false);
+        blocos = []; atualizarTabelaBlocos();
+    }
+
+    // Função mantida por compatibilidade
+    function mostrarResumoBlocos() {
+        setModoEdicaoBlocos(true);
+        atualizarTabelaBlocos();
+    }
+
+    // Função para copiar coordenadas
+    function copiarCoordenada(tipo) {
+        const input = tipo === 'lat' ? document.getElementById('inp_lat') : document.getElementById('inp_long');
+        const valor = input.value.trim();
+        
+        if (!valor || valor === 'Buscando...') {
+            alert('Não há coordenada para copiar.');
+            return;
+        }
+        
+        navigator.clipboard.writeText(valor).then(() => {
+            // Feedback visual
+            const btn = input.nextElementSibling;
+            const iconOriginal = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check"></i>';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-secondary');
+            
+            setTimeout(() => {
+                btn.innerHTML = iconOriginal;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-secondary');
+            }, 2000);
+        }).catch(err => {
+            console.error('Erro ao copiar:', err);
+            alert('Erro ao copiar. Tente selecionar e copiar manualmente.');
+        });
+    }
+
+    async function excluir(id) {
+        if(!confirm('Excluir solicitação?')) return;
+        try {
+            const res = await fetch(`/api/crm/cdoi/editar/${id}/`, { 
+                method: 'DELETE', 
+                headers: {'Authorization': `Bearer ${localStorage.getItem('accessToken')}`} 
+            });
+
+            if (res.ok) {
+                alert('Solicitação excluída com sucesso.');
+                carregarMeusAcionamentos();
+            } else {
+                const errorData = await res.json().catch(() => ({ detail: 'Erro desconhecido.' }));
+                const errorMessage = res.status === 403 ? 'Acesso negado. Você não tem permissão.' : (errorData.detail || 'Não foi possível excluir.');
+                alert(`Erro: ${errorMessage}`);
+            }
+        } catch (error) {
+            alert('Ocorreu um erro de conexão ao tentar excluir.');
+        }
+    }
+
+    async function enviarFormulario(btn) {
+        const form = document.getElementById('form-cdoi');
+        const criadoPorDiv = document.getElementById('div-criado-por');
+        const criadoPorInput = document.getElementById('inp_criado_por');
+        const criadoPorVisible = criadoPorDiv && criadoPorDiv.offsetParent !== null;
+        if (criadoPorInput) {
+            criadoPorInput.required = !!criadoPorVisible;
+            criadoPorInput.disabled = !criadoPorVisible;
+        }
+        if(!form.checkValidity()) { form.reportValidity(); return; }
+        
+        const id = document.getElementById('edit_mode_id').value;
+        const isEdit = !!id;
+        
+        const formData = new FormData(form);
+        const dataJson = Object.fromEntries(formData.entries());
+        
+        // Converte criado_por_id para inteiro se existir
+        if (dataJson.criado_por_id) {
+            dataJson.criado_por_id = parseInt(dataJson.criado_por_id);
+        }
+        
+        const url = isEdit ? `/api/crm/cdoi/editar/${id}/` : '/api/crm/cdoi/novo/';
+        const method = isEdit ? 'PATCH' : 'POST'; // Usa PATCH para edição conforme a view
+        const headers = {'Authorization': `Bearer ${localStorage.getItem('accessToken')}`};
+        
+        // Verifica se há arquivos para upload em modo edição
+        const temArquivos = isEdit && (formData.get('arquivo_carta') || formData.get('arquivo_fachada'));
+        if(isEdit && !temArquivos) {
+            // Se não há arquivos, envia como JSON
+            headers['Content-Type'] = 'application/json';
+        }
+
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: headers,
+                body: (isEdit && !temArquivos) ? JSON.stringify(dataJson) : formData
+            });
+            const data = await res.json().catch(() => ({}));
+            if(res.ok) { 
+                const resumoDiv = document.getElementById('resumoEnvio');
+                const resumoTexto = document.getElementById('resumoEnvioTexto');
+                if (data.resumo && resumoDiv && resumoTexto) {
+                    resumoTexto.textContent = data.resumo;
+                    resumoDiv.classList.remove('d-none');
+                }
+                alert('Salvo!');
+                cancelarEdicao(); 
+                if(isEdit) carregarMeusAcionamentos(); 
+                else window.location.reload(); 
+            }
+            else { alert(data.error || 'Erro ao salvar.'); }
+        } catch(e) { alert('Erro de conexão.'); }
+        finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+
+    // Modal Status
+    const mStatus = new bootstrap.Modal(document.getElementById('modalStatus'));
+    function modalStatus(id, st, obs) {
+        document.getElementById('st-id').value = id;
+        document.getElementById('st-val').value = st;
+        document.getElementById('st-obs').value = obs;
+        mStatus.show();
+    }
+    async function salvarStatus() {
+        const id = document.getElementById('st-id').value;
+        try {
+            const res = await fetch(`/api/crm/cdoi/editar/${id}/`, {
+                method: 'PATCH',
+                headers: {'Authorization': `Bearer ${localStorage.getItem('accessToken')}`, 'Content-Type': 'application/json'},
+                body: JSON.stringify({ status: document.getElementById('st-val').value, observacao: document.getElementById('st-obs').value })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                alert(data.error || data.detail || 'Não foi possível atualizar o status.');
+                return;
+            }
+            mStatus.hide();
+            carregarMeusAcionamentos();
+        } catch (e) {
+            alert('Erro de conexão ao atualizar o status.');
+        }
+    }
+    async function buscarCep(cep) { 
+        try { 
+            const cepLimpo = (cep || '').replace(/\D/g,'');
+            if (cepLimpo.length !== 8) return;
+            const token = localStorage.getItem('accessToken');
+            const r = await fetch(`/api/crm/cdoi/viacep/${cepLimpo}/`, { 
+                headers: {'Authorization': `Bearer ${token}`} 
+            }); 
+            const d = await r.json(); 
+            if (r.status === 401 || r.status === 403) {
+                alert(d.message || 'Sessão expirada. Faça login novamente.');
+                return;
+            }
+            if(!r.ok) {
+                const msg = d.message || d.error || 'Não foi possível consultar o CEP.';
+                alert(d.code === 'not_found' ? msg : msg + ' Tente novamente ou preencha manualmente.');
+                return;
+            }
+            const erroCep = d.erro === true || d.erro === 'true';
+            if(!erroCep){ 
+                document.getElementById('logradouro').value=d.logradouro; 
+                document.getElementById('bairro').value=d.bairro; 
+                document.getElementById('cidade_uf').value=`${d.localidade}-${d.uf}`; 
+                document.getElementById('cidade').value=d.localidade; 
+                document.getElementById('uf').value=d.uf; 
+                // Após buscar CEP, tenta buscar coordenadas se o número já estiver preenchido
+                setTimeout(() => buscarCoordenadas(), 500);
+            } 
+        } catch(e){ 
+            console.error('Erro ao buscar CEP:', e);
+        } 
+    }
+    
+    // Debounce para evitar muitas chamadas durante digitação
+    let timeoutCoordenadas = null;
+    function debounceBuscarCoordenadas() {
+        clearTimeout(timeoutCoordenadas);
+        timeoutCoordenadas = setTimeout(() => buscarCoordenadas(), 1000);
+    }
+    
+    // Força nova busca ao clicar em "Gerar coordenadas"
+    function gerarCoordenadas() {
+        buscarCoordenadas(true);
+    }
+    
+    // Função para buscar coordenadas (latitude/longitude) via geocodificação
+    // force = true: sempre busca (botão "Gerar coordenadas"). force = false: não sobrescreve se já tiver valor
+    async function buscarCoordenadas(force) {
+        const logradouro = document.getElementById('logradouro').value;
+        const numero = document.getElementById('inp_numero').value;
+        const bairro = document.getElementById('bairro').value;
+        const cidade = document.getElementById('cidade').value;
+        const uf = document.getElementById('uf').value;
+        const cep = document.getElementById('inp_cep').value.replace(/\D/g, '');
+        
+        // Verifica se temos dados suficientes para geocodificar
+        if (!logradouro || !numero || !cidade || !uf) {
+            if (typeof showAlert === 'function') {
+                showAlert('Preencha logradouro, número, cidade e UF (ou CEP) antes de gerar coordenadas.', 'warning');
+            } else {
+                alert('Preencha logradouro, número, cidade e UF (ou CEP) antes de gerar coordenadas.');
+            }
+            return;
+        }
+        
+        const latInput = document.getElementById('inp_lat');
+        const lngInput = document.getElementById('inp_long');
+
+        // Se já temos coordenadas e não é forçado (botão), não sobrescreve
+        if (!force && (latInput.value && latInput.value !== 'Buscando...') && (lngInput.value && lngInput.value !== 'Buscando...')) {
+            return;
+        }
+        
+        // Monta o endereço completo para geocodificação
+        const enderecoCompleto = `${logradouro}, ${numero}, ${bairro || ''}, ${cidade}, ${uf}, Brasil`.replace(/,\s*,/g, ',').replace(/,\s*$/, '');
+        
+        // Mostra indicador de carregamento
+        latInput.value = 'Buscando...';
+        lngInput.value = 'Buscando...';
+        
+        try {
+            const token = localStorage.getItem('accessToken');
+            // Usa proxy no backend para evitar CORS
+            const url = `/api/crm/cdoi/nominatim/?q=${encodeURIComponent(enderecoCompleto)}`;
+            const response = await fetch(url, { 
+                headers: {'Authorization': `Bearer ${token}`} 
+            });
+            
+            if (!response.ok) {
+                throw new Error('Erro ao buscar coordenadas');
+            }
+            
+            const data = await response.json();
+            
+            if (data && data.length > 0 && data[0].lat && data[0].lon) {
+                latInput.value = parseFloat(data[0].lat).toFixed(6);
+                lngInput.value = parseFloat(data[0].lon).toFixed(6);
+                console.log('Coordenadas encontradas:', latInput.value, lngInput.value);
+            } else {
+                // Tenta buscar apenas com CEP se não encontrou com endereço completo
+                if (cep && cep.length === 8) {
+                    const urlCep = `/api/crm/cdoi/nominatim/?postalcode=${cep}`;
+                    const responseCep = await fetch(urlCep, { 
+                        headers: {'Authorization': `Bearer ${token}`} 
+                    });
+                    
+                    if (responseCep.ok) {
+                        const dataCep = await responseCep.json();
+                        if (dataCep && dataCep.length > 0 && dataCep[0].lat && dataCep[0].lon) {
+                            latInput.value = parseFloat(dataCep[0].lat).toFixed(6);
+                            lngInput.value = parseFloat(dataCep[0].lon).toFixed(6);
+                            console.log('Coordenadas encontradas pelo CEP:', latInput.value, lngInput.value);
+                            return;
+                        }
+                    }
+                }
+                
+                // Se não encontrou e ainda não existiam valores manuais, limpa os campos
+                if (latInput.value === 'Buscando...' || !latInput.value) {
+                    latInput.value = '';
+                }
+                if (lngInput.value === 'Buscando...' || !lngInput.value) {
+                    lngInput.value = '';
+                }
+                console.warn('Coordenadas não encontradas para:', enderecoCompleto);
+            }
+        } catch (error) {
+            console.error('Erro ao buscar coordenadas:', error);
+            if (latInput.value === 'Buscando...') latInput.value = '';
+            if (lngInput.value === 'Buscando...') lngInput.value = '';
+            if (force) {
+                if (typeof showAlert === 'function') {
+                    showAlert('Não foi possível obter as coordenadas automaticamente. Você pode digitar latitude e longitude manualmente e salvar.', 'warning');
+                } else {
+                    alert('Não foi possível obter as coordenadas automaticamente. Você pode digitar latitude e longitude manualmente e salvar.');
+                }
+            }
+        }
+    }
+
+    function copiarCampo(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const valor = (input.value || '').trim();
+        copiarTexto(valor);
+    }
+
+    function copiarTexto(valor) {
+        if (!valor) {
+            if (typeof showAlert === 'function') {
+                showAlert('Campo vazio. Nada para copiar.', 'warning');
+            } else {
+                alert('Campo vazio. Nada para copiar.');
+            }
+            return;
+        }
+        navigator.clipboard.writeText(valor).then(() => {
+            if (typeof showAlert === 'function') {
+                showAlert('Copiado!', 'success');
+            } else {
+                alert('Copiado!');
+            }
+        }).catch(() => {
+            alert('Erro ao copiar.');
+        });
+    }
+
+    function copiarEnderecoCompleto() {
+        const nome = (document.getElementById('inp_nome')?.value || '').trim();
+        const logradouro = (document.getElementById('logradouro')?.value || '').trim();
+        const numero = (document.getElementById('inp_numero')?.value || '').trim();
+        const bairro = (document.getElementById('bairro')?.value || '').trim();
+        const cidade = (document.getElementById('cidade')?.value || '').trim();
+        const uf = (document.getElementById('uf')?.value || '').trim();
+        const cep = (document.getElementById('inp_cep')?.value || '').trim();
+
+        const partes = [];
+        if (nome) partes.push(nome);
+        if (logradouro || numero) {
+            const endBase = [logradouro, numero].filter(Boolean).join(', ');
+            if (endBase) partes.push(endBase);
+        }
+        if (bairro) partes.push(bairro);
+
+        const cidadeUf = [cidade, uf].filter(Boolean).join(' - ');
+        if (cidadeUf) partes.push(cidadeUf);
+        if (cep) partes.push(`CEP ${cep}`);
+
+        const endereco = partes.join(' | ');
+        copiarTexto(endereco);
+    }
+
+    function parseDestinatarios(texto) {
+        return (texto || '')
+            .split(',')
+            .map(item => item.trim())
+            .filter(item => item.length > 0);
+    }
+
+    async function carregarConfiguracaoCdoi() {
+        const feedback = document.getElementById('config-feedback');
+        try {
+            if (feedback) feedback.textContent = 'Carregando configuração...';
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch('/api/regras-automacao/', { headers: {'Authorization': `Bearer ${token}`} });
+            const data = await res.json();
+            const regras = Array.isArray(data) ? data : (data.results || []);
+            regraCdoiConfig = regras.find(r => r.evento_gatilho === 'NOVO_CDOI') || null;
+
+            const inputDest = document.getElementById('inp_config_destinatarios');
+            const inputAtivo = document.getElementById('inp_config_ativo');
+            if (regraCdoiConfig) {
+                const numeros = (regraCdoiConfig.destinos_numeros || []).join(', ');
+                if (inputDest) inputDest.value = numeros;
+                if (inputAtivo) inputAtivo.checked = !!regraCdoiConfig.ativo;
+                if (feedback) feedback.textContent = 'Configuração carregada.';
+            } else {
+                if (inputDest) inputDest.value = '';
+                if (inputAtivo) inputAtivo.checked = true;
+                if (feedback) feedback.textContent = 'Nenhuma configuração encontrada. Você pode criar uma nova.';
+            }
+        } catch (e) {
+            console.error('Erro ao carregar configuração CDOI:', e);
+            if (feedback) feedback.textContent = 'Erro ao carregar configuração.';
+        }
+    }
+
+    async function salvarConfiguracaoCdoi() {
+        const feedback = document.getElementById('config-feedback');
+        const inputDest = document.getElementById('inp_config_destinatarios');
+        const inputAtivo = document.getElementById('inp_config_ativo');
+        const numeros = parseDestinatarios(inputDest ? inputDest.value : '');
+        const ativo = inputAtivo ? inputAtivo.checked : true;
+
+        const payload = {
+            nome: regraCdoiConfig?.nome || 'CDOI - Resumo',
+            ativo: ativo,
+            evento_gatilho: 'NOVO_CDOI',
+            destinos_grupos: regraCdoiConfig?.destinos_grupos || [],
+            destinos_numeros: numeros,
+            template_mensagem: regraCdoiConfig?.template_mensagem || '🔔 *NOVO CDOI*\\nCliente: {cliente}\\nResp: {usuario}'
+        };
+
+        try {
+            if (feedback) feedback.textContent = 'Salvando...';
+            const token = localStorage.getItem('accessToken');
+            const url = regraCdoiConfig?.id ? `/api/regras-automacao/${regraCdoiConfig.id}/` : '/api/regras-automacao/';
+            const method = regraCdoiConfig?.id ? 'PATCH' : 'POST';
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || 'Erro ao salvar configuração');
+            regraCdoiConfig = data;
+            if (feedback) feedback.textContent = 'Configuração salva com sucesso.';
+        } catch (e) {
+            console.error('Erro ao salvar configuração CDOI:', e);
+            if (feedback) feedback.textContent = 'Erro ao salvar configuração.';
+        }
+    }
+
+    async function carregarDashboardCdoi() {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch('/api/crm/cdoi/dashboard/', { headers: {'Authorization': `Bearer ${token}`} });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Erro ao carregar dashboard');
+
+            const cards = document.getElementById('dashboard-cards');
+            cards.innerHTML = `
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="dashboard-card">
+                        <div class="dashboard-card-icon bg-azul">
+                            <i class="bi bi-building-fill"></i>
+                        </div>
+                        <div>
+                            <div class="dashboard-card-label">Acionamentos</div>
+                            <div class="dashboard-card-value">${data.total_acionamentos}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="dashboard-card">
+                        <div class="dashboard-card-icon bg-verde">
+                            <i class="bi bi-grid-fill"></i>
+                        </div>
+                        <div>
+                            <div class="dashboard-card-label">HPs total</div>
+                            <div class="dashboard-card-value">${data.total_hps}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="dashboard-card">
+                        <div class="dashboard-card-icon bg-laranja">
+                            <i class="bi bi-people-fill"></i>
+                        </div>
+                        <div>
+                            <div class="dashboard-card-label">Pré-venda</div>
+                            <div class="dashboard-card-value">${data.total_prevenda}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="dashboard-card">
+                        <div class="dashboard-card-icon bg-roxo">
+                            <i class="bi bi-cash-stack"></i>
+                        </div>
+                        <div>
+                            <div class="dashboard-card-label">Vendas (CEP + fachada)</div>
+                            <div class="dashboard-card-value">${data.vendas_realizadas}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const statusDiv = document.getElementById('dashboard-status');
+            let statusHtml = `
+                <div class="dashboard-status-table">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th class="text-end">Quantidade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            (data.por_status || []).forEach(s => {
+                statusHtml += `
+                    <tr>
+                        <td><span class="dashboard-status-pill">${s.status}</span></td>
+                        <td class="text-end"><span class="fw-bold">${s.qtd}</span></td>
+                    </tr>
+                `;
+            });
+            statusHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            statusDiv.innerHTML = statusHtml;
+        } catch (e) {
+            console.error('Erro dashboard CDOI:', e);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        carregarDashboardCdoi();
+        setModoEdicaoBlocos(false);
+    });
+    
+    // Expande o container quando a aba Meus Acionamentos está ativa
+    document.getElementById('lista-tab').addEventListener('click', function() {
+        setTimeout(() => {
+            document.querySelector('.system-container').style.maxWidth = '95%';
+        }, 50);
+    });
+    
+    document.getElementById('nova-tab').addEventListener('click', function() {
+        setTimeout(() => {
+            document.querySelector('.system-container').style.maxWidth = '1400px';
+        }, 50);
+    });
+    
+    // --- PRÉ-VENDAS PÚBLICAS (Nova abordagem com links públicos) ---
+    let cdoiIdLinkAtual = null;
+    
+    async function gerarLinkPreVenda(cdoiId) {
+        cdoiIdLinkAtual = cdoiId;
+        const modal = new bootstrap.Modal(document.getElementById('modalLinkPreVenda'));
+        document.getElementById('link-prevenda-url').value = '';
+        document.getElementById('link-imagem-url').value = '';
+        document.getElementById('link-imagem-file').value = '';
+        modal.show();
+        
+        // Verifica se já existe link
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch(`/api/crm/prevenda/por-cdoi/${cdoiId}/`, {
+                headers: {'Authorization': `Bearer ${token}`}
+            });
+            const data = await res.json();
+            
+            if (data.link_existe && data.link_url) {
+                document.getElementById('link-prevenda-url').value = data.link_url;
+            }
+        } catch (e) {
+            console.error('Erro ao verificar link existente:', e);
+        }
+    }
+    
+    async function salvarLinkPreVenda() {
+        if (!cdoiIdLinkAtual) return;
+        
+        const btn = document.getElementById('btn-salvar-link-prevenda');
+        const btnText = document.getElementById('btn-salvar-link-text');
+        const originalHtml = btn.innerHTML;
+        const originalText = btnText.textContent;
+        
+        // Desabilita botão e mostra feedback
+        btn.disabled = true;
+        const spinnerHtml = '<span class="spinner-border spinner-border-sm me-2"></span>';
+        btnText.textContent = 'Gerando link...';
+        btn.innerHTML = spinnerHtml + '<span id="btn-salvar-link-text">Gerando link...</span>';
+        
+        const formData = new FormData();
+        const imagemFile = document.getElementById('link-imagem-file').files[0];
+        const imagemUrl = document.getElementById('link-imagem-url').value.trim();
+        
+        if (imagemFile) {
+            formData.append('imagem_banner', imagemFile);
+            const btnTextInner = document.getElementById('btn-salvar-link-text');
+            if (btnTextInner) btnTextInner.textContent = 'Enviando imagem...';
+        } else if (imagemUrl) {
+            formData.append('imagem_banner_url', imagemUrl);
+        }
+        
+        try {
+            const token = localStorage.getItem('accessToken');
+            const url = `/api/crm/prevenda/gerar-link/${cdoiIdLinkAtual}/`;
+            const options = {
+                method: 'POST',
+                headers: {'Authorization': `Bearer ${token}`},
+                body: formData
+            };
+            
+            const res = await fetch(url, options);
+            const data = await res.json();
+            
+            if (res.ok) {
+                document.getElementById('link-prevenda-url').value = data.link;
+                alert('Link gerado/carregado com sucesso!');
+            } else {
+                alert(data.error || 'Erro ao gerar link.');
+            }
+        } catch (e) {
+            console.error('Erro:', e);
+            alert('Erro de conexão ao gerar link.');
+        } finally {
+            // Restaura botão
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+    
+    function copiarLinkPreVenda() {
+        const input = document.getElementById('link-prevenda-url');
+        if (!input.value) {
+            alert('Nenhum link disponível. Gere o link primeiro.');
+            return;
+        }
+        input.select();
+        document.execCommand('copy');
+        alert('Link copiado!');
+    }
+
+    function getCnpjFiltrosParams() {
+        const ufs = [];
+        document.querySelectorAll('#cnpj-box-ufs input[name="cnpj-uf"]:checked').forEach(cb => { if (cb.value) ufs.push(cb.value); });
+        const cnaes = [];
+        document.querySelectorAll('#cnpj-box-cnaes input[name="cnpj-cnae"]:checked').forEach(cb => { if (cb.value) cnaes.push(cb.value); });
+        const codigos_municipio = [];
+        document.querySelectorAll('#cnpj-box-municipios input[name="cnpj-municipio"]:checked').forEach(cb => { if (cb.value) codigos_municipio.push(cb.value); });
+        const bairros = [];
+        document.querySelectorAll('#cnpj-box-bairros input[name="cnpj-bairro"]:checked').forEach(cb => { if (cb.value) bairros.push(cb.value); });
+        return { ufs, cnaes, codigo_municipio: codigos_municipio, bairro: bairros };
+    }
+
+    function buildCnpjQueryString(params, extra) {
+        const p = { ...params, ...extra };
+        const qs = new URLSearchParams();
+        (p.ufs || []).forEach(v => qs.append('uf', v));
+        (p.cnaes || []).forEach(v => qs.append('cnae', v));
+        (p.codigo_municipio || []).forEach(v => qs.append('codigo_municipio', v));
+        (p.bairro || []).forEach(v => qs.append('bairro', v));
+        if (p.limit != null) qs.set('limit', p.limit);
+        if (p.page != null) qs.set('page', p.page);
+        if (p.export) qs.set('export', p.export);
+        return qs.toString();
+    }
+
+    async function carregarCnpjMunicipios() {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch('/api/crm/cdoi/cnpj-municipios/', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            const box = document.getElementById('cnpj-box-municipios');
+            const checked = new Set(Array.from(document.querySelectorAll('#cnpj-box-municipios input[name="cnpj-municipio"]:checked')).map(c => c.value));
+            box.innerHTML = '';
+            (data.municipios || []).forEach(m => {
+                const label = document.createElement('label');
+                label.className = 'd-block small mb-1 cnpj-municipio-item';
+                label.setAttribute('data-search', `${m.codigo_municipio} ${m.uf || ''} ${(m.nome_municipio || '').toLowerCase()}`.trim().toLowerCase());
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.name = 'cnpj-municipio';
+                cb.value = m.codigo_municipio;
+                cb.className = 'me-1';
+                if (checked.has(m.codigo_municipio)) cb.checked = true;
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(`${m.codigo_municipio}${m.nome_municipio ? ' - ' + m.nome_municipio : ''} - ${m.uf || ''} (${(m.qtd || 0).toLocaleString('pt-BR')})`));
+                box.appendChild(label);
+                cb.addEventListener('change', carregarCnpjEstabelecimentos);
+            });
+            if (box.children.length === 0) box.innerHTML = '<small class="text-muted">Nenhum município na base.</small>';
+            else filtrarCnpjMunicipios();
+        } catch (e) { console.error('carregarCnpjMunicipios', e); document.getElementById('cnpj-box-municipios').innerHTML = '<small class="text-danger">Erro ao carregar.</small>'; }
+    }
+
+    function filtrarCnpjMunicipios() {
+        const q = (document.getElementById('cnpj-filtro-municipio-pesquisa') || {}).value.trim().toLowerCase();
+        document.querySelectorAll('#cnpj-box-municipios .cnpj-municipio-item').forEach(el => {
+            const text = (el.getAttribute('data-search') || '') + (el.textContent || '').toLowerCase();
+            el.style.display = (!q || text.includes(q)) ? '' : 'none';
+        });
+    }
+
+    async function carregarCnpjUfs() {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch('/api/crm/cdoi/cnpj-ufs/', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            const box = document.getElementById('cnpj-box-ufs');
+            const checked = new Set(Array.from(document.querySelectorAll('#cnpj-box-ufs input[name="cnpj-uf"]:checked')).map(c => c.value));
+            box.innerHTML = '';
+            (data.ufs || []).forEach(x => {
+                const label = document.createElement('label');
+                label.className = 'd-block small mb-1 cnpj-uf-item';
+                label.setAttribute('data-uf', (x.uf || '').toUpperCase());
+                label.setAttribute('data-search', ((x.uf || '') + ' ' + (x.qtd || '')).toLowerCase());
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.name = 'cnpj-uf';
+                cb.value = x.uf;
+                cb.className = 'me-1';
+                if (checked.has(x.uf)) cb.checked = true;
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(`${x.uf || ''} (${(x.qtd || 0).toLocaleString('pt-BR')})`));
+                box.appendChild(label);
+                cb.addEventListener('change', carregarCnpjEstabelecimentos);
+            });
+            if (box.children.length === 0) box.innerHTML = '<small class="text-muted">Nenhuma UF na base.</small>';
+            filtrarCnpjUfs();
+        } catch (e) { console.error('carregarCnpjUfs', e); document.getElementById('cnpj-box-ufs').innerHTML = '<small class="text-danger">Erro ao carregar.</small>'; }
+    }
+
+    function filtrarCnpjUfs() {
+        const q = (document.getElementById('cnpj-filtro-uf-pesquisa') || {}).value.trim().toLowerCase();
+        document.querySelectorAll('#cnpj-box-ufs .cnpj-uf-item').forEach(el => {
+            const uf = (el.getAttribute('data-uf') || '').toLowerCase();
+            const text = ((el.getAttribute('data-search') || '') + ' ' + (el.textContent || '')).toLowerCase();
+            el.style.display = (!q || uf.includes(q) || text.includes(q)) ? '' : 'none';
+        });
+    }
+
+    async function carregarCnpjCnaes() {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch('/api/crm/cdoi/cnpj-cnaes/', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            const box = document.getElementById('cnpj-box-cnaes');
+            const checked = new Set(Array.from(document.querySelectorAll('#cnpj-box-cnaes input[name="cnpj-cnae"]:checked')).map(c => c.value));
+            box.innerHTML = '';
+            (data.cnaes || []).forEach(x => {
+                const label = document.createElement('label');
+                label.className = 'd-block small mb-1 cnpj-cnae-item';
+                label.setAttribute('data-search', (x.cnae || '').toLowerCase());
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.name = 'cnpj-cnae';
+                cb.value = x.cnae;
+                cb.className = 'me-1';
+                if (checked.has(x.cnae)) cb.checked = true;
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(`${x.cnae} (${(x.qtd || 0).toLocaleString('pt-BR')})`));
+                box.appendChild(label);
+                cb.addEventListener('change', carregarCnpjEstabelecimentos);
+            });
+            if (box.children.length === 0) box.innerHTML = '<small class="text-muted">Nenhum CNAE na base.</small>';
+            else filtrarCnpjCnaes();
+        } catch (e) { console.error('carregarCnpjCnaes', e); document.getElementById('cnpj-box-cnaes').innerHTML = '<small class="text-danger">Erro ao carregar.</small>'; }
+    }
+
+    function filtrarCnpjCnaes() {
+        const q = (document.getElementById('cnpj-filtro-cnae-pesquisa') || {}).value.trim().toLowerCase();
+        document.querySelectorAll('#cnpj-box-cnaes .cnpj-cnae-item').forEach(el => {
+            const text = (el.getAttribute('data-search') || '') + (el.textContent || '').toLowerCase();
+            el.style.display = (!q || text.includes(q)) ? '' : 'none';
+        });
+    }
+
+    async function carregarCnpjBairros() {
+        const params = getCnpjFiltrosParams();
+        const qs = new URLSearchParams();
+        (params.ufs || []).forEach(v => qs.append('uf', v));
+        (params.codigo_municipio || []).forEach(v => qs.append('codigo_municipio', v));
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch(`/api/crm/cdoi/cnpj-bairros/?${qs.toString()}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            const box = document.getElementById('cnpj-box-bairros');
+            const checked = new Set(Array.from(document.querySelectorAll('#cnpj-box-bairros input[name="cnpj-bairro"]:checked')).map(c => c.value));
+            box.innerHTML = '';
+            (data.bairros || []).forEach(x => {
+                const label = document.createElement('label');
+                label.className = 'd-block small mb-1 cnpj-bairro-item';
+                label.setAttribute('data-search', (x.bairro || '').toLowerCase());
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.name = 'cnpj-bairro';
+                cb.value = x.bairro;
+                cb.className = 'me-1';
+                if (checked.has(x.bairro)) cb.checked = true;
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(`${(x.bairro || '').substring(0, 35)} (${(x.qtd || 0).toLocaleString('pt-BR')})`));
+                box.appendChild(label);
+                cb.addEventListener('change', carregarCnpjEstabelecimentos);
+            });
+            if (box.children.length === 0) box.innerHTML = '<small class="text-muted">Nenhum bairro. Ajuste municípios/UF e clique em Atualizar.</small>';
+            else filtrarCnpjBairros();
+        } catch (e) { console.error('carregarCnpjBairros', e); document.getElementById('cnpj-box-bairros').innerHTML = '<small class="text-danger">Erro ao carregar.</small>'; }
+    }
+
+    function filtrarCnpjBairros() {
+        const q = (document.getElementById('cnpj-filtro-bairro-pesquisa') || {}).value.trim().toLowerCase();
+        document.querySelectorAll('#cnpj-box-bairros .cnpj-bairro-item').forEach(el => {
+            const text = (el.getAttribute('data-search') || '') + (el.textContent || '').toLowerCase();
+            el.style.display = (!q || text.includes(q)) ? '' : 'none';
+        });
+    }
+
+    async function carregarCnpjEstabelecimentos() {
+        const params = getCnpjFiltrosParams();
+        const qs = buildCnpjQueryString(params, { limit: 100, page: 1 });
+        const tbody = document.getElementById('tbody-cnpj-estabelecimentos');
+        const totalEl = document.getElementById('cnpj-total-registros');
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Carregando...</td></tr>';
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch(`/api/crm/cdoi/cnpj-estabelecimentos/?${qs}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            totalEl.textContent = data.total != null ? data.total : 0;
+            if (!data.results || data.results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Nenhum registro. Ajuste os filtros ou importe a base CNPJ na Central de Importações.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            data.results.forEach(r => {
+                tbody.innerHTML += `<tr>
+                    <td><code>${r.cnpj || ''}</code></td>
+                    <td>${(r.nome_fantasia || '').substring(0, 40)}</td>
+                    <td>${(r.logradouro || '').substring(0, 30)}</td>
+                    <td>${r.numero || ''}</td>
+                    <td>${(r.bairro || '').substring(0, 25)}</td>
+                    <td>${r.cep || ''}</td>
+                    <td>${r.uf || ''}</td>
+                    <td>${(r.nome_municipio || r.codigo_municipio || '-').substring(0, 25)}</td>
+                    <td>${r.cnae || '-'}</td>
+                    <td>${r.telefone || '-'}</td>
+                    <td>${(r.retorno_viabilidade || '-').substring(0, 40)}</td>
+                </tr>`;
+            });
+        } catch (e) {
+            console.error('carregarCnpjEstabelecimentos', e);
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Erro ao carregar.</td></tr>';
+        }
+    }
+
+    async function downloadCnpjExcel() {
+        const btn = document.getElementById('btn-download-cnpj');
+        if (btn && btn.disabled) return; // evita duplo clique
+        const params = getCnpjFiltrosParams();
+        const qs = buildCnpjQueryString(params, { export: 'xlsx' });
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+            alert('Faça login para baixar o arquivo.');
+            return;
+        }
+        const totalEl = document.getElementById('cnpj-total-registros');
+        const total = parseInt(totalEl?.textContent || '0', 10) || 0;
+        if (total > 15000 && !confirm('São ' + total.toLocaleString('pt-BR') + ' registros. A exportação pode levar 10–30 minutos. Deseja continuar?')) {
+            return;
+        }
+        const labelOriginal = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando...';
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25 * 60 * 1000); // 25 min
+        try {
+            const res = await fetch(`/api/crm/cdoi/cnpj-estabelecimentos/?${qs}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) {
+                if (res.status === 403) {
+                    alert('Sessão expirada. Faça login novamente.');
+                    return;
+                }
+                if (res.status === 404) {
+                    alert('Rota não encontrada. Atualize a página e tente novamente.');
+                    return;
+                }
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || err.error || `Erro ao baixar (${res.status}). Tente novamente.`);
+                return;
+            }
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'cnpj_estabelecimentos_cidade_bairro.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(a.href); }, 500);
+        } catch (e) {
+            clearTimeout(timeoutId);
+            console.error(e);
+            if (e.name === 'AbortError') {
+                alert('A exportação demorou muito e foi cancelada. Tente reduzir os filtros (ex: município específico) para exportar menos registros.');
+            } else {
+                alert('Erro ao baixar. Verifique sua conexão e tente novamente.');
+            }
+        } finally {
+            clearTimeout(timeoutId);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = labelOriginal;
+            }
+        }
+    }
+    
+    async function verPreVendas(cdoiId) {
+        const modal = new bootstrap.Modal(document.getElementById('modalPreVendas'));
+        const loading = document.getElementById('prevendas-loading');
+        const content = document.getElementById('prevendas-content');
+        const empty = document.getElementById('prevendas-empty');
+        const tbody = document.getElementById('tbody-prevendas-modal');
+        
+        loading.style.display = 'block';
+        content.style.display = 'none';
+        empty.style.display = 'none';
+        tbody.innerHTML = '';
+        modal.show();
+        
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch(`/api/crm/prevenda/por-cdoi/${cdoiId}/`, {
+                headers: {'Authorization': `Bearer ${token}`}
+            });
+            const data = await res.json();
+            
+            loading.style.display = 'none';
+            
+            if (data.total === 0) {
+                empty.style.display = 'block';
+                content.style.display = 'none';
+            } else {
+                content.style.display = 'block';
+                empty.style.display = 'none';
+                tbody.innerHTML = '';
+                
+                data.prevendas.forEach(p => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><small>${p.data_cadastro}</small></td>
+                            <td><strong>${p.nome_cliente}</strong></td>
+                            <td><a href="https://wa.me/55${p.telefone_whatsapp.replace(/\D/g, '')}" target="_blank" class="text-success"><i class="bi bi-whatsapp"></i> ${p.telefone_whatsapp}</a></td>
+                            <td>${p.email || '-'}</td>
+                            <td>${p.bloco || '-'}</td>
+                            <td>${p.apartamento || '-'}</td>
+                        </tr>
+                    `;
+                });
+            }
+        } catch (e) {
+            console.error('Erro:', e);
+            loading.style.display = 'none';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Erro ao carregar pré-vendas.</td></tr>';
+            content.style.display = 'block';
+        }
+    }
+
+    // --- SmartRiser / V.top ---
+    function _vtopAuthHeaders() {
+        return {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'Content-Type': 'application/json',
+        };
+    }
+
+    function vtopAtualizarUiStatus(state) {
+        const badge = document.getElementById('vtop-status-badge');
+        const btnSenha = document.getElementById('btn-vtop-senha-pronta');
+        const btnFechar = document.getElementById('btn-vtop-fechar');
+        const btnStart = document.getElementById('btn-vtop-smartriser');
+        if (!badge) return;
+
+        if (!state) {
+            badge.classList.add('d-none');
+            btnSenha?.classList.add('d-none');
+            btnFechar?.classList.add('d-none');
+            return;
+        }
+
+        const st = state.status || '';
+        const msg = state.message || st;
+        badge.classList.remove('d-none', 'bg-secondary', 'bg-warning', 'bg-success', 'bg-danger', 'bg-info', 'text-dark');
+        let cls = 'bg-secondary';
+        if (st === 'awaiting_credentials') cls = 'bg-warning text-dark';
+        else if (st === 'done') cls = 'bg-success';
+        else if (st === 'error') cls = 'bg-danger';
+        else if (st === 'paused') cls = 'bg-info text-dark';
+        else if (st && st !== 'idle') cls = 'bg-primary';
+        badge.className = `badge ${cls}`;
+        badge.textContent = msg.length > 80 ? msg.slice(0, 80) + '…' : msg;
+        badge.title = msg;
+
+        // Produção: needs_vtop_login → reabre modal (browser headless não aceita digitar na tela)
+        if (state.needs_vtop_login || state.error === 'needs_vtop_login') {
+            vtopAbrirModalCredenciais(msg || 'Informe usuário e senha V.tal para continuar.');
+        }
+
+        if (st === 'awaiting_credentials') {
+            // Local (browser visível): botão «Já coloquei a senha»
+            btnSenha?.classList.remove('d-none');
+            btnSenha?.classList.add('pulse');
+        } else {
+            btnSenha?.classList.add('d-none');
+        }
+
+        const ativo = st && !['idle', 'done', 'error'].includes(st);
+        if (ativo || st === 'paused' || st === 'done' || st === 'error') {
+            btnFechar?.classList.remove('d-none');
+        }
+
+        if (btnStart && ['starting', 'awaiting_credentials', 'clicking_login', 'navigating',
+            'filling_obra', 'filling_coords', 'filling_cadastro', 'uploading', 'saving', 'validating',
+            'logged_in'].includes(st)) {
+            btnStart.disabled = true;
+        } else if (btnStart) {
+            btnStart.disabled = false;
+        }
+
+        const btnModal = document.getElementById('btn-vtop-modal-iniciar');
+        if (btnModal) {
+            btnModal.disabled = !!(btnStart && btnStart.disabled && st !== 'error' && st !== 'idle' && st !== 'done');
+        }
+
+        if (['done', 'error', 'idle'].includes(st) && window._vtopPollTimer) {
+            clearInterval(window._vtopPollTimer);
+            window._vtopPollTimer = null;
+        }
+    }
+
+    function vtopIniciarPolling(cdoiId) {
+        if (window._vtopPollTimer) clearInterval(window._vtopPollTimer);
+        window._vtopPollTimer = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/crm/cdoi/${cdoiId}/vtop/status/`, {
+                    headers: _vtopAuthHeaders(),
+                });
+                const data = await res.json();
+                if (data.state) vtopAtualizarUiStatus(data.state);
+            } catch (e) {
+                console.warn('[VTOP] poll falhou', e);
+            }
+        }, 2000);
+    }
+
+    function vtopPopularSelectBlocos() {
+        const sel = document.getElementById('vtop_bloco');
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">— só testar login (sessão) —</option>';
+        const lista = (typeof blocos !== 'undefined' && Array.isArray(blocos)) ? blocos : [];
+        lista.forEach((b) => {
+            const nome = (b.nome || '').trim();
+            if (!nome) return;
+            if ([...sel.options].some((o) => o.value === nome)) return;
+            const opt = document.createElement('option');
+            opt.value = nome;
+            opt.textContent = nome;
+            sel.appendChild(opt);
+        });
+        if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+    }
+
+    function vtopAbrirModalCredenciais(alertaMsg) {
+        const id = document.getElementById('edit_mode_id')?.value;
+        if (!id) {
+            alert('Abra um CDOI em modo edição antes de preencher o SmartRiser.');
+            return;
+        }
+        vtopPopularSelectBlocos();
+        const alerta = document.getElementById('vtop-modal-alerta');
+        if (alerta) {
+            if (alertaMsg) {
+                alerta.textContent = alertaMsg;
+                alerta.classList.remove('d-none');
+            } else {
+                alerta.classList.add('d-none');
+                alerta.textContent = '';
+            }
+        }
+        const el = document.getElementById('modalVtopLogin');
+        if (!el || typeof bootstrap === 'undefined') {
+            // Fallback sem Bootstrap modal
+            const u = prompt('Usuário V.tal:');
+            const s = u ? prompt('Senha V.tal:') : null;
+            if (u && s) {
+                document.getElementById('vtop_usuario').value = u;
+                document.getElementById('vtop_senha').value = s;
+                vtopIniciarSmartRiser();
+            }
+            return;
+        }
+        bootstrap.Modal.getOrCreateInstance(el).show();
+        setTimeout(() => document.getElementById('vtop_usuario')?.focus(), 300);
+    }
+
+    async function vtopIniciarSmartRiser() {
+        const id = document.getElementById('edit_mode_id')?.value;
+        if (!id) {
+            alert('Abra um CDOI em modo edição antes de preencher o SmartRiser.');
+            return;
+        }
+
+        const usuario = (document.getElementById('vtop_usuario')?.value || '').trim();
+        const senha = document.getElementById('vtop_senha')?.value || '';
+        const bloco = (document.getElementById('vtop_bloco')?.value || '').trim();
+
+        const body = {};
+        if (usuario) body.vtop_usuario = usuario;
+        if (senha) body.vtop_senha = senha;
+        if (bloco) {
+            body.bloco = bloco;
+        } else {
+            body.somente_ate = 'login';
+        }
+
+        const btn = document.getElementById('btn-vtop-smartriser');
+        const btnModal = document.getElementById('btn-vtop-modal-iniciar');
+        if (btn) btn.disabled = true;
+        if (btnModal) {
+            btnModal.disabled = true;
+            btnModal.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Iniciando…';
+        }
+
+        try {
+            const res = await fetch(`/api/crm/cdoi/${id}/vtop/iniciar/`, {
+                method: 'POST',
+                headers: _vtopAuthHeaders(),
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+
+            // Limpa senha do DOM assim que a request sai (não fica no campo)
+            const senhaEl = document.getElementById('vtop_senha');
+            if (senhaEl) senhaEl.value = '';
+
+            if (data.state) vtopAtualizarUiStatus(data.state);
+
+            if (data.state?.needs_vtop_login || data.state?.error === 'needs_vtop_login') {
+                // Mantém modal aberto pedindo credenciais
+                const alerta = document.getElementById('vtop-modal-alerta');
+                if (alerta) {
+                    alerta.textContent = data.state.message || 'Informe usuário e senha V.tal.';
+                    alerta.classList.remove('d-none');
+                }
+                if (btn) btn.disabled = false;
+                return;
+            }
+
+            if (!res.ok || !data.ok) {
+                alert(data.error || data.state?.message || 'Não foi possível iniciar a automação.');
+                if (btn) btn.disabled = false;
+                return;
+            }
+
+            // Fecha modal se login/fluxo engatou
+            const modalEl = document.getElementById('modalVtopLogin');
+            if (modalEl && typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getInstance(modalEl)?.hide();
+            }
+            vtopIniciarPolling(id);
+        } catch (e) {
+            console.error(e);
+            alert('Erro de rede ao iniciar SmartRiser.');
+            if (btn) btn.disabled = false;
+        } finally {
+            if (btnModal) {
+                btnModal.disabled = false;
+                btnModal.innerHTML = 'Iniciar SmartRiser';
+            }
+        }
+    }
+
+    async function vtopSenhaPronta() {
+        const id = document.getElementById('edit_mode_id')?.value;
+        if (!id) return;
+        try {
+            const res = await fetch(`/api/crm/cdoi/${id}/vtop/senha-pronta/`, {
+                method: 'POST',
+                headers: _vtopAuthHeaders(),
+                body: JSON.stringify({}),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                alert(data.error || 'Não foi possível confirmar a senha.');
+                return;
+            }
+            vtopAtualizarUiStatus(data.state);
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao sinalizar senha pronta.');
+        }
+    }
+
+    async function vtopFecharNavegador() {
+        const id = document.getElementById('edit_mode_id')?.value || '0';
+        try {
+            const res = await fetch(`/api/crm/cdoi/${id}/vtop/fechar/`, {
+                method: 'POST',
+                headers: _vtopAuthHeaders(),
+                body: JSON.stringify({ manter_sessao: true }),
+            });
+            const data = await res.json();
+            vtopAtualizarUiStatus(data.state || { status: 'idle', message: 'Navegador fechado (sessão mantida).' });
+            const btn = document.getElementById('btn-vtop-smartriser');
+            if (btn) btn.disabled = false;
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao fechar navegador.');
+        }
+    }
+</script>
+{% endblock %}

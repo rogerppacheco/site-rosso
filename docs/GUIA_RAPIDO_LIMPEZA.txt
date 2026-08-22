@@ -1,0 +1,78 @@
+# ⚡ GUIA RÁPIDO: Limpeza e Validação
+
+## ✅ O QUE FOI FEITO
+
+1. **Tabela ImportacaoFPD limpa** (6 registros deletados)
+2. **Validação de duplicatas implementada**
+3. **Sistema agora atualiza se registro existir**
+4. **Script de limpeza/validação criado**
+
+---
+
+## 🚀 USAR AGORA
+
+### Para limpar a tabela
+```bash
+.\.venv\Scripts\python.exe limpar_e_validar_fpd.py
+Opção: 1
+```
+
+### Para validar dados
+```bash
+.\.venv\Scripts\python.exe limpar_e_validar_fpd.py
+Opção: 4
+```
+
+### Para checar duplicatas
+```bash
+.\.venv\Scripts\python.exe limpar_e_validar_fpd.py
+Opção: 2
+```
+
+---
+
+## 📊 COMO FUNCIONA
+
+**Se O.S + Fatura já existem:**
+```
+Sistema encontra registro existente
+    ↓
+ATUALIZA todos os dados
+    ↓
+Conta como "Atualizado" no log
+```
+
+**Se O.S + Fatura são novos:**
+```
+Sistema não encontra registro
+    ↓
+CRIA novo registro
+    ↓
+Conta como "Criado" no log
+```
+
+---
+
+## 💡 EXEMPLO
+
+### Primeira importação (arquivo com 3 registros)
+```
+Resultado: Criados 3, Atualizados 0
+Banco tem: 3 registros
+```
+
+### Segunda importação (mesmo arquivo, mesmos 3 registros)
+```
+Resultado: Criados 0, Atualizados 3
+Banco tem: 3 registros (mesmos, mas atualizados)
+```
+
+---
+
+## ✨ Pronto! 
+
+Agora você pode:
+- ✅ Importar quantas vezes quiser
+- ✅ Se O.S já existe → atualiza
+- ✅ Se O.S é nova → cria
+- ✅ Nenhum dado duplicado

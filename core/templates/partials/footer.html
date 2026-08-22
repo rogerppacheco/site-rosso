@@ -1,0 +1,10 @@
+<footer class="site-footer py-4 mt-auto text-center" style="background: var(--bg-secondary); color: var(--text-muted); border-top: 1px solid var(--border-color);">
+    <div class="container">
+        {% block footer_content %}
+        <p class="mb-1 fw-semibold" style="color: var(--text-main);">{{ SITE_BRAND }} — Internet Fibra Óptica</p>
+        {% if SITE_CONTACT_PHONE or SITE_CONTACT_EMAIL %}
+        <p class="small mb-0">Contato:{% if SITE_CONTACT_PHONE %} {{ SITE_CONTACT_PHONE }}{% endif %}{% if SITE_CONTACT_PHONE and SITE_CONTACT_EMAIL %} · {% endif %}{% if SITE_CONTACT_EMAIL %}{{ SITE_CONTACT_EMAIL }}{% endif %}</p>
+        {% endif %}
+        {% endblock %}
+    </div>
+</footer>

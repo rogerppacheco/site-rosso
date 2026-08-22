@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}{{ SITE_BRAND }} — Preview Design System{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="container record-breadcrumb" aria-label="breadcrumb">
+    <a href="/">Início</a> &rsaquo; <span>Preview do Base Template</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="glass-panel p-4 mb-4">
+        <h1 class="h3 fw-bold mb-2">Preview — Design System v15</h1>
+        <p class="text-muted mb-0">
+            Template base pronto para revisão. Use o botão lua/sol no header para alternar o tema.
+        </p>
+    </div>
+
+    <div class="card-kpi-grid mb-4">
+        <div class="card-kpi">
+            <i class="bi bi-graph-up-arrow card-kpi-icon"></i>
+            <div class="card-kpi-label">Vendas Hoje</div>
+            <div class="card-kpi-value">128</div>
+            <div class="card-kpi-trend up"><i class="bi bi-arrow-up-short"></i> +12%</div>
+        </div>
+        <div class="card-kpi">
+            <i class="bi bi-wifi card-kpi-icon"></i>
+            <div class="card-kpi-label">Instalações</div>
+            <div class="card-kpi-value">43</div>
+            <div class="card-kpi-trend up"><i class="bi bi-arrow-up-short"></i> +5%</div>
+        </div>
+        <div class="card-kpi">
+            <i class="bi bi-currency-dollar card-kpi-icon"></i>
+            <div class="card-kpi-label">Receita Estimada</div>
+            <div class="card-kpi-value">R$ 84k</div>
+            <div class="card-kpi-trend down"><i class="bi bi-arrow-down-short"></i> -2%</div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text" style="width: 80%;"></div>
+            <div class="skeleton skeleton-card mt-3"></div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Formulário Bootstrap (compatível)</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Exemplo</label>
+                        <input type="text" class="form-control" placeholder="Campo de teste">
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="showToast('Operação concluída!', 'success')">
+                        Testar Toast
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block header_nav %}
+<li><a href="/">Início</a></li>
+<li><a href="/area-interna/" class="nav-button">Área Interna</a></li>
+{% endblock %}

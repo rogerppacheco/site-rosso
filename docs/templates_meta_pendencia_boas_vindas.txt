@@ -1,0 +1,74 @@
+Templates Meta para submissão (WhatsAtende / WABA conexão #194)
+Categoria: UTILITY | Idioma: pt_BR | Botões: Quick Reply (máx. 3)
+
+================================================================================
+7. nio_pendencia_reagendamento_v1
+================================================================================
+Corpo:
+
+Olá, {{1}}!
+
+{{2}},
+
+Parceiro oficial da Nio Fibra.
+Identificamos uma pendência no agendamento
+da sua instalação Nio Fibra.
+Na maioria dos casos isso não depende de você.
+
+Para reagendar, entre em contato pelo
+WhatsApp oficial da Nio: {{3}}.
+
+Toque em um dos botões abaixo se precisar
+de ajuda com o reagendamento ou tiver dúvidas.
+
+Obrigado por escolher a Nio Fibra.
+SAC: 0800 001 1000
+
+Variáveis:
+  {{1}} = saudação (Bom dia / Boa tarde / Boa noite)
+  {{2}} = primeiro nome
+  {{3}} = 21 3605-1000
+
+Botões Quick Reply:
+  1. Reagendar
+  2. Falar com atendente
+  3. Entendi
+
+================================================================================
+8. nio_boas_vindas_v1
+================================================================================
+Corpo:
+
+Olá, {{1}}!
+
+{{2}},
+
+Parceiro oficial da Nio Fibra.
+Sua instalação Nio Fibra foi concluída.
+Seja bem-vindo(a)!
+
+Guarde este WhatsApp para suporte e
+dúvidas sobre sua conexão.
+
+SAC: 0800 001 1000 | WhatsApp: 21 3605-1000
+
+Toque em um dos botões abaixo se precisar
+de ajuda agora.
+
+Variáveis:
+  {{1}} = saudação
+  {{2}} = primeiro nome
+
+Botões Quick Reply:
+  1. Entendi
+  2. Falar com atendente
+  3. Suporte
+
+================================================================================
+CRM (resumo)
+================================================================================
+Pendência: Esteira → registrar pendência tipo Cliente → modal
+  «Enviar WhatsApp ao cliente?» → Sim → envia template 7
+  (enquanto não aprovado: fallback texto livre).
+
+Boas-vindas: ao status INSTALADA (fase 2) → template 8.

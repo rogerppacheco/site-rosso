@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Importar Preços GDP - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.import-container { max-width: 1200px; margin: 40px auto; padding: 20px; }
+.upload-zone {
+    border: 3px dashed #6f42c1;
+    border-radius: 15px;
+    padding: 60px 20px;
+    text-align: center;
+    background: var(--bg-card);
+    transition: all 0.3s;
+    cursor: pointer;
+}
+.upload-zone:hover { border-color: #5a32a3; transform: scale(1.01); }
+.upload-zone i { font-size: 4rem; color: #6f42c1; display: block; margin-bottom: 20px; }
+.info-card {
+    background: var(--bg-card);
+    border-left: 4px solid #6f42c1;
+    padding: 20px;
+    margin-bottom: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.column-tag {
+    display: inline-block;
+    background: #6f42c1;
+    color: white;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    margin: 5px;
+    font-family: monospace;
+}
+.logs-table { margin-top: 30px; }
+.importar-page .bg-white { background-color: var(--bg-card) !important; }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/importacoes/">Voltar</a></li>
+    <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="importar-page">
+    <div class="import-container">
+        <div class="text-center mb-4">
+            <h2 class="fw-bold">Importar Preços GDP (Nio por Cidade)</h2>
+            <p class="text-muted">Planilha oficial de ofertas por município, meio de pagamento e velocidade</p>
+        </div>
+
+        <div class="info-card card-modern">
+            <h5 class="mb-3"><i class="bi bi-info-circle"></i> Como funciona</h5>
+            <ul class="mb-3">
+                <li>Envie o arquivo Excel GDP (ex.: <code>20260701_B2C_GDP.xlsx</code>)</li>
+                <li>O sistema lê a aba <strong>PAP (Local)</strong> e substitui a base vigente de preços</li>
+                <li>Auditoria, resumo WhatsApp e demais telas passam a usar o valor por <strong>cidade + plano + pagamento</strong></li>
+                <li>Se a cidade não estiver na planilha, mantém o fallback (valor do plano com desconto legado no cartão)</li>
+            </ul>
+            <div>
+                <span class="column-tag">MUNICIPIO</span>
+                <span class="column-tag">UF</span>
+                <span class="column-tag">COD_IBGE</span>
+                <span class="column-tag">OFERTA PRINCIPAL CARTAO</span>
+                <span class="column-tag">OFERTA PRINCIPAL DACC</span>
+                <span class="column-tag">OFERTA PRINCIPAL BOLETO</span>
+            </div>
+        </div>
+
+        <div class="upload-zone card-modern" id="uploadZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+            <h4>Arraste a planilha GDP aqui</h4>
+            <p class="text-muted">ou clique para selecionar (.xlsx)</p>
+            <div id="fileInfo" class="mt-3" style="display:none;">
+                <div class="alert alert-info d-inline-block mb-0">
+                    <i class="bi bi-file-earmark-check"></i> <strong id="fileName"></strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button class="btn btn-primary btn-lg" id="btnUpload" disabled>
+                <i class="bi bi-upload"></i> Importar preços
+            </button>
+            <a href="/importacoes/" class="btn btn-outline-secondary btn-lg ms-2">Cancelar</a>
+        </div>
+
+        <div id="resultadoImportacao" class="mt-4" style="display:none;"></div>
+
+        <div class="logs-table card-modern p-3">
+            <h5 class="mb-3"><i class="bi bi-clock-history"></i> Histórico de importações</h5>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Status</th>
+                            <th>Vigente</th>
+                            <th>Municípios</th>
+                            <th>Preços</th>
+                            <th>Quando</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsBody">
+                        <tr><td colspan="6" class="text-muted">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+const API_BASE = '/api/crm';
+let selectedFile = null;
+
+function authHeaders(json = true) {
+    const token = localStorage.getItem('accessToken');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (json) headers['Content-Type'] = 'application/json';
+    return headers;
+}
+
+async function apiFetchJson(url) {
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders(true),
+        credentials: 'include',
+    });
+    if (response.status === 401) {
+        logout();
+        throw new Error('Sessão expirada.');
+    }
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || err.detail || `Erro HTTP ${response.status}`);
+    }
+    return response.json();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+    const btnUpload = document.getElementById('btnUpload');
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFileSelect);
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragging'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragging'));
+    uploadZone.addEventListener('drop', e => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragging');
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect();
+        }
+    });
+    btnUpload.addEventListener('click', enviarImportacao);
+    carregarLogs();
+});
+
+function handleFileSelect() {
+    const fileInput = document.getElementById('fileInput');
+    selectedFile = fileInput.files[0] || null;
+    const fileInfo = document.getElementById('fileInfo');
+    if (!selectedFile) {
+        fileInfo.style.display = 'none';
+        document.getElementById('btnUpload').disabled = true;
+        return;
+    }
+    document.getElementById('fileName').textContent = selectedFile.name;
+    fileInfo.style.display = 'block';
+    document.getElementById('btnUpload').disabled = false;
+}
+
+async function enviarImportacao() {
+    if (!selectedFile) return;
+    const btn = document.getElementById('btnUpload');
+    const resultado = document.getElementById('resultadoImportacao');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+    resultado.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${API_BASE}/importar-gdp/`, {
+            method: 'POST',
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+            body: formData,
+            credentials: 'include',
+        });
+        const resp = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(resp.error || resp.detail || 'Erro na importação.');
+        }
+        resultado.style.display = 'block';
+        resultado.innerHTML = `
+            <div class="alert alert-success">
+                <strong>Importação concluída!</strong><br>
+                ${resp.message || ''}<br>
+                Municípios: ${resp.total_municipios || 0} | Preços: ${resp.total_precos || 0}
+            </div>`;
+        carregarLogs();
+    } catch (err) {
+        resultado.style.display = 'block';
+        resultado.innerHTML = `<div class="alert alert-danger">${err.message || 'Erro na importação.'}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload"></i> Importar preços';
+    }
+}
+
+async function carregarLogs() {
+    const tbody = document.getElementById('logsBody');
+    try {
+        const data = await apiFetchJson(`${API_BASE}/logs-importacao-gdp/?limit=15`);
+        const logs = data.logs || [];
+        if (!logs.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Nenhuma importação registrada.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = logs.map(log => `
+            <tr>
+                <td>${log.nome_arquivo}</td>
+                <td><span class="badge ${log.status === 'SUCESSO' ? 'bg-success' : log.status === 'ERRO' ? 'bg-danger' : 'bg-secondary'}">${log.status}</span></td>
+                <td>${log.vigente ? 'Sim' : 'Não'}</td>
+                <td>${log.total_municipios || 0}</td>
+                <td>${log.total_precos || 0}</td>
+                <td>${log.iniciado_em || '-'}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Erro ao carregar histórico.</td></tr>';
+    }
+}
+</script>
+{% endblock %}

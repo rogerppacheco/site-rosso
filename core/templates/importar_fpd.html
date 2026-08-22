@@ -1,0 +1,722 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Importar FPD - Bônus M-10{% endblock %}
+
+{% block extra_css %}
+<style>
+        .import-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #4e73df;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            background: var(--bg-card);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover {
+            border-color: #2e59d9;
+            background: var(--bg-secondary);
+            transform: scale(1.02);
+        }
+
+        .upload-zone.dragging {
+            border-color: #1cc88a;
+            background: #d1f2eb;
+        }
+
+        .upload-zone i {
+            font-size: 4rem;
+            color: #4e73df;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        .btn-upload {
+            font-size: 1.1rem;
+            padding: 12px 30px;
+            margin-top: 20px;
+        }
+
+        .info-card {
+            background: var(--bg-card);
+            border-left: 4px solid #4e73df;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .required-columns {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .column-tag {
+            display: inline-block;
+            background: #4e73df;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 5px;
+            font-family: monospace;
+        }
+
+        .spinner-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner-content {
+            text-align: center;
+            color: white;
+        }
+
+        .spinner-border {
+            width: 4rem;
+            height: 4rem;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .progress-bar {
+            height: 30px;
+            background-color: #4e73df;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .progress-text {
+            margin-top: 15px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-left: 4px solid #4e73df;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #4e73df;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .importar-page .bg-white { background-color: var(--bg-card) !important; }
+        .importar-page .bg-light { background-color: var(--bg-secondary) !important; }
+        .importar-page .text-dark { color: var(--text-primary) !important; }
+        .importar-page .info-card,
+        .importar-page .upload-zone,
+        .importar-page .progress-container,
+        .importar-page .filter-card { border: 1px solid var(--border-color); color: var(--text-primary); }
+
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/importacoes/">Voltar</a></li>
+                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<main class="importar-page"><div class="import-container">
+        <div class="text-center mb-4">
+            <h2 class="fw-bold text-dark">Importar Base FPD / SPD / TPD</h2>
+            <p class="text-muted">Planilha da operadora com INDICADOR (FPD=1ª, SPD=2ª, TPD=3ª) — vínculo por NR_ORDEM</p>
+        </div>
+
+        <!-- Informações Importantes -->
+        <div class="info-card card-modern">
+            <h5 class="text-primary mb-3"><i class="bi bi-info-circle"></i> Instruções</h5>
+            <ul class="mb-0">
+                <li>Faça download da planilha diretamente do sistema da operadora (base pré-FPD com FPD/SPD/TPD)</li>
+                <li>O arquivo deve estar em formato <strong>Excel (.xlsx, .xls, .xlsb)</strong> ou <strong>CSV</strong></li>
+                <li>A coluna <strong>INDICADOR</strong> define a fatura: FPD→1ª, SPD→2ª, TPD→3ª</li>
+                <li>Match por <strong>NR_ORDEM</strong>; O.S. sem contrato/venda vão para a aba <strong>Faltam no CRM</strong> em Qualidade</li>
+            </ul>
+
+            <div class="required-columns">
+                <strong class="text-dark">Colunas obrigatórias na planilha:</strong><br>
+                <span class="column-tag">NR_ORDEM</span>
+                <span class="column-tag">INDICADOR</span>
+                <span class="column-tag">ID_CONTRATO</span>
+                <span class="column-tag">NR_FATURA</span>
+                <span class="column-tag">DS_STATUS_FATURA</span>
+                <span class="column-tag">DS_SIT_FATURA</span>
+                <span class="column-tag">DT_VENC_ORIG</span>
+                <span class="column-tag">DT_PAGAMENTO</span>
+                <span class="column-tag">NR_DIAS_ATRASO</span>
+                <span class="column-tag">NM_SEG</span>
+            </div>
+        </div>
+
+        <!-- Zona de Upload -->
+        <div class="upload-zone card-modern" id="uploadZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.xlsb" style="display: none;">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <h4 class="text-dark">Arraste o arquivo aqui</h4>
+            <p class="text-muted">ou clique para selecionar</p>
+            <p class="text-muted mb-0"><small>Formatos aceitos: .xlsx, .xls, .xlsb, .csv</small></p>
+            <div id="fileInfo" class="mt-3" style="display: none;">
+                <div class="alert alert-info d-inline-block">
+                    <i class="bi bi-file-earmark-check"></i> <strong id="fileName"></strong> 
+                    <span class="ms-2">(<span id="fileSize"></span>)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button class="btn btn-primary btn-upload" id="btnUpload" disabled>
+                <i class="bi bi-upload"></i> Processar Arquivo
+            </button>
+            <a href="/importacoes/" class="btn btn-outline-secondary btn-upload ms-2">
+                <i class="bi bi-arrow-left"></i> Cancelar
+            </a>
+        </div>
+
+        <!-- Resultados -->
+        <div id="resultadoImportacao" class="mt-4" style="display: none;"></div>
+
+        <!-- Barra de Progresso -->
+        <div class="progress-container card-modern" id="progressContainer">
+            <div class="progress" style="background: #e9ecef;">
+                <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%">0%</div>
+            </div>
+            <div class="progress-text">
+                <span id="progressMessage">Preparando...</span>
+            </div>
+        </div>
+
+        <!-- Histórico de Importações -->
+        <div class="mt-5">
+            <h4 class="fw-bold text-dark mb-3">
+                <i class="bi bi-clock-history"></i> Histórico de Importações FPD
+            </h4>
+            <div id="historicoImportacoes" class="table-responsive">
+                <p class="text-center text-muted">Carregando histórico...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="spinner-overlay" id="loadingOverlay">
+        <div class="spinner-content">
+            <div class="spinner-border text-light" role="status"></div>
+            <h4 class="mt-3">Processando arquivo...</h4>
+            <p>Aguarde enquanto importamos os dados</p>
+        </div>
+    </div>
+
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/menu.js' %}?v=7.0"></script>
+<script>
+        // Garante token válido antes de chamadas protegidas
+        async function ensureTokenValido() {
+            const accessToken = localStorage.getItem('accessToken');
+            if (!accessToken) {
+                alert('Sua sessão expirou. Por favor, faça login novamente.');
+                window.location.href = '/';
+                return null;
+            }
+
+            const payload = jwt_decode(accessToken);
+            const agora = Date.now() / 1000;
+
+            if (!payload || !payload.exp) {
+                alert('Token inválido. Por favor, faça login novamente.');
+                logout();
+                return null;
+            }
+
+            const tempoRestante = payload.exp - agora;
+
+            // Token expirado? Tenta renovar.
+            if (tempoRestante <= 0) {
+                console.log("Token expirado. Tentando renovar...");
+                const renovado = await refreshAccessToken();
+                if (!renovado) {
+                    alert('Sua sessão expirou. Por favor, faça login novamente.');
+                    window.location.href = '/';
+                    return null;
+                }
+                return localStorage.getItem('accessToken');
+            }
+            
+            // Token expirando em breve (menos de 10 minutos)? Tenta renovar mas continua se falhar.
+            if (tempoRestante < 600) {
+                console.log("Token próximo de expirar. Tentando renovar...");
+                const renovado = await refreshAccessToken();
+                // Se falhou a renovação mas o token ainda é válido, continua
+                if (!renovado && tempoRestante > 60) {
+                    console.warn("Falha ao renovar token, mas token atual ainda é válido.");
+                    return accessToken;
+                } else if (!renovado) {
+                    alert('Sua sessão expirou. Por favor, faça login novamente.');
+                    window.location.href = '/';
+                    return null;
+                }
+                return localStorage.getItem('accessToken');
+            }
+
+            return accessToken;
+        }
+
+        // Verificar permissão (apenas Diretoria pode importar FPD)
+        async function verificarPermissao() {
+            const token = await ensureTokenValido();
+            if (!token) return false;
+            
+            try {
+                const res = await fetch('/api/usuarios/me/', { headers: {'Authorization': `Bearer ${token}`} });
+                
+                if (!res.ok) {
+                    console.error('Erro ao buscar usuário:', res.status);
+                    // Tentar verificar com JWT
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    console.log('JWT payload:', payload);
+                    return true; // Permitir acesso temporário
+                }
+                
+                const user = await res.json();
+                console.log('Usuário completo:', user);
+                
+                // Extrair nomes dos grupos (pode vir como array de objetos ou strings)
+                let gruposNomes = [];
+                if (user.groups && Array.isArray(user.groups)) {
+                    gruposNomes = user.groups.map(g => {
+                        if (typeof g === 'string') return g;
+                        if (g.name) return g.name;
+                        return null;
+                    }).filter(Boolean);
+                }
+                
+                console.log('Grupos do usuário:', gruposNomes);
+                
+                // Verificar se tem permissão (Diretoria, Admin ou BackOffice)
+                const temPermissao = gruposNomes.some(g => 
+                    ['Diretoria', 'Admin', 'BackOffice', 'admin', 'diretoria'].includes(g)
+                );
+                
+                console.log('Tem permissão?', temPermissao);
+                
+                if (!temPermissao) {
+                    document.body.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8f9fa;">
+                            <div style="text-align: center; background: var(--bg-card); padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                                <i class="bi bi-lock-fill" style="font-size: 3rem; color: #dc3545;"></i>
+                                <h2 style="margin-top: 20px; color: #333;">Acesso Restrito</h2>
+                                <p style="color: var(--text-secondary); margin: 20px 0;">Esta ferramenta é restrita para usuários da Diretoria.</p>
+                                <p style="color: #999; font-size: 0.9rem;">Seus grupos: ${gruposNomes.join(', ') || 'Nenhum'}</p>
+                                <a href="/area-interna/" class="btn btn-primary" style="text-decoration: none; background: #0d6efd; color: white; padding: 10px 30px; border-radius: 5px; display: inline-block;">Voltar</a>
+                            </div>
+                        </div>
+                    `;
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                console.error('Erro ao verificar permissão:', error);
+                // Em caso de erro, permitir acesso
+                alert('Aviso: Não foi possível verificar permissões. Continuando...');
+                return true;
+            }
+        }
+
+        // Inicializar página
+        (async function inicializar() {
+            const temPermissao = await verificarPermissao();
+            if (temPermissao) {
+                // Carregar histórico ao abrir a página
+                carregarHistoricoImportacoes();
+            }
+        })();
+
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const btnUpload = document.getElementById('btnUpload');
+        const fileInfo = document.getElementById('fileInfo');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        let selectedFile = null;
+
+        // Eventos de drag & drop
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragging');
+        });
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragging');
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragging');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileSelect(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            const validExtensions = ['.xlsx', '.xls', '.csv', '.xlsb'];
+            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            
+            if (!validExtensions.includes(fileExtension)) {
+                alert('Formato inválido! Use .xlsx, .xls, .xlsb ou .csv');
+                return;
+            }
+
+            selectedFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            fileInfo.style.display = 'block';
+            btnUpload.disabled = false;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        btnUpload.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            loadingOverlay.style.display = 'flex';
+            const progressContainer = document.getElementById('progressContainer');
+            progressContainer.style.display = 'block';
+
+            // Simular progresso (10%, 30%, 70%, 90%, 100%)
+            const progressBar = document.getElementById('progressBar');
+            const progressMessage = document.getElementById('progressMessage');
+            let progress = 0;
+
+            const progressInterval = setInterval(() => {
+                if (progress < 10) progress = 10;
+                else if (progress < 30) progress = 30;
+                else if (progress < 70) progress = 70;
+                else if (progress < 90) progress = 90;
+                else progress = 100;
+
+                progressBar.style.width = progress + '%';
+                progressBar.textContent = progress + '%';
+
+                if (progress === 10) progressMessage.textContent = 'Iniciando upload...';
+                else if (progress === 30) progressMessage.textContent = 'Enviando arquivo...';
+                else if (progress === 70) progressMessage.textContent = 'Processando dados...';
+                else if (progress === 90) progressMessage.textContent = 'Finalizando...';
+                else if (progress === 100) progressMessage.textContent = 'Concluído!';
+
+                if (progress === 100) clearInterval(progressInterval);
+            }, 300);
+
+            try {
+                let token = await ensureTokenValido();
+                if (!token) {
+                    mostrarResultado('error', { erro: 'Sessão expirada. Faça login novamente.' });
+                    clearInterval(progressInterval);
+                    loadingOverlay.style.display = 'none';
+                    return;
+                }
+
+                const fazerUpload = async (authToken) => fetch('/api/bonus-m10/importar-fpd/', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                    body: formData
+                });
+
+                let response = await fazerUpload(token);
+
+                // Tenta uma renovação rápida se o token estiver vencido
+                if (response.status === 401) {
+                    await refreshAccessToken();
+                    const novoToken = localStorage.getItem('accessToken');
+                    if (novoToken && novoToken !== token) {
+                        token = novoToken;
+                        response = await fazerUpload(token);
+                    }
+                }
+
+                const data = await response.json();
+                clearInterval(progressInterval);
+                loadingOverlay.style.display = 'none';
+
+                if (response.ok) {
+                    // Verifica se é processamento em background
+                    if (data.background && data.status === 'PROCESSANDO') {
+                        mostrarResultado('info', {
+                            message: data.message || 'Importação iniciada! O processamento está rodando em segundo plano.',
+                            detalhes: 'A importação pode levar alguns minutos. Volte a esta página em breve para verificar o resultado final no painel M-10.'
+                        });
+                    } else {
+                        mostrarResultado('success', data);
+                    }
+                } else {
+                    mostrarResultado('error', data);
+                }
+
+                // Atualiza histórico após upload
+                setTimeout(() => carregarHistoricoImportacoes(), 1000);
+                
+            } catch (error) {
+                clearInterval(progressInterval);
+                loadingOverlay.style.display = 'none';
+                mostrarResultado('error', { erro: 'Erro ao conectar com servidor' });
+            }
+        });
+
+        function mostrarResultado(tipo, data) {
+            const resultado = document.getElementById('resultadoImportacao');
+            resultado.style.display = 'block';
+            
+            if (tipo === 'success') {
+                resultado.innerHTML = `
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading"><i class="bi bi-check-circle"></i> Importação Concluída!</h5>
+                        <p class="mb-0">
+                            <strong>${data.criados || data.vinculados || 0}</strong> contratos vinculados |
+                            <strong>${data.atualizados || data.sem_vinculo || 0}</strong> sem vínculo |
+                            <strong>${data.faturas || data.total_importados || 0}</strong> registros processados
+                        </p>
+                        <hr>
+                        <div class="d-flex gap-2 mt-3">
+                            <a href="/bonus-m10/" class="btn btn-success">
+                                <i class="bi bi-bar-chart-fill"></i> Ver Painel M-10
+                            </a>
+                            <button class="btn btn-outline-primary" onclick="location.reload()">
+                                <i class="bi bi-arrow-clockwise"></i> Nova Importação
+                            </button>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+            } else if (tipo === 'info') {
+                resultado.innerHTML = `
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading"><i class="bi bi-clock-history"></i> Processamento em Andamento</h5>
+                        <p class="mb-0">${data.message || 'Importação iniciada com sucesso!'}</p>
+                        ${data.detalhes ? `<hr><p class="mb-0"><small>${data.detalhes}</small></p>` : ''}
+                        <hr>
+                        <div class="d-flex gap-2 mt-3">
+                            <a href="/bonus-m10/" class="btn btn-info">
+                                <i class="bi bi-bar-chart-fill"></i> Ir para Painel M-10
+                            </a>
+                            <button class="btn btn-outline-primary" onclick="location.reload()">
+                                <i class="bi bi-arrow-clockwise"></i> Atualizar Página
+                            </button>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+            } else {
+                resultado.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading"><i class="bi bi-x-circle"></i> Erro na Importação</h5>
+                        <p class="mb-0">${data.erro || data.error || 'Erro desconhecido'}</p>
+                        ${data.detalhes ? `<hr><small>${data.detalhes}</small>` : ''}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+            }
+
+            resultado.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Carregar histórico de importações
+        let autoRefreshInterval = null;
+
+        async function carregarHistoricoImportacoes() {
+            try {
+                const token = await ensureTokenValido();
+                if (!token) return;
+
+                const response = await fetch('/api/bonus-m10/logs-fpd/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar histórico');
+                }
+
+                const data = await response.json();
+                
+                if (data.success && data.logs && data.logs.length > 0) {
+                    exibirHistorico(data.logs);
+                    
+                    // Se houver importações PROCESSANDO, continuar auto-refresh
+                    const temProcessando = data.logs.some(log => log.status === 'PROCESSANDO');
+                    if (temProcessando && !autoRefreshInterval) {
+                        iniciarAutoRefresh();
+                    } else if (!temProcessando && autoRefreshInterval) {
+                        pararAutoRefresh();
+                    }
+                } else {
+                    document.getElementById('historicoImportacoes').innerHTML = `
+                        <p class="text-center text-muted">Nenhuma importação encontrada</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar histórico:', error);
+                document.getElementById('historicoImportacoes').innerHTML = `
+                    <p class="text-center text-danger">Erro ao carregar histórico</p>
+                `;
+            }
+        }
+
+        function exibirHistorico(logs) {
+            const container = document.getElementById('historicoImportacoes');
+            
+            let html = `
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Arquivo</th>
+                            <th>Status</th>
+                            <th>Iniciado</th>
+                            <th>Duração</th>
+                            <th>Processadas</th>
+                            <th>Detalhes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            logs.forEach(log => {
+                const statusBadge = getStatusBadge(log.status, log.status_display);
+                const duracao = log.duracao_segundos 
+                    ? `${log.duracao_segundos}s` 
+                    : (log.status === 'PROCESSANDO' ? '<i class="spinner-border spinner-border-sm"></i>' : '-');
+                let iniciado = '-';
+                if (log.iniciado_em) {
+                    const dataInicio = new Date(log.iniciado_em);
+                    if (!isNaN(dataInicio.getTime())) {
+                        iniciado = dataInicio.toLocaleString('pt-BR');
+                    }
+                }
+                const processadas = log.total_processadas || 0;
+                
+                html += `
+                    <tr>
+                        <td><small>${log.nome_arquivo}</small></td>
+                        <td>${statusBadge}</td>
+                        <td><small>${iniciado}</small></td>
+                        <td>${duracao}</td>
+                        <td>${processadas}</td>
+                        <td>
+                            ${log.mensagem_erro ? `<small class="text-danger">${log.mensagem_erro}</small>` : ''}
+                            ${log.novos_inseridos > 0 ? `<span class="badge bg-success">${log.novos_inseridos} novos</span> ` : ''}
+                            ${log.atualizados > 0 ? `<span class="badge bg-info">${log.atualizados} atualizados</span>` : ''}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function getStatusBadge(status, display) {
+            const badges = {
+                'PROCESSANDO': '<span class="badge bg-primary"><i class="spinner-border spinner-border-sm me-1"></i> Processando</span>',
+                'SUCESSO': '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i> Sucesso</span>',
+                'ERRO': '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i> Erro</span>',
+                'PARCIAL': '<span class="badge bg-warning"><i class="bi bi-exclamation-triangle me-1"></i> Parcial</span>'
+            };
+            return badges[status] || `<span class="badge bg-secondary">${display}</span>`;
+        }
+
+        function iniciarAutoRefresh() {
+            if (autoRefreshInterval) return;
+            
+            autoRefreshInterval = setInterval(() => {
+                carregarHistoricoImportacoes();
+            }, 5000); // Atualiza a cada 5 segundos
+            
+            console.log('Auto-refresh iniciado');
+        }
+
+        function pararAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                console.log('Auto-refresh parado');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('accessToken');
+            window.location.href = '/';
+        }
+
+        // Executar verificação de permissão ao carregar
+        window.addEventListener('load', verificarPermissao);
+    </script>
+{% endblock %}
