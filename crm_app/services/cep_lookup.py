@@ -84,7 +84,7 @@ def _consultar_opencep(cep_limpo):
     try:
         import urllib.request
         url = f"https://opencep.com/v1/{cep_limpo}.json"
-        req = urllib.request.Request(url, headers={'User-Agent': 'RecordCRM/1.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'RossoCRM/1.0'})
         with urllib.request.urlopen(req, timeout=6) as resp:
             data = json.loads(resp.read().decode('utf-8'))
         if isinstance(data, dict) and data.get('localidade'):

@@ -1708,7 +1708,7 @@ class Comunicado(models.Model):
         return f"{self.titulo} - {self.get_status_display()}"
     
     class Meta:
-        verbose_name = "Comunicado (Record Informa)"
+        verbose_name = "Comunicado (Rosso Informa)"
         verbose_name_plural = "Comunicados"
         ordering = ['-data_programada', '-hora_programada']
 
@@ -3173,7 +3173,7 @@ class LinkPublicoPreVenda(models.Model):
             base_url = request.build_absolute_uri('/')[:-1]
         else:
             from django.conf import settings
-            base_url = getattr(settings, 'SITE_URL', 'https://www.recordpap.com.br')
+            base_url = getattr(settings, 'SITE_URL', 'https://site-rosso-production.up.railway.app')
         return f"{base_url}/prevenda-publica/{self.codigo_unico}/"
 
 
@@ -4395,7 +4395,7 @@ class LogImportacaoRecompra(models.Model):
 
 
 class RecordApoia(models.Model):
-    """Repositório de arquivos Record Apoia - Acesso público para todos os usuários"""
+    """Repositório de arquivos Apoia - Acesso público para todos os usuários"""
     
     TIPO_ARQUIVO_CHOICES = [
         ('PDF', 'PDF'),
@@ -4476,8 +4476,8 @@ class RecordApoia(models.Model):
     )
     
     class Meta:
-        verbose_name = "Arquivo Record Apoia"
-        verbose_name_plural = "Arquivos Record Apoia"
+        verbose_name = "Arquivo Apoia"
+        verbose_name_plural = "Arquivos Apoia"
         ordering = ['-data_upload']
         indexes = [
             models.Index(fields=['tipo_arquivo']),

@@ -1,5 +1,5 @@
 /**
- * MENU.JS v5.0 - Sistema de Navegação Padronizado Record PAP
+ * MENU.JS v5.0 - Sistema de Navegação Padronizado
  * Gerencia menu responsivo, autenticação e funcionalidades globais
  */
 

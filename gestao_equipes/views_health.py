@@ -34,7 +34,7 @@ class HealthView(View):
         payload: dict[str, Any] = {
             "status": "ok",
             "service": os.environ.get("RAILWAY_SERVICE_NAME")
-            or getattr(settings, "SITE_BRAND", "site-record"),
+            or getattr(settings, "SITE_BRAND", "Rosso"),
         }
         return JsonResponse(payload)
 

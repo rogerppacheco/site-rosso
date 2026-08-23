@@ -98,7 +98,7 @@ def montar_url_webhook_whatsatende(site_url: Optional[str] = None) -> str:
     """URL sugerida para cadastrar na WhatsAtende (com token no path, se houver)."""
     base = (site_url or getattr(settings, "SITE_URL", "") or "").rstrip("/")
     if not base:
-        base = "https://www.recordpap.com.br"
+        base = "https://site-rosso-production.up.railway.app"
     token = get_whatsatende_webhook_token()
     if token:
         return f"{base}/api/crm/webhook-whatsapp/{token}/"

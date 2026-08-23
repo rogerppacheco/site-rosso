@@ -42,7 +42,7 @@ O bot do WhatsApp oferece estes comandos e fluxos:
 - *Status*: consultar status de pedido
 - *Fatura*: consultar fatura por CPF (Nio Negociar)
 - *Conta*: 2ª via de conta por CPF
-- *Material* / *Apoia*: buscar materiais e documentos por palavra-chave (Record Apoia)
+- *Material* / *Apoia*: buscar materiais e documentos por palavra-chave
 - *Andamento*: ver agendamentos do dia
 - *Crédito*: análise de crédito por CPF
 - *Pedido*: consultar pedido/O.S. por CPF no PAP
@@ -176,7 +176,7 @@ def get_contexto_sistema(reduzido: bool = False, contexto_externo: bool = False)
     """
     if contexto_externo:
         return """
-Você é o atendimento do Record PAP, parceiro da Nio Fibra. Esta mensagem veio de um contato externo (número não cadastrado como vendedor interno no sistema).
+Você é o atendimento da Rosso, parceiro da Nio Fibra. Esta mensagem veio de um contato externo (número não cadastrado como vendedor interno no sistema).
 
 Responda de forma acolhedora e profissional:
 - Coloque-se à disposição.

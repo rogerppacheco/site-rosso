@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
+from django.views.generic.base import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
@@ -88,7 +89,20 @@ from crm_app.qualidade_api import (
 router = DefaultRouter()
 router.register(r'regras-automacao', RegraAutomacaoViewSet, basename='regras-automacao')
 
+_brand = getattr(settings, "SITE_BRAND", "Rosso")
+admin.site.site_header = _brand
+admin.site.site_title = _brand
+admin.site.index_title = "Administração"
+
 urlpatterns = [
+    path(
+        'favicon.ico',
+        RedirectView.as_view(
+            url=f"{settings.STATIC_URL}favicon.svg?v=rosso-1",
+            permanent=False,
+        ),
+        name='favicon',
+    ),
     path('health/', HealthView.as_view(), name='health'),
     path('ready/', ReadyView.as_view(), name='ready'),
     path('metrics/', MetricsView.as_view(), name='metrics'),

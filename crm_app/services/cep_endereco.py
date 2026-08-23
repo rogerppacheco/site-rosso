@@ -11,7 +11,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_HEADERS = {'User-Agent': 'RecordCRM/1.0'}
+_HEADERS = {'User-Agent': 'RossoCRM/1.0'}
 _TIMEOUT = 10
 
 

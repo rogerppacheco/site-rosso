@@ -30,7 +30,7 @@ def consultar_cep(cep, cache=None):
     try:
         import urllib.request
         url = f"https://viacep.com.br/ws/{cep_limpo}/json/"
-        req = urllib.request.Request(url, headers={'User-Agent': 'RecordCRM/1.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'RossoCRM/1.0'})
         with urllib.request.urlopen(req, timeout=5) as resp:
             import json
             data = json.loads(resp.read().decode('utf-8'))

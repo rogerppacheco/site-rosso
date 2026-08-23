@@ -1,4 +1,4 @@
-"""Regras de negócio para envio de comunicados (Record Informa)."""
+"""Regras de negócio para envio de comunicados (Informa)."""
 from __future__ import annotations
 
 import logging

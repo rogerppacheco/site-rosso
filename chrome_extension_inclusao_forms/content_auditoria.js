@@ -72,7 +72,7 @@
           alert("Não foi possível abrir o Forms: " + (resp?.error || "erro desconhecido"));
           return;
         }
-        console.info("[Record Inclusão] Forms aberto", resp);
+        console.info("[Rosso Inclusão] Forms aberto", resp);
       }
     );
   });

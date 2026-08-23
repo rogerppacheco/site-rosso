@@ -183,7 +183,7 @@ def build_whatsapp_config_payload() -> Dict[str, Any]:
         payload["whatsatendeWebhookUrl"] = montar_url_webhook_whatsatende()
     except Exception:
         payload["whatsatendeWebhookUrl"] = (
-            f"{getattr(settings, 'SITE_URL', 'https://www.recordpap.com.br').rstrip('/')}"
+            f"{getattr(settings, 'SITE_URL', 'https://site-rosso-production.up.railway.app').rstrip('/')}"
             "/api/crm/webhook-whatsapp/"
         )
     if db_indisponivel:

@@ -401,7 +401,7 @@ def _consultar_brasilapi(cnpj_limpo: str, *, tentativas: int = 1) -> Optional[di
     import urllib.request
 
     url = BRASILAPI_CNPJ_URL.format(cnpj=cnpj_limpo)
-    req = urllib.request.Request(url, headers={'User-Agent': 'RecordCRM/1.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'RossoCRM/1.0'})
     max_tentativas = max(1, int(tentativas))
     for tentativa in range(1, max_tentativas + 1):
         try:

@@ -277,7 +277,7 @@
   }
 
   async function run() {
-    banner("Record Inclusão: carregando demanda…");
+    banner("Rosso Inclusão: carregando demanda…");
     let jobResp = await send({ type: "INCLUSAO_GET_JOB", demandaId });
     for (let i = 0; i < 10 && !jobResp?.ok; i++) {
       await sleep(500);

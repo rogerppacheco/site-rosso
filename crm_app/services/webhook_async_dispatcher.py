@@ -23,7 +23,7 @@ class WebhookRequestContext:
         if request is not None:
             self._base = request.build_absolute_uri("/").rstrip("/")
         else:
-            domain = getattr(settings, "RAILWAY_PUBLIC_DOMAIN", None) or "www.recordpap.com.br"
+            domain = getattr(settings, "RAILWAY_PUBLIC_DOMAIN", None) or "site-rosso-production.up.railway.app"
             self._base = f"https://{domain}"
 
     def build_absolute_uri(self, path: str) -> str:
@@ -54,7 +54,7 @@ def _nome_thread(payload: Dict[str, Any]) -> str:
 def _base_url_de_request(request: Any = None) -> str:
     if request is not None:
         return request.build_absolute_uri("/").rstrip("/")
-    domain = getattr(settings, "RAILWAY_PUBLIC_DOMAIN", None) or "www.recordpap.com.br"
+    domain = getattr(settings, "RAILWAY_PUBLIC_DOMAIN", None) or "site-rosso-production.up.railway.app"
     return f"https://{domain}"
 
 

@@ -17,8 +17,8 @@ import time
 # DDD fixo 31 (região de BH/Contagem)
 DDD_CREDITO = "31"
 
-# E-mail fixo quando não há pool configurado (fallback)
-CREDITO_EMAIL_BASE = "comunicacao@recordpap.com.br"
+# Sem e-mail próprio da Rosso: não usar o da Record. Mailinator entra como fallback.
+CREDITO_EMAIL_BASE = ""
 
 # Domínios de email conhecidos para gerar endereços (uso alternativo)
 DOMINIOS_EMAIL = [
@@ -66,7 +66,10 @@ def gerar_email_credito() -> str:
     pool = _get_credito_emails_pool()
     if pool:
         return random.choice(pool)
-    return CREDITO_EMAIL_BASE
+    if CREDITO_EMAIL_BASE:
+        return CREDITO_EMAIL_BASE
+    local = f"credito{int(time.time() * 1000)}{random.randint(100, 999)}"
+    return f"{local}@mailinator.com"
 
 
 def gerar_celular_random() -> str:

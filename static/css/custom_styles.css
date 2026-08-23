@@ -2908,7 +2908,7 @@ a.link-accent:hover,
     color: var(--accent-hover);
 }
 
-/* Bootstrap utilities — respeitam o tema Record PAP */
+/* Bootstrap utilities — respeitam o tema */
 [data-theme="dark"] .text-dark,
 html[data-theme="dark"] .text-dark {
     color: var(--text-main) !important;

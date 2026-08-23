@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Record PAP — Inclusão Forms",
-  "version": "1.0.2",
-  "description": "Abre e preenche o Google Forms de Inclusão/Viabilidade a partir da Auditoria Record PAP.",
+  "name": "Rosso — Inclusão Forms",
+  "version": "1.0.3",
+  "description": "Abre e preenche o Google Forms de Inclusão/Viabilidade a partir da Auditoria Rosso.",
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
-    "https://recordpap.com.br/*",
-    "https://www.recordpap.com.br/*",
+    "https://site-rosso-production.up.railway.app/*",
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*",
     "https://docs.google.com/*",
@@ -15,8 +14,7 @@
   ],
   "externally_connectable": {
     "matches": [
-      "https://recordpap.com.br/*",
-      "https://www.recordpap.com.br/*",
+      "https://site-rosso-production.up.railway.app/*",
       "http://localhost:8000/*",
       "http://127.0.0.1:8000/*"
     ]
@@ -27,8 +25,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://recordpap.com.br/*",
-        "https://www.recordpap.com.br/*",
+        "https://site-rosso-production.up.railway.app/*",
         "http://localhost:8000/*",
         "http://127.0.0.1:8000/*"
       ],
@@ -43,7 +40,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Record Inclusão Forms"
+    "default_title": "Rosso Inclusão Forms"
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjS37wen+FheyhT3ipCB4iEEACKE190JLRFvn5/nlo+GnOAqViwDqn9PctKVlJEVU+u9I9a2iR+LnD1EaVkFywHJUabzTFL17WXaVD2dqwvtO5gd4hOAgo0pToqB2YkWgU1hV5ChC8SezBCqNrf3m709+LiaxtpvH68rU3LUBt7mP42Z95vO67QzoCTURl4KjpC2bhHsqFhS7Xv/Tzc8yJWtAXttIy9Ir1okWA2KDh3/QguJasggEVZwJs5Bnle6ODwoEyGEtOD6wsgFrmxtzTjJhWoBneuZdUUbKg3RQKeqFjDtimmBRsm1XQO3+354rQRvd4vqbLPWuxh/85xcLAQIDAQAB"
 }

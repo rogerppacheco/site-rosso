@@ -75,7 +75,7 @@ def _env_ou_decouple(chave: str, default: str = "") -> str:
 
 def _email_formulario() -> str:
     """E-mail preenchido no *campo* do Google Forms (não é a conta de login)."""
-    return _env_ou_decouple("GOOGLE_FORM_EMAIL", "comunicacao@recordpap.com.br")
+    return _env_ou_decouple("GOOGLE_FORM_EMAIL", "")
 
 
 def _email_login_google() -> str:
@@ -265,7 +265,7 @@ def buscar_coordenadas(endereco_completo: str) -> Optional[dict]:
     endereco_completo: ex "Rua X, 123, Cidade - UF, Brasil"
     """
     try:
-        headers = {'User-Agent': 'RecordPAP_Inclusao/1.0'}
+        headers = {'User-Agent': 'RossoCRM_Inclusao/1.0'}
         params = {'q': endereco_completo, 'format': 'json', 'limit': 1}
         resp = requests.get(
             "https://nominatim.openstreetmap.org/search",

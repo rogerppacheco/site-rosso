@@ -6,7 +6,13 @@
     <script>
         (function () {
             try {
-                var STORAGE_KEY = 'record-pap-theme';
+                var STORAGE_KEY = 'rosso-theme';
+                if (!localStorage.getItem(STORAGE_KEY)) {
+                    var legacy = localStorage.getItem('record-pap-theme');
+                    if (legacy === 'dark' || legacy === 'light') {
+                        localStorage.setItem(STORAGE_KEY, legacy);
+                    }
+                }
                 var stored = localStorage.getItem(STORAGE_KEY);
                 var theme = (stored === 'dark' || stored === 'light')
                     ? stored
@@ -27,8 +33,9 @@
     <meta name="color-scheme" content="light dark">
     <title>{% block title %}{{ SITE_BRAND }}{% endblock %}</title>
 
-    <link rel="shortcut icon" href="{% static 'logo.png' %}" type="image/x-icon">
-    <link rel="icon" type="image/png" href="{% static 'logo.png' %}">
+    <link rel="icon" href="{% static 'favicon.svg' %}?v=rosso-1" type="image/svg+xml">
+    <link rel="shortcut icon" href="{% static 'favicon.svg' %}?v=rosso-1" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{% static 'favicon.svg' %}?v=rosso-1">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -92,7 +99,7 @@
 
     {% block footer %}{% endblock %}
 
-    <script src="{% static 'js/theme-toggle.js' %}?v=1.6"></script>
+    <script src="{% static 'js/theme-toggle.js' %}?v=1.7"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{% static 'js/menu.js' %}?v=5.1"></script>
 

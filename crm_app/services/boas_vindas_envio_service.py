@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+from django.conf import settings
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ def montar_texto_fallback_boas_vindas(
     despedida = "boa tarde!" if agora.hour >= 12 else "bom dia!"
     return (
         f"Olá {saudacao}, {nome_cliente} tudo bem?\n\n"
-        f"Me chamo {especialista}, sou especialista de qualidade do Record PAP, "
+        f"Me chamo {especialista}, sou especialista de qualidade da {getattr(settings, 'SITE_BRAND', 'Rosso')}, "
         "parceiro Oficial da Nio Fibra.\n\n"
         "Estou entrando em contato para informar que estamos à sua disposição, "
         "caso você precise tirar dúvidas sobre seu plano e faturas.\n\n"

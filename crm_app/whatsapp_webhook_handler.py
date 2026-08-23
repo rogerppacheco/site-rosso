@@ -6971,7 +6971,7 @@ def _buscar_record_apoia_por_texto(busca_texto, sessao):
                 logger.error(f"[Webhook] Erro ao ler arquivo Record Apoia id={arquivo.id}: {e}")
                 return (
                     f"❌ Arquivo \"{arquivo.titulo}\" não está disponível no servidor.\n\n"
-                    "Peça ao administrador para reenviar o material no Record Apoia "
+                    "Peça ao administrador para reenviar o material no módulo Apoia "
                     "(Administração → Limpar registro órfão e fazer upload novamente)."
                 )
 
@@ -8890,13 +8890,14 @@ def processar_webhook_whatsapp(data, request=None):
             return _enviar_resposta_e_retornar(_com_prefixo_primeira_mensagem(resposta))
 
         # Comando RECORD APOIA / APOIA (repositório de arquivos - mesmo fluxo que Material)
-        if mensagem_limpa in ['APOIA', 'RECORD APOIA', 'RECORDAPOIA']:
-            logger.info(f"[Webhook] Comando RECORD APOIA/APOIA reconhecido!")
+        if mensagem_limpa in ['APOIA', 'RECORD APOIA', 'RECORDAPOIA', 'ROSSO APOIA', 'ROSSOAPOIA']:
+            logger.info(f"[Webhook] Comando APOIA reconhecido!")
             sessao.etapa = 'material_buscar'
             sessao.dados_temp = {}
             sessao.save()
+            marca_apoia = getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso')
             resposta = (
-                "📁 *Record Apoia* – Buscar arquivos/materiais\n\n"
+                f"📁 *{marca_apoia} Apoia* – Buscar arquivos/materiais\n\n"
                 "Digite a *palavra-chave* para buscar (ex: Globoplay, boleto, contrato, instalacao):"
             )
             return _enviar_resposta_e_retornar(_com_prefixo_primeira_mensagem(resposta))
@@ -8987,7 +8988,7 @@ def processar_webhook_whatsapp(data, request=None):
                 "• *Fatura* - Consultar fatura por CPF (Nio Negociar)\n",
                 "• *Conta* - 2ª via de conta por CPF (site Nio)\n",
                 "• *Material* - Buscar materiais/documentos\n",
-                "• *Apoia* - Record Apoia (buscar arquivos por palavra-chave)\n",
+                "• *Apoia* - buscar arquivos por palavra-chave\n",
                 "• *Andamento* - Ver agendamentos do dia\n",
                 "• *Crédito* - Consultar análise de crédito por CPF\n",
                 "• *Pedido* - Consultar pedido/O.S. por CPF no PAP\n",
@@ -10117,7 +10118,7 @@ def processar_webhook_whatsapp(data, request=None):
                     "⚠️ *Confirmação antes de enviar*\n\n"
                     "Confirme que você *não* está tentando criar um complemento ou fachada que não existe "
                     "para recompra, ou anexar fotos/comprovante que não sejam verdadeiros, ou algo que possa "
-                    "prejudicar a Record como parceiro Nio.\n\n"
+                    f"prejudicar a {getattr(settings, 'SITE_BRAND', 'Rosso')} como parceiro Nio.\n\n"
                     "Ao confirmar, a solicitação irá para a *Auditoria* (envio ao Google Forms pelo auditor).\n\n"
                     "Digite *SIM* para enviar ou *CANCELAR* para desistir."
                 )

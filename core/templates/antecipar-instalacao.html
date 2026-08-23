@@ -488,7 +488,7 @@
                     '*MÁSCARA PADRÃO DE ACIONAMENTO - GRUPO ELITE:*\n\n' +
                     '- *OS:* ' + (pedidoSelecionado.ordem_servico || '') + '\n' +
                     '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
-                    '- *NOME DO PDV:* 1067100 - RECORD\n' +
+                    '- *NOME DO PDV:* {{ SITE_MODULE_PREFIX|upper }}\n' +
                     '- *DATA AGENDADA:* ' + (pedidoSelecionado.data_agendamento || '') + ' - ' + (pedidoSelecionado.periodo_agendamento || '') + '\n' +
                     '- *DESCRIÇÃO DETALHADA DA SOLICITAÇÃO:* ' + desc
                 );
@@ -533,7 +533,7 @@
                     '- *NOME DO CLIENTE:* ' + (pedidoSelecionado.cliente_nome || '') + '\n' +
                     '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
                     '- *CONTATO DO CLIENTE:* ' + contatoCliente + '\n' +
-                    '- *PDV:* 1068561 - RECORD PAP\n' +
+                    '- *PDV:* {{ SITE_MODULE_PREFIX|upper }}\n' +
                     '- *GC:* ' + nomeGc + '\n' +
                     '- *DATA INSTALAÇÃO:* ' + (pedidoSelecionado.data_instalacao || '') + '\n' +
                     '- *DATA E HORÁRIO AGENDADO COM O CLIENTE:*\n' +
@@ -662,7 +662,7 @@
                     '*SINALIZAÇÃO - INSTALAÇÃO FÍSICA / PENDÊNCIA NO SISTEMA:*\n\n' +
                     '- *OS:* ' + (pedidoSelecionado.ordem_servico || '') + '\n' +
                     '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
-                    '- *NOME DO PDV:* 1067100 - RECORD\n' +
+                    '- *NOME DO PDV:* {{ SITE_MODULE_PREFIX|upper }}\n' +
                     '- *DATA INSTALAÇÃO FÍSICA (NO CLIENTE):* ' + df + '\n' +
                     '- *CONTEXTO:* Houve instalação física; o pedido segue com pendência na esteira.\n' +
                     '- *DESCRIÇÃO DETALHADA:* ' + desc

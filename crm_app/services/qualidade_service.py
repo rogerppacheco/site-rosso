@@ -2358,10 +2358,11 @@ def atualizar_contato(
 def montar_mensagem_cobranca_roteiro1(
     contrato: ContratoM10,
     fatura: FaturaM10,
-    nome_parceiro: str = 'Record PAP',
+    nome_parceiro: str | None = None,
     nome_atendente: str = '_________',
 ) -> str:
     """Monta texto do Roteiro 1 da Jornada de Cobrança (2ª via + barras + PIX)."""
+    parceiro = (nome_parceiro or getattr(settings, 'SITE_BRAND', 'Rosso')).strip() or 'Rosso'
     nome_cliente = (contrato.cliente_nome or 'cliente').strip()
     saudacao = _saudacao_periodo()
     codigo_barras = (fatura.codigo_barras or '').strip() or '(código de barras indisponível)'
@@ -2369,7 +2370,7 @@ def montar_mensagem_cobranca_roteiro1(
 
     return (
         f'Olá, {saudacao} Sr(a). {nome_cliente}.\n'
-        f'Me chamo {nome_atendente}, sou especialista de qualidade do ({nome_parceiro}), '
+        f'Me chamo {nome_atendente}, sou especialista de qualidade do ({parceiro}), '
         f'parceiro Oficial da Nio Fibra.\n'
         f'Identificamos um valor pendente referente ao seu plano Nio Fibra. '
         f'Segue a 2ª via da sua fatura, juntamente com o código de barras e a chave PIX.\n'

@@ -1,11 +1,19 @@
 /**
- * theme-toggle.js - Record PAP Dark/Light Mode v1.6
- * PersistÃªncia: localStorage['record-pap-theme'] = 'dark' | 'light'
+ * theme-toggle.js - Rosso Dark/Light Mode v1.7
+ * Persistência: localStorage['rosso-theme'] = 'dark' | 'light'
  */
 (function () {
     'use strict';
 
-    var STORAGE_KEY = 'record-pap-theme';
+    var STORAGE_KEY = 'rosso-theme';
+    try {
+        if (!localStorage.getItem(STORAGE_KEY)) {
+            var legacy = localStorage.getItem('record-pap-theme');
+            if (legacy === 'dark' || legacy === 'light') {
+                localStorage.setItem(STORAGE_KEY, legacy);
+            }
+        }
+    } catch (e) { /* ignore */ }
     var BG_LIGHT = '#F7F9FC';
     var BG_DARK = '#0F172A';
 
@@ -103,10 +111,11 @@
         });
     });
 
-    window.RecordPapTheme = {
+    window.RossoTheme = {
         applyTheme: applyTheme,
         toggleTheme: toggleTheme,
         getPreferredTheme: getPreferredTheme,
         storageKey: STORAGE_KEY
     };
+    window.RecordPapTheme = window.RossoTheme;
 }());

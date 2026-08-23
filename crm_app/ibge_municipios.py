@@ -46,7 +46,7 @@ def _load_from_api():
         import gzip
         import io
         url = 'https://servicodados.ibge.gov.br/api/v1/localidades/municipios'
-        req = urllib.request.Request(url, headers={'User-Agent': 'RecordCRM/1.0', 'Accept-Encoding': 'identity'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'RossoCRM/1.0', 'Accept-Encoding': 'identity'})
         with urllib.request.urlopen(req, timeout=20) as resp:
             raw = resp.read()
         # Servidor pode devolver gzip mesmo com identity; descomprime se necessário

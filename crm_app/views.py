@@ -9425,7 +9425,7 @@ class NominatimProxyView(APIView):
             url = f"https://nominatim.openstreetmap.org/search?{urllib.parse.urlencode(params)}"
             req = urllib.request.Request(
                 url,
-                headers={'User-Agent': 'RecordPap/1.0'}
+                headers={'User-Agent': 'RossoCRM/1.0'}
             )
             with urllib.request.urlopen(req, timeout=8) as response:
                 data = json.loads(response.read().decode('utf-8'))
@@ -12442,7 +12442,7 @@ def page_validacao_recompra(request):
 
 
 def page_record_apoia(request):
-    """View para renderizar a página HTML do Record Apoia"""
+    """View para renderizar a página HTML do Apoia"""
     return render(request, 'record_apoia.html')
 
 
@@ -14993,7 +14993,7 @@ class ExportarAgendamentosDiaView(APIView):
             tel2 = re.sub(r'\D', '', v.telefone2 or '') if v.telefone2 else ''
             
             ws.append([
-                'Record',                          # Parceiro (fixo)
+                getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso'),  # Parceiro
                 v.ordem_servico or '',             # Pedido (O.S)
                 (v.estado or '').upper()[:2],      # UF
                 (v.cidade or '').upper(),          # Cidade
@@ -16572,7 +16572,7 @@ def _mensagem_padrao_instalacao_fisica(os_num, endereco, data_fisica_fmt, descri
         "*SINALIZAÇÃO - INSTALAÇÃO FÍSICA / PENDÊNCIA NO SISTEMA:*\n\n"
         f"- *OS:* {os_num}\n"
         f"- *ENDEREÇO COMPLETO:* {endereco}\n"
-        "- *NOME DO PDV:* 1067100 - RECORD\n"
+        f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso').upper()}\n"
         f"- *DATA INSTALAÇÃO FÍSICA (NO CLIENTE):* {data_fisica_fmt}\n"
         "- *CONTEXTO:* Houve instalação física; o pedido segue com pendência na esteira.\n"
         f"- *DESCRIÇÃO DETALHADA:* {descricao}"
@@ -16723,7 +16723,7 @@ class SolicitarAnteciparInstalacaoView(APIView):
                 "*MÁSCARA PADRÃO DE ACIONAMENTO - GRUPO ELITE:*\n\n"
                 f"- *OS:* {os_num}\n"
                 f"- *ENDEREÇO COMPLETO:* {endereco}\n"
-                "- *NOME DO PDV:* 1067100 - RECORD\n"
+                f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso').upper()}\n"
                 f"- *DATA AGENDADA:* {data_ag_fmt} - {turno}\n"
                 f"- *DESCRIÇÃO DETALHADA DA SOLICITAÇÃO:* {descricao}"
             )

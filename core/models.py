@@ -31,7 +31,7 @@ class DiaFiscal(models.Model):
 # ---------------------------------------------------------
 class RegraAutomacao(models.Model):
     EVENTO_CHOICES = [
-        ('NOVO_CDOI', 'Novo CDOI Solicitado (Record Vertical)'),
+        ('NOVO_CDOI', 'Novo CDOI Solicitado (Rosso Vertical)'),
         # Futuramente você pode adicionar: ('NOVA_VENDA', 'Nova Venda Realizada'),
     ]
 

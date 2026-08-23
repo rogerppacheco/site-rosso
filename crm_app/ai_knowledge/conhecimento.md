@@ -1,4 +1,4 @@
-# Conhecimento para a IA do bot (Record / Nio)
+# Conhecimento para a IA do bot (Rosso / Nio)
 
 Base montada a partir do Book de Vendas (ebook Nio varejo), do Roteiro de Vendas Nio Empresas e do manual Jornada Cliente – Padronização de Mensagens. A IA usa este texto para responder sobre planos, valores, benefícios, canais e para manter a linguagem alinhada à Nio.
 
