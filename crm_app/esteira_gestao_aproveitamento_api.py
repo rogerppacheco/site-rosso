@@ -11,9 +11,10 @@ from rest_framework.views import APIView
 
 from crm_app.esteira_eventos_utils import TIPO_AGENDAMENTO, TIPO_MOTIVO_PENDENCIA, TIPO_STATUS_ESTEIRA
 from crm_app.models import LembreteInstalacaoEnviado, PendenciaIndevidaRegistro, Venda, VendaEsteiraEvento
+from crm_app.perfis_acesso import GRUPOS_ESTEIRA_GESTAO_APROVEITAMENTO
 from crm_app.utils import is_member
 
-GRUPOS_GESTAO_APROVEITAMENTO_ESTEIRA = ['Diretoria', 'BackOffice', 'Admin']
+GRUPOS_GESTAO_APROVEITAMENTO_ESTEIRA = list(GRUPOS_ESTEIRA_GESTAO_APROVEITAMENTO)
 
 
 def _montar_resumo_mes(vendas_qs, inicio_mes, fim_mes):

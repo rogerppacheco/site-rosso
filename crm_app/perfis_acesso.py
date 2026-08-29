@@ -27,6 +27,21 @@ GRUPOS_FPD_DASHBOARD: list[str] = [
     PERFIL_GERENTE_CONTAS,
 ]
 
+GRUPOS_ESTEIRA_GESTAO_APROVEITAMENTO: list[str] = [
+    'Diretoria',
+    'Admin',
+    'BackOffice',
+    PERFIL_GERENTE_CONTAS,
+]
+
+GRUPOS_EXPORT_AGENDADOS_PENDENTES: list[str] = [
+    'Diretoria',
+    'Admin',
+    'BackOffice',
+    'Supervisor',
+    PERFIL_GERENTE_CONTAS,
+]
+
 
 def is_somente_leitura(user: Any) -> bool:
     """True se o perfil do usuário é somente leitura (sem ações de escrita)."""

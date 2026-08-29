@@ -2026,7 +2026,7 @@ min-width: 100%;
         if (!allowedProfiles.includes(userProfile)) { alert('Acesso negado.'); window.location.href = '/area-interna/'; }
         const perfilSomenteLeitura = userProfile === 'Gerente de Contas';
         const podeAcessarVendasTotais = ['Diretoria', 'BackOffice', 'Admin'].includes(userProfile);
-        const podeAcessarGestaoAproveitamento = podeAcessarVendasTotais;
+        const podeAcessarGestaoAproveitamento = ['Diretoria', 'BackOffice', 'Admin', 'Gerente de Contas'].includes(userProfile);
         const podeAcessarChurnTratamento = podeAcessarVendasTotais;
         const totalAbasFixas = podeAcessarVendasTotais ? 8 : 5;
         let churnTratamentoPagina = 1;

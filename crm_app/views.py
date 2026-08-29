@@ -705,7 +705,12 @@ from crm_app.utils import (
     mes_completo_vendedor_supervisor_valido,
     q_venda_acesso_retrieve_vendedor_supervisor,
 )
-from crm_app.perfis_acesso import GRUPOS_VISUALIZACAO_GESTAO, PERFIL_GERENTE_CONTAS, is_somente_leitura
+from crm_app.perfis_acesso import (
+    GRUPOS_EXPORT_AGENDADOS_PENDENTES,
+    GRUPOS_VISUALIZACAO_GESTAO,
+    PERFIL_GERENTE_CONTAS,
+    is_somente_leitura,
+)
 
 # Modelos do App
 from .models import (
@@ -15084,7 +15089,7 @@ class ExportarAgendadosPendentesEsteiraView(APIView):
             formatar_reagendar_consultor_exibicao_com_consultor,
         )
 
-        if not is_member(request.user, ['Diretoria', 'BackOffice', 'Supervisor', 'Admin']):
+        if not is_member(request.user, GRUPOS_EXPORT_AGENDADOS_PENDENTES):
             return Response({'detail': 'Acesso negado.'}, status=status.HTTP_403_FORBIDDEN)
 
         vendas = (

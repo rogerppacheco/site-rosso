@@ -23,6 +23,12 @@ class GestaoAproveitamentoEsteiraTests(APITestCase):
             password="SenhaSegura123",
             perfil=cls.perfil_vend,
         )
+        cls.perfil_gc = Perfil.objects.create(cod_perfil="GC", nome="Gerente de Contas")
+        cls.gc = Usuario.objects.create_user(
+            username="gc_aprov",
+            password="SenhaSegura123",
+            perfil=cls.perfil_gc,
+        )
         cls.cliente = Cliente.objects.create(
             cpf_cnpj="11122233344",
             nome_razao_social="CLIENTE APROV",
@@ -127,3 +133,24 @@ class GestaoAproveitamentoEsteiraTests(APITestCase):
         self.assertEqual(resumo["total_abertas"], 2)
         self.assertGreaterEqual(resumo["instaladas"], 2)
         self.assertEqual(resumo["aproveitamento"], 100.0)
+
+    def test_gerente_contas_acessa_gestao(self):
+        self.client.force_authenticate(user=self.gc)
+        mes = timezone.localdate().strftime("%Y-%m")
+        r = self.client.get(f"/api/crm/esteira/gestao-aproveitamento/?mes_referencia={mes}")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertIn("resumo", r.data)
+
+    def test_gerente_contas_exporta_agendados_pendentes(self):
+        self.client.force_authenticate(user=self.gc)
+        r = self.client.get("/api/crm/esteira/exportar-agendados-pendentes/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK)
+        self.assertIn(
+            "spreadsheetml",
+            r["Content-Type"],
+        )
+
+    def test_vendedor_nao_exporta_agendados_pendentes(self):
+        self.client.force_authenticate(user=self.vendedor)
+        r = self.client.get("/api/crm/esteira/exportar-agendados-pendentes/")
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
