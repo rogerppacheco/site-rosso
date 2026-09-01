@@ -111,8 +111,8 @@
                                     <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">WhatsApp 2</label><input type="text" class="form-control" id="tel_whatsapp_2" placeholder="Opcional"></div>
                                     <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">WhatsApp 3</label><input type="text" class="form-control" id="tel_whatsapp_3" placeholder="Opcional"></div>
                                     <div class="col-12 mt-3 pt-3"><h6 class="text-primary border-bottom pb-2 mb-2"><i class="bi bi-key me-1"></i> Acesso</h6></div>
-                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Username</label><input type="text" class="form-control" id="usuario_login" required placeholder="Login único"></div>
-                                    <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">Senha</label><input type="password" class="form-control" id="senha" placeholder="Vazio = não alterar"></div>
+                                    <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Username</label><input type="text" class="form-control" id="usuario_login" required placeholder="Login único, sem espaços"><small class="text-muted">Sem espaços. Ex.: MARCELO.LARANJO</small></div>
+                                    <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">Senha</label><input type="password" class="form-control" id="senha" placeholder="Obrigatória no cadastro"></div>
                                     <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Perfil</label><select class="form-select" id="perfil_id" required></select></div>
                                     <div class="col-lg-3 col-md-6"><label class="form-label fw-bold">Líder</label><select class="form-select" id="supervisor_id"><option value="">Nenhum</option></select></div>
                                     <div class="col-lg-2 col-md-4"><label class="form-label fw-bold">Canal</label><select class="form-select" id="user_canal"><option value="PAP">PAP</option><option value="DIGITAL">Digital</option><option value="RECEPTIVO">Receptivo</option><option value="PARCEIRO">Parceiro</option></select></div>
@@ -192,6 +192,31 @@
         const API_USUARIOS = API_BASE + '/usuarios';
 
         const apiUrl = '';
+        function mensagemErroApi(err, statusText) {
+            if (err == null) return statusText || 'Falha ao salvar.';
+            if (typeof err === 'string') return err;
+            if (typeof err.detail === 'string' && err.detail.trim()) return err.detail.trim();
+            const rotulos = {
+                username: 'Login', email: 'E-mail', password: 'Senha', first_name: 'Nome',
+                last_name: 'Sobrenome', cpf: 'CPF', groups: 'Perfil', tel_whatsapp: 'WhatsApp 1',
+                supervisor: 'Líder', non_field_errors: '', detail: '', error: ''
+            };
+            const partes = [];
+            Object.keys(err).forEach(function(chave) {
+                const val = err[chave];
+                const texto = Array.isArray(val)
+                    ? val.map(function(v) { return typeof v === 'string' ? v : JSON.stringify(v); }).join(', ')
+                    : (typeof val === 'string' ? val : JSON.stringify(val));
+                if (!texto) return;
+                const rotulo = rotulos[chave];
+                if (chave === 'detail' || chave === 'error' || chave === 'non_field_errors' || rotulo === '') {
+                    partes.push(texto);
+                } else {
+                    partes.push((rotulo || chave) + ': ' + texto);
+                }
+            });
+            return partes.filter(Boolean).join('\n') || statusText || 'Falha ao salvar.';
+        }
         async function apiFetch(endpoint, options = {}) {
             const headers = { 'Content-Type': 'application/json', ...options.headers };
             const t = localStorage.getItem('accessToken');
@@ -201,7 +226,7 @@
             if (res.status === 401) { alert('Sessão expirada.'); localStorage.removeItem('accessToken'); window.location.href = '/'; throw new Error('Não autorizado'); }
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || err.error || res.statusText);
+                throw new Error(mensagemErroApi(err, res.statusText));
             }
             if (res.status === 204) return null;
             return res.json();
@@ -525,7 +550,19 @@
         userForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             const id = document.getElementById('user_id').value;
-            const clean = (v, num) => { if (!v || v === '') return null; if (num) { const n = parseFloat(v); return isNaN(n) ? null : n; } return v; };
+            const username = (document.getElementById('usuario_login').value || '').trim();
+            if (/\s/.test(username)) {
+                alert('O login (username) não pode ter espaços. Use por exemplo MARCELO.LARANJO ou MARCELOLARANJO.');
+                document.getElementById('usuario_login').focus();
+                return;
+            }
+            const senhaVal = (document.getElementById('senha').value || '').trim();
+            if (!id && !senhaVal) {
+                alert('Informe a senha do novo usuário.');
+                document.getElementById('senha').focus();
+                return;
+            }
+            const clean = (v, num) => { if (!v || v === '') return num ? 0 : null; if (num) { const n = parseFloat(v); return isNaN(n) ? 0 : n; } return v; };
             const parts = (document.getElementById('nome_completo').value || '').trim().split(' ');
             const body = {
                 first_name: parts.shift() || '', last_name: parts.join(' ') || '',
@@ -534,7 +571,7 @@
                 tel_whatsapp: clean(document.getElementById('tel_whatsapp').value),
                 tel_whatsapp_2: clean(document.getElementById('tel_whatsapp_2').value),
                 tel_whatsapp_3: clean(document.getElementById('tel_whatsapp_3').value),
-                username: document.getElementById('usuario_login').value,
+                username: username,
                 supervisor: document.getElementById('supervisor_id').value ? parseInt(document.getElementById('supervisor_id').value) : null,
                 canal: document.getElementById('user_canal').value,
                 cluster: clean(document.getElementById('user_cluster').value),
@@ -565,13 +602,13 @@
             };
             if (document.getElementById('senha_pap').value.trim()) body.senha_pap = document.getElementById('senha_pap').value.trim();
             if (document.getElementById('brpronto_senha').value.trim()) body.brpronto_senha = document.getElementById('brpronto_senha').value.trim();
-            if (document.getElementById('senha').value.trim()) body.password = document.getElementById('senha').value.trim();
+            if (senhaVal) body.password = senhaVal;
             try {
                 await apiFetch(id ? API_USUARIOS + '/' + id + '/' : API_USUARIOS + '/', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
                 todosUsuariosCache = []; lideresCache = { data: [], timestamp: 0 };
                 userModal.hide();
                 carregarUsuarios(document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos', paginacaoAtual.page);
-            } catch (err) { alert('Erro: ' + err.message); }
+            } catch (err) { alert('Erro: ' + (err.message || 'Falha ao salvar.')); }
         });
 
         window.inativarUsuario = async function(id) {

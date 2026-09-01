@@ -4,9 +4,24 @@ from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Permission, Group
 import logging
+import re
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+# Campos financeiros com default 0 no model. O front envia null quando a aba
+# Financeiro fica em branco; sem allow_null o DRF recusa o cadastro.
+CAMPOS_NUMERICOS_ZERO = (
+    'valor_almoco',
+    'valor_passagem',
+    'valor_ajuda_custo_mensal',
+    'desconto_boleto',
+    'desconto_inclusao_viabilidade',
+    'desconto_instalacao_antecipada',
+    'adiantamento_cnpj',
+    'desconto_inss_fixo',
+    'meta_comissao',
+)
 
 # --- SERIALIZERS DE SEGURANÇA ---
 
@@ -87,6 +102,15 @@ class UsuarioSerializer(serializers.ModelSerializer):
     def get_brpronto_senha_preenchida(self, obj) -> bool:
         return bool(getattr(obj, "brpronto_senha", None))
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        campo = self.fields.get('username')
+        if campo is not None:
+            campo.validators = [
+                v for v in campo.validators
+                if v.__class__.__name__ not in ('ASCIIUsernameValidator', 'UnicodeUsernameValidator')
+            ]
+
     def validate_meta_comissao(self, value):
         """Valida e normaliza meta_comissao - aceita 0 como valor válido"""
         if value is None or value == '':
@@ -100,8 +124,29 @@ class UsuarioSerializer(serializers.ModelSerializer):
         # Aceita 0 como valor válido (0 é um número válido)
         return value if value is not None else 0
 
+    def validate_username(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('Informe o login (username).')
+        if any(ch.isspace() for ch in value):
+            raise serializers.ValidationError(
+                'O login não pode ter espaços. Use por exemplo MARCELO.LARANJO ou MARCELOLARANJO.'
+            )
+        if not re.fullmatch(r'[\w.@+-]+', value):
+            raise serializers.ValidationError(
+                'O login deve conter apenas letras, números e os caracteres @ . + - _ (sem espaços).'
+            )
+        return value
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        for campo in CAMPOS_NUMERICOS_ZERO:
+            if campo in attrs and attrs[campo] in (None, ''):
+                attrs[campo] = 0
+        if self.instance is None and not attrs.get('password'):
+            raise serializers.ValidationError(
+                {'password': 'Informe a senha do novo usuário.'}
+            )
         perfil = attrs.get('perfil', getattr(self.instance, 'perfil', None))
         perfil_nome = (getattr(perfil, 'nome', '') or '').strip().lower()
         if perfil_nome != 'vendedor':
@@ -154,6 +199,14 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'perfil': {'required': False, 'allow_null': True},
             'supervisor': {'required': False, 'allow_null': True},
             'meta_comissao': {'required': False, 'allow_null': True},
+            'valor_almoco': {'required': False, 'allow_null': True},
+            'valor_passagem': {'required': False, 'allow_null': True},
+            'valor_ajuda_custo_mensal': {'required': False, 'allow_null': True},
+            'desconto_boleto': {'required': False, 'allow_null': True},
+            'desconto_inclusao_viabilidade': {'required': False, 'allow_null': True},
+            'desconto_instalacao_antecipada': {'required': False, 'allow_null': True},
+            'adiantamento_cnpj': {'required': False, 'allow_null': True},
+            'desconto_inss_fixo': {'required': False, 'allow_null': True},
         }
 
     def to_representation(self, instance):

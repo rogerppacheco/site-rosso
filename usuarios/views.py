@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import ContentType, Group, Permission
-from django.db import transaction, connection
+from django.db import IntegrityError, transaction, connection
 from django.db.models import Q
 from django.utils.crypto import get_random_string
 from django.http import HttpResponse
@@ -13,6 +13,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from crm_app.whatsapp_service import WhatsAppService
 from datetime import datetime
+import logging
 import re
 import openpyxl
 
@@ -29,8 +30,42 @@ from .serializers import (
     ResetSenhaSolicitacaoSerializer
 )
 
+logger = logging.getLogger(__name__)
+
 # Perfis que não aparecem na ferramenta Gestão de Acessos (delegação)
 PERFIS_EXCLUIDOS_GESTAO_ACESSOS = ('Admin', 'Diretoria')
+
+_ROTULOS_ERRO_USUARIO = {
+    'username': 'Login',
+    'email': 'E-mail',
+    'password': 'Senha',
+    'first_name': 'Nome',
+    'last_name': 'Sobrenome',
+    'cpf': 'CPF',
+    'groups': 'Perfil',
+    'tel_whatsapp': 'WhatsApp 1',
+    'supervisor': 'Líder',
+    'non_field_errors': '',
+}
+
+
+def _mensagem_erros_serializer(errors) -> str:
+    """Junta erros de campo do DRF numa frase que o front consegue exibir."""
+    def _texto(valor):
+        if isinstance(valor, (list, tuple)):
+            return ', '.join(_texto(item) for item in valor)
+        if isinstance(valor, dict):
+            return '; '.join(f'{chave}: {_texto(item)}' for chave, item in valor.items())
+        return str(valor)
+
+    partes = []
+    for chave, valor in (errors or {}).items():
+        texto = _texto(valor).strip()
+        if not texto:
+            continue
+        rotulo = _ROTULOS_ERRO_USUARIO.get(chave, chave)
+        partes.append(f'{rotulo}: {texto}' if rotulo else texto)
+    return ' | '.join(partes) if partes else 'Não foi possível salvar o usuário.'
 
 
 class PodeGestaoAcessos(permissions.BasePermission):
@@ -81,8 +116,18 @@ class GestaoAcessosUsuarioViewSet(viewsets.ModelViewSet):
             Group.objects.filter(name__in=PERFIS_EXCLUIDOS_GESTAO_ACESSOS).values_list('id', flat=True)
         )
 
+    def _resposta_validacao(self, serializer):
+        logger.warning(
+            '[Gestão Acessos] cadastro/edição inválido user=%s errors=%s',
+            getattr(self.request.user, 'username', None),
+            serializer.errors,
+        )
+        corpo = dict(serializer.errors)
+        corpo['detail'] = _mensagem_erros_serializer(serializer.errors)
+        return Response(corpo, status=status.HTTP_400_BAD_REQUEST)
+
     def update(self, request, *args, **kwargs):
-        partial = kwargs.get('partial', False)
+        partial = kwargs.pop('partial', False)
         groups = request.data.get('groups')
         if groups is not None:
             proibidos = self._grupos_proibidos_ids()
@@ -91,7 +136,19 @@ class GestaoAcessosUsuarioViewSet(viewsets.ModelViewSet):
                     {'detail': 'Não é permitido atribuir perfil Admin ou Diretoria nesta ferramenta.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        return super().update(request, *args, **kwargs)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if not serializer.is_valid():
+            return self._resposta_validacao(serializer)
+        try:
+            self.perform_update(serializer)
+        except IntegrityError:
+            logger.exception('[Gestão Acessos] IntegrityError na edição id=%s', instance.pk)
+            return Response(
+                {'detail': 'Já existe um usuário com este login, e-mail ou CPF.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         groups = request.data.get('groups')
@@ -102,7 +159,19 @@ class GestaoAcessosUsuarioViewSet(viewsets.ModelViewSet):
                     {'detail': 'Não é permitido atribuir perfil Admin ou Diretoria nesta ferramenta.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        return super().create(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return self._resposta_validacao(serializer)
+        try:
+            self.perform_create(serializer)
+        except IntegrityError:
+            logger.exception('[Gestão Acessos] IntegrityError no cadastro')
+            return Response(
+                {'detail': 'Já existe um usuário com este login, e-mail ou CPF.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=['put'], url_path='reativar')
     def reativar(self, request, pk=None):
