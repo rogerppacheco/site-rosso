@@ -1840,8 +1840,9 @@ input[type="text"]:not(#input-email), textarea { text-transform: uppercase; }
             const camposOpcionaisNoApp = [
                 'select-plano', 'select-pagamento', 
                 'nova-cep', 'nova-logradouro', 'nova-numero', 'nova-bairro', 'nova-cidade', 'nova-estado', 'nova-referencia',
-                'input-nome-mae', 'input-data-nascimento', 'input-email' 
+                'input-email'
             ];
+            const camposOpcionaisSemApp = ['input-nome-mae', 'input-data-nascimento'];
 
             if (origemCadastroAtual === 'APP') {
                 const ehGestaoVendedor = ['Admin', 'Diretoria', 'BackOffice'].includes(userProfile);
@@ -1864,6 +1865,10 @@ input[type="text"]:not(#input-email), textarea { text-transform: uppercase; }
                     const el = document.getElementById(id);
                     if(el) el.removeAttribute('required');
                 });
+                camposOpcionaisSemApp.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.removeAttribute('required');
+                });
 
             } else {
                 if(containerDadosVenda) containerDadosVenda.style.display = 'flex';
@@ -1878,6 +1883,10 @@ input[type="text"]:not(#input-email), textarea { text-transform: uppercase; }
                 camposOpcionaisNoApp.forEach(id => {
                     const el = document.getElementById(id);
                     if(el) el.setAttribute('required', 'required');
+                });
+                camposOpcionaisSemApp.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.removeAttribute('required');
                 });
                 const inputEmail = document.getElementById('input-email');
                 if (inputEmail) inputEmail.removeAttribute('required');
