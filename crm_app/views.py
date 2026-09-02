@@ -16111,6 +16111,8 @@ class ConfigEsteiraVendasView(APIView):
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Supervisor']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
         config = _esteira_vendas_get_config()
+        if request.query_params.get('sync_grupos') in ('1', 'true', 'yes'):
+            _antecipar_instalacao_sync_grupos_zapi()
         payload = self._payload(config, incluir_catalogo=True)
         payload['pode_editar'] = is_member(request.user, ['Diretoria', 'Admin', 'BackOffice'])
         return Response(payload)
@@ -16220,7 +16222,8 @@ class ConfigAnteciparInstalacaoView(APIView):
 
     def get(self, request):
         config = _antecipar_instalacao_get_config()
-        _antecipar_instalacao_sync_grupos_zapi()
+        if request.query_params.get('sync_grupos') in ('1', 'true', 'yes'):
+            _antecipar_instalacao_sync_grupos_zapi()
         payload = self._payload(config, incluir_catalogo=True)
         payload['pode_editar'] = is_member(request.user, ['Diretoria', 'Admin', 'BackOffice'])
         return Response(payload)

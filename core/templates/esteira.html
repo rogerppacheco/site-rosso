@@ -1778,7 +1778,12 @@ min-width: 100%;
                         </div>
                     </div>
                     <div class="mb-2">
-                        <label class="form-label small fw-bold" for="config-pend-cliente-grupos">Grupos WhatsApp</label>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold mb-0" for="config-pend-cliente-grupos">Grupos WhatsApp</label>
+                            <button type="button" class="btn btn-xs btn-outline-secondary" id="btn-atualizar-grupos-pend-cliente" onclick="atualizarGruposPendCliente()" title="Buscar grupos novos no WhatsApp">
+                                <i class="bi bi-arrow-clockwise"></i> Atualizar lista
+                            </button>
+                        </div>
                         <select id="config-pend-cliente-grupos" class="form-select form-select-sm" multiple size="6"></select>
                         <div class="form-text">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar vários.</div>
                         <div id="config-pend-cliente-grupos-aviso" class="form-text text-warning" style="display:none;">
@@ -2785,6 +2790,55 @@ min-width: 100%;
             }
         }
 
+        function preencherSelectGruposPendCliente(data, opts) {
+            opts = opts || {};
+            const sel = document.getElementById('config-pend-cliente-grupos');
+            if (!sel) return;
+            let idsToSelect;
+            if (opts.preserveSelection) {
+                idsToSelect = new Set(Array.from(sel.selectedOptions).map(function (o) { return Number(o.value); }));
+            } else {
+                idsToSelect = new Set((data.grupo_ids || []).map(Number));
+            }
+            sel.innerHTML = '';
+            (data.grupos || []).forEach(function (g) {
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = g.nome;
+                if (idsToSelect.has(Number(g.id))) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            const aviso = document.getElementById('config-pend-cliente-grupos-aviso');
+            if (aviso) aviso.style.display = (data.grupos && data.grupos.length) ? 'none' : 'block';
+        }
+
+        async function atualizarGruposPendCliente() {
+            const btn = document.getElementById('btn-atualizar-grupos-pend-cliente');
+            const msgEl = document.getElementById('config-pend-cliente-msg');
+            if (btn) btn.disabled = true;
+            if (msgEl) {
+                msgEl.textContent = 'Atualizando grupos do WhatsApp...';
+                msgEl.className = 'small mt-2 text-muted';
+            }
+            try {
+                const data = await apiFetch('/crm/esteira/config/?sync_grupos=1');
+                preencherSelectGruposPendCliente(data, { preserveSelection: true });
+                if (msgEl) {
+                    msgEl.textContent = (data.grupos && data.grupos.length)
+                        ? (data.grupos.length + ' grupo(s) disponível(is).')
+                        : 'Nenhum grupo encontrado. Verifique a conexão WhatsApp.';
+                    msgEl.className = 'small mt-2 ' + ((data.grupos && data.grupos.length) ? 'text-success' : 'text-warning');
+                }
+            } catch (e) {
+                if (msgEl) {
+                    msgEl.textContent = e.message || 'Erro ao atualizar grupos.';
+                    msgEl.className = 'small mt-2 text-danger';
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         async function abrirModalRelatorioPendCliente() {
             if (!podeConfigEsteiraBackoffice || !modalRelatorioPendCliente) return;
             const msgEl = document.getElementById('config-pend-cliente-msg');
@@ -2796,18 +2850,7 @@ min-width: 100%;
                     data.relatorio_pendencia_cliente_horario_1 || '12:00';
                 document.getElementById('config-pend-cliente-horario-2').value =
                     data.relatorio_pendencia_cliente_horario_2 || '18:00';
-                const sel = document.getElementById('config-pend-cliente-grupos');
-                sel.innerHTML = '';
-                const selectedIds = new Set((data.grupo_ids || []).map(Number));
-                (data.grupos || []).forEach(function (g) {
-                    const opt = document.createElement('option');
-                    opt.value = g.id;
-                    opt.textContent = g.nome;
-                    if (selectedIds.has(Number(g.id))) opt.selected = true;
-                    sel.appendChild(opt);
-                });
-                const aviso = document.getElementById('config-pend-cliente-grupos-aviso');
-                if (aviso) aviso.style.display = (data.grupos && data.grupos.length) ? 'none' : 'block';
+                preencherSelectGruposPendCliente(data);
                 modalRelatorioPendCliente.show();
             } catch (e) {
                 alert(e.message || 'Erro ao carregar configuração.');

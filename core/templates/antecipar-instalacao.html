@@ -201,7 +201,12 @@
                         <h6 class="fw-bold mb-2">Destinos das mensagens (Antecipação e Sem SLOT)</h6>
                         <p class="text-muted small mb-3">Os mesmos destinos WhatsApp valem para Antecipação e para Sem SLOT na auditoria. A máscara Sem SLOT também pode ir ao e-mail do GC (interruptor acima).</p>
                         <div class="mb-3">
-                            <label class="form-label">Grupos WhatsApp</label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">Grupos WhatsApp</label>
+                                <button type="button" class="btn btn-xs btn-outline-secondary" id="btn-atualizar-grupos-antecipar" title="Buscar grupos novos no WhatsApp">
+                                    <i class="bi bi-arrow-clockwise"></i> Atualizar lista
+                                </button>
+                            </div>
                             <select id="config-grupo" class="form-select" multiple size="6"></select>
                             <div class="form-text">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar vários.</div>
                             <div id="config-grupos-aviso" class="form-text text-warning" style="display:none;">Nenhum grupo cadastrado. Cadastre em Integração &gt; Grupos de disparo (ou use a opção listar grupos da Z-API).</div>
@@ -828,9 +833,59 @@
                     tels.length ? tels.join(', ') : 'Nenhum';
             }
 
+            function preencherSelectGruposAntecipar(data, opts) {
+                opts = opts || {};
+                const sel = document.getElementById('config-grupo');
+                if (!sel) return;
+                let idsToSelect;
+                if (opts.preserveSelection) {
+                    idsToSelect = new Set(Array.from(sel.selectedOptions).map(function (o) { return Number(o.value); }));
+                } else {
+                    idsToSelect = new Set((data.grupo_ids || []).map(Number));
+                }
+                sel.innerHTML = '';
+                (data.grupos || []).forEach(function (g) {
+                    const opt = document.createElement('option');
+                    opt.value = g.id;
+                    opt.textContent = g.nome;
+                    if (idsToSelect.has(Number(g.id))) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+                document.getElementById('config-grupos-aviso').style.display = (data.grupos && data.grupos.length) ? 'none' : 'block';
+            }
+
+            async function atualizarGruposAnteciparConfig() {
+                const btn = document.getElementById('btn-atualizar-grupos-antecipar');
+                const msgEl = document.getElementById('config-msg');
+                if (btn) btn.disabled = true;
+                if (msgEl) {
+                    msgEl.textContent = 'Atualizando grupos do WhatsApp...';
+                    msgEl.className = 'ms-2 small text-muted';
+                }
+                try {
+                    const res = await fetch(apiBase + '/antecipar-instalacao/config/?sync_grupos=1', { headers: getAuthHeader(true) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Erro');
+                    preencherSelectGruposAntecipar(data, { preserveSelection: true });
+                    if (msgEl) {
+                        msgEl.textContent = (data.grupos && data.grupos.length)
+                            ? (data.grupos.length + ' grupo(s) disponível(is).')
+                            : 'Nenhum grupo encontrado. Verifique a conexão WhatsApp.';
+                        msgEl.className = 'ms-2 small ' + ((data.grupos && data.grupos.length) ? 'text-success' : 'text-warning');
+                    }
+                } catch (e) {
+                    if (msgEl) {
+                        msgEl.textContent = e.message || 'Erro ao atualizar grupos.';
+                        msgEl.className = 'ms-2 small text-danger';
+                    }
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            }
+
             async function carregarConfig() {
                 try {
-                    const res = await fetch(apiBase + '/antecipar-instalacao/config/', { headers: getAuthHeader(true) });
+                    const res = await fetch(apiBase + '/antecipar-instalacao/config/?sync_grupos=1', { headers: getAuthHeader(true) });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.detail || 'Erro');
                     configData = data;
@@ -841,17 +896,7 @@
                     formatarDestinosDisplay(data);
                     document.getElementById('config-relatorio-display').textContent = data.relatorio_esteira_gc_ativo ? 'Ativo' : 'Inativo';
                     document.getElementById('config-horarios-display').textContent = formatarHorariosDisplay(data);
-                    const sel = document.getElementById('config-grupo');
-                    sel.innerHTML = '';
-                    const selectedIds = new Set((data.grupo_ids || []).map(Number));
-                    (data.grupos || []).forEach(function(g) {
-                        const opt = document.createElement('option');
-                        opt.value = g.id;
-                        opt.textContent = g.nome;
-                        if (selectedIds.has(Number(g.id))) opt.selected = true;
-                        sel.appendChild(opt);
-                    });
-                    document.getElementById('config-grupos-aviso').style.display = (data.grupos && data.grupos.length) ? 'none' : 'block';
+                    preencherSelectGruposAntecipar(data);
                     document.getElementById('config-nome-gc').value = data.nome_gc || '';
                     document.getElementById('config-telefone').value = data.telefone_gc || '';
                     document.getElementById('config-email-gc').value = data.email_gc || '';
@@ -877,6 +922,8 @@
             document.getElementById('btn-add-telefone-destino').addEventListener('click', function() {
                 addTelefoneDestinoRow('');
             });
+
+            document.getElementById('btn-atualizar-grupos-antecipar').addEventListener('click', atualizarGruposAnteciparConfig);
 
             document.getElementById('btn-add-horario-relatorio').addEventListener('click', function() {
                 const qtd = document.querySelectorAll('#config-horarios-list .config-horario-row').length;
