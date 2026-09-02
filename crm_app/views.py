@@ -5676,8 +5676,10 @@ class ImportacaoOsabView(APIView):
                 log.save()
                 return
 
-                # 1. Normalização dos nomes das colunas
-            df.columns = [str(col).strip().upper().replace(' ', '_') for col in df.columns]
+                # 1. Normalização dos nomes das colunas (inclui layout Portal Parceiros)
+            from crm_app.portal_parceiros_import_utils import normalizar_colunas_osab
+
+            df = normalizar_colunas_osab(df)
 
             def _coluna_tem_valores(col_nome):
                 if col_nome not in df.columns:
@@ -5686,7 +5688,7 @@ class ImportacaoOsabView(APIView):
                 return serie.ne('').any()
 
             if not _coluna_tem_valores('PEDIDO'):
-                for alt_col in ('NR_ORDEM_ORIGINAL', 'NUMERO_BA'):
+                for alt_col in ('NR_ORDEM', 'NR_ORDEM_ORIGINAL', 'NUMERO_BA'):
                     if _coluna_tem_valores(alt_col):
                         df['PEDIDO'] = df[alt_col]
                         print(f"[OSAB] Coluna PEDIDO vazia/ausente; usando {alt_col} como PEDIDO.")
@@ -13065,6 +13067,7 @@ class ImportarFPDView(APIView):
                 'CONTRATO': str,
                 'NR_FATURA': str,
                 'NR_ORDEM': str,
+                'NR_ORDEM_VENDA': str,
                 'nr_ordem': str,
                 'INDICADOR': str,
             }
@@ -13084,16 +13087,21 @@ class ImportarFPDView(APIView):
             else:
                 df = pd.read_excel(arquivo_io, dtype=dtype_spec)
 
-            df.columns = df.columns.str.lower().str.strip().str.replace(' ', '_')
+            from crm_app.portal_parceiros_import_utils import (
+                coluna_nr_ordem_fpd_presente,
+                normalizar_colunas_fpd,
+            )
+
+            df = normalizar_colunas_fpd(df)
             if 'id_contrato' not in df.columns and 'contrato' in df.columns:
                 df['id_contrato'] = df['contrato']
 
-            if 'nr_ordem' not in df.columns:
+            if not coluna_nr_ordem_fpd_presente(df):
                 colunas_encontradas = ', '.join(sorted(df.columns[:15]))
                 log.status = 'ERRO'
                 log.mensagem_erro = (
                     'Coluna NR_ORDEM não encontrada no arquivo. '
-                    'A planilha FPD deve ter uma coluna "NR_ORDEM" (ou "Nr Ordem"). '
+                    'A planilha FPD deve ter "NR_ORDEM" ou "NR_ORDEM_VENDA" (Portal Parceiros). '
                     f'Colunas encontradas: {colunas_encontradas}'
                     + ('...' if len(df.columns) > 15 else '')
                 )

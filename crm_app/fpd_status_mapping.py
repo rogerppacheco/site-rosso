@@ -36,6 +36,8 @@ FPD_STATUS_MAP = {
     # Variações / retrocompatibilidade
     'PAGO': 'PAGO',
     'NAO_PAGO': 'NAO_PAGO',
+    'NAO_PAGA': 'NAO_PAGO',
+    'PAGA': 'PAGO',
     'ABERTO': 'NAO_PAGO',
     'VENCIDO': 'ATRASADO',
     'AGUARDANDO': 'AGUARDANDO',
