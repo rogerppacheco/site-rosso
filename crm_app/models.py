@@ -5172,3 +5172,86 @@ class RelatorioTratamentoConfig(models.Model):
     def __str__(self) -> str:
         estado = 'ativo' if self.ativo else 'inativo'
         return f'Relatório tempo de tratamento ({estado})'
+
+class HistoricoPapPedido(models.Model):
+    """Protocolo já retirado do histórico PAP (coluna Pedido / numeroPedido)."""
+
+    TIPO_VENDA = "VENDA"
+    TIPO_INTERESSE = "INTERESSE"
+    TIPO_PRE_VENDA = "PRE_VENDA"
+    TIPO_CHOICES = (
+        (TIPO_VENDA, "Venda"),
+        (TIPO_INTERESSE, "Interesse"),
+        (TIPO_PRE_VENDA, "Pré-venda"),
+    )
+
+    numero_pedido = models.CharField(max_length=40, unique=True, db_index=True)
+    tipo_venda = models.CharField(max_length=20, choices=TIPO_CHOICES, default=TIPO_VENDA, db_index=True)
+    pdv = models.CharField(max_length=20, blank=True, default="")
+    status = models.CharField(max_length=80, blank=True, default="")
+    data_criacao_pap = models.DateTimeField(null=True, blank=True)
+    origem = models.CharField(max_length=20, default="api")
+    payload = models.JSONField(default=dict, blank=True)
+    capturado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "crm_historico_pap_pedido"
+        verbose_name = "Pedido histórico PAP"
+        verbose_name_plural = "Pedidos histórico PAP"
+        ordering = ["-capturado_em"]
+
+    def __str__(self) -> str:
+        return f"{self.numero_pedido} ({self.tipo_venda})"
+
+
+class HistoricoPapBusca(models.Model):
+    """Job de busca no histórico PAP (venda / interesse / pré-venda). Não grava Venda."""
+
+    STATUS_PENDENTE = "pendente"
+    STATUS_EM_ANDAMENTO = "em_andamento"
+    STATUS_CONCLUIDO = "concluido"
+    STATUS_ERRO = "erro"
+    STATUS_CANCELADO = "cancelado"
+    STATUS_CHOICES = (
+        (STATUS_PENDENTE, "Pendente"),
+        (STATUS_EM_ANDAMENTO, "Em andamento"),
+        (STATUS_CONCLUIDO, "Concluído"),
+        (STATUS_ERRO, "Erro"),
+        (STATUS_CANCELADO, "Cancelado"),
+    )
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="historico_pap_buscas",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDENTE,
+        db_index=True,
+    )
+    data_inicio = models.DateField()
+    data_fim = models.DateField()
+    pdv = models.CharField(max_length=20, blank=True, default="")
+    tipos = models.JSONField(default=list, blank=True)
+    encontrados = models.PositiveIntegerField(default=0)
+    novos = models.PositiveIntegerField(default=0)
+    ignorados = models.PositiveIntegerField(default=0)
+    por_tipo = models.JSONField(default=dict, blank=True)
+    novos_numeros = models.JSONField(default=list, blank=True)
+    mensagem = models.TextField(blank=True, default="")
+    relatorio_json = models.JSONField(default=dict, blank=True)
+    iniciado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    finalizado_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "crm_historico_pap_busca"
+        verbose_name = "Busca histórico PAP"
+        verbose_name_plural = "Buscas histórico PAP"
+        ordering = ["-iniciado_em"]
+
+    def __str__(self) -> str:
+        return f"Busca PAP #{self.pk} {self.status}"

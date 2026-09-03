@@ -1,18 +1,41 @@
 {% extends "base.html" %}
 
-{% block title %}Funil de Vendas (WhatsApp) - {{ SITE_BRAND }}{% endblock %}
+{% block title %}Funil de Vendas - {{ SITE_BRAND }}{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.funil-json { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
+.funil-tabs .nav-link { color: var(--text-secondary); font-weight: 600; }
+.funil-tabs .nav-link.active { color: var(--accent-primary, #0d6efd); border-bottom: 3px solid var(--accent-primary, #0d6efd); }
+</style>
+{% endblock %}
+
 {% block content %}
 <main class="container py-4" style="max-width:1200px">
-        <h1 class="h4 mb-1"><i class="bi bi-funnel text-primary"></i> Funil de vendas (WhatsApp)</h1>
-        <p class="text-muted small mb-4">Tentativas do fluxo <strong>VENDER</strong> (a partir do CEP). Acesso: <strong>Diretoria</strong> ou <strong>Admin</strong>.</p>
+        <h1 class="h4 mb-1"><i class="bi bi-funnel text-primary"></i> Funil de vendas</h1>
+        <p class="text-muted small mb-3">Acesso: <strong>Diretoria</strong> ou <strong>Admin</strong>.</p>
 
         <div id="alert-403" class="alert alert-danger d-none">Sem permissão para esta ferramenta.</div>
+
+        <ul class="nav funil-tabs border-bottom mb-4" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active bg-transparent border-0 px-3 py-2" id="tab-wpp" type="button">WhatsApp (VENDER)</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link bg-transparent border-0 px-3 py-2" id="tab-hist" type="button">Histórico PAP</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link bg-transparent border-0 px-3 py-2" id="tab-legado" type="button">Montar legado (PAP × OSAB)</button>
+            </li>
+        </ul>
+
+        <div id="painel-wpp">
         <div id="alert-env" class="alert alert-warning d-none">Em produção, defina <code>FUNIL_VENDAS_REGISTRAR=true</code> para gravar novas tentativas.</div>
+        <p class="text-muted small mb-3">Tentativas do fluxo <strong>VENDER</strong> (a partir do CEP).</p>
 
         <div class="card card-modern shadow-sm mb-3">
             <div class="card-body row g-2 align-items-end">
@@ -62,6 +85,115 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-next" disabled>Próxima</button>
             </div>
         </nav>
+        </div>
+
+        <div id="painel-hist" class="d-none">
+            <div class="alert alert-info small">
+                Busca <strong>venda</strong>, <strong>interesse</strong> e <strong>pré-venda</strong> no histórico PAP.
+                O protocolo da coluna <strong>Pedido</strong> (ex.: 202606292619833371) é gravado na base;
+                se já existir, não entra de novo. <strong>Nenhuma venda é criada</strong>.
+            </div>
+            <div class="card card-modern shadow-sm mb-3">
+                <div class="card-body row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">Data início</label>
+                        <input type="date" id="hist-inicio" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">Data fim</label>
+                        <input type="date" id="hist-fim" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">PDV SAP</label>
+                        <input type="text" id="hist-pdv" class="form-control form-control-sm" placeholder="1069321">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="small">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="hist-tipo-venda" checked>
+                                <label class="form-check-label" for="hist-tipo-venda">Venda</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="hist-tipo-interesse" checked>
+                                <label class="form-check-label" for="hist-tipo-interesse">Interesse</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="hist-tipo-prevenda" checked>
+                                <label class="form-check-label" for="hist-tipo-prevenda">Pré-venda</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label small mb-0">Exportação anterior (opcional — marca Pedidos já vistos)</label>
+                        <input type="file" id="hist-export" class="form-control form-control-sm" accept=".xlsx,.xls,.xlsb,.json">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-hist-registrar">Registrar Pedidos</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-hist-buscar">Buscar no PAP</button>
+                    </div>
+                    <div class="col-12">
+                        <span class="small text-muted" id="hist-status"></span>
+                        <span class="small ms-2" id="hist-credencial"></span>
+                    </div>
+                </div>
+            </div>
+            <div id="hist-resumo" class="d-none">
+                <div class="card card-modern shadow-sm mb-3">
+                    <div class="card-body">
+                        <h2 class="h6">Resultado da busca</h2>
+                        <ul class="small mb-3" id="hist-metricas"></ul>
+                        <button type="button" class="btn btn-success btn-sm" id="btn-hist-baixar" disabled>Baixar só os novos</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="painel-legado" class="d-none">
+            <div class="alert alert-info small">
+                Esta etapa <strong>não grava vendas</strong>. Ela cruza o histórico PAP com as OSAB do parceiro e gera a planilha do
+                <a href="/importar-legado/">Importar Vendas Históricas (Legado)</a> para você revisar e subir depois.
+            </div>
+            <div class="card card-modern shadow-sm mb-3">
+                <div class="card-body row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">Histórico PAP (.xlsx)</label>
+                        <input type="file" id="pap-file" class="form-control form-control-sm" accept=".xlsx,.xls,.xlsb">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-0">OSAB (jun/jul/ago — vários arquivos)</label>
+                        <input type="file" id="osab-files" class="form-control form-control-sm" accept=".xlsx,.xls,.xlsb" multiple>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small mb-0">Parceiro (DESCRICAO OSAB)</label>
+                        <input type="text" id="legado-parceiro" class="form-control form-control-sm" placeholder="Ex.: IGOR CRISTIANO">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">PDV SAP (opcional)</label>
+                        <input type="text" id="legado-pdv" class="form-control form-control-sm" placeholder="1069321">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="somente-instalada" checked>
+                            <label class="form-check-label small" for="somente-instalada">Somente OS concluídas (INSTALADA)</label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-montar-legado">Montar planilha</button>
+                        <span class="small text-muted ms-2" id="legado-status"></span>
+                    </div>
+                </div>
+            </div>
+            <div id="legado-resumo" class="d-none">
+                <div class="card card-modern shadow-sm mb-3">
+                    <div class="card-body">
+                        <h2 class="h6">Resumo do cruzamento</h2>
+                        <ul class="small mb-3" id="legado-metricas"></ul>
+                        <button type="button" class="btn btn-success btn-sm" id="btn-baixar-legado" disabled>Baixar planilha</button>
+                        <a class="btn btn-outline-secondary btn-sm ms-2" href="/importar-legado/">Ir para importar legado</a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <div class="modal fade" id="modalDetalhe" tabindex="-1">
@@ -79,17 +211,18 @@
     </div>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-.funil-json { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
-</style>
-{% endblock %}
-
 {% block extra_js %}
 <script>
         const API_BASE = '/api/crm/funil-venda-wpp/tentativas/';
+        const API_LEGADO = '/api/crm/funil-venda-wpp/montar-legado/';
+        const API_HIST = '/api/crm/funil-venda-wpp/historico-pap/';
         let page = 1;
         const pageSize = 25;
+        let legadoBlob = null;
+        let legadoNome = 'Legado_PAP_OSAB.xlsx';
+        let histBlob = null;
+        let histNome = 'Historico_PAP.xlsx';
+        let histPoll = null;
 
         function getToken() {
             return localStorage.getItem('accessToken');
@@ -104,6 +237,18 @@
                 return role === 'Diretoria' || role === 'Admin' || p.is_staff === true;
             } catch (e) { return false; }
         }
+
+        function mostrarPainel(qual) {
+            document.getElementById('painel-wpp').classList.toggle('d-none', qual !== 'wpp');
+            document.getElementById('painel-hist').classList.toggle('d-none', qual !== 'hist');
+            document.getElementById('painel-legado').classList.toggle('d-none', qual !== 'legado');
+            document.getElementById('tab-wpp').classList.toggle('active', qual === 'wpp');
+            document.getElementById('tab-hist').classList.toggle('active', qual === 'hist');
+            document.getElementById('tab-legado').classList.toggle('active', qual === 'legado');
+        }
+        document.getElementById('tab-wpp').addEventListener('click', () => mostrarPainel('wpp'));
+        document.getElementById('tab-hist').addEventListener('click', () => mostrarPainel('hist'));
+        document.getElementById('tab-legado').addEventListener('click', () => mostrarPainel('legado'));
 
         async function carregar() {
             const tbody = document.getElementById('tbody');
@@ -168,6 +313,230 @@
             new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
         });
 
+        async function carregarConfigLegado() {
+            const token = getToken();
+            if (!token || !podeAcessar()) return;
+            try {
+                const r = await fetch(API_LEGADO + 'config/', { headers: { 'Authorization': 'Bearer ' + token } });
+                if (!r.ok) return;
+                const cfg = await r.json();
+                if (cfg.parceiro) document.getElementById('legado-parceiro').value = cfg.parceiro;
+                if (cfg.pdv_sap) document.getElementById('legado-pdv').value = cfg.pdv_sap;
+            } catch (e) {}
+        }
+
+        function b64ToBlob(b64) {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        }
+
+        document.getElementById('btn-montar-legado').addEventListener('click', async () => {
+            const status = document.getElementById('legado-status');
+            const pap = document.getElementById('pap-file').files[0];
+            const osabs = document.getElementById('osab-files').files;
+            if (!pap) { status.textContent = 'Selecione o histórico PAP.'; return; }
+            if (!osabs.length) { status.textContent = 'Selecione ao menos uma OSAB.'; return; }
+            const token = getToken();
+            if (!token) { window.location.href = '/'; return; }
+            const fd = new FormData();
+            fd.append('pap', pap);
+            for (const f of osabs) fd.append('osab', f);
+            fd.append('parceiro', document.getElementById('legado-parceiro').value.trim());
+            fd.append('pdv_sap', document.getElementById('legado-pdv').value.trim());
+            fd.append('somente_instalada', document.getElementById('somente-instalada').checked ? 'true' : 'false');
+            status.textContent = 'Processando…';
+            document.getElementById('btn-montar-legado').disabled = true;
+            document.getElementById('btn-baixar-legado').disabled = true;
+            legadoBlob = null;
+            try {
+                const r = await fetch(API_LEGADO, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
+                const data = await r.json();
+                if (!r.ok) {
+                    status.textContent = data.error || data.detail || 'Falha no cruzamento.';
+                    return;
+                }
+                const s = data.resumo || {};
+                document.getElementById('legado-metricas').innerHTML = [
+                    `<li>Parceiro: <strong>${s.parceiro || '—'}</strong> · PDV ${s.pdv_sap || '—'}</li>`,
+                    `<li>PAP Pedido Gerado: ${s.pap_pedido_gerado || 0}</li>`,
+                    `<li>OSAB do parceiro (dedup): ${s.osab_parceiro_dedup || 0}</li>`,
+                    `<li>Cruzados: ${s.cruzados || 0}</li>`,
+                    `<li>Linhas na planilha: <strong>${s.modelo_legado || 0}</strong> (INSTALADA ${s.instalada || 0})</li>`,
+                    `<li>PAP sem OSAB: ${s.pap_sem_osab || 0} · OSAB sem PAP: ${s.osab_sem_pap || 0}</li>`,
+                    `<li class="text-success">Nenhuma venda foi gravada no CRM.</li>`
+                ].join('');
+                document.getElementById('legado-resumo').classList.remove('d-none');
+                if (data.arquivo_base64) {
+                    legadoBlob = b64ToBlob(data.arquivo_base64);
+                    legadoNome = data.nome_arquivo || legadoNome;
+                    document.getElementById('btn-baixar-legado').disabled = false;
+                }
+                status.textContent = data.aviso || 'Pronto.';
+            } catch (e) {
+                status.textContent = 'Erro ao montar a planilha.';
+            } finally {
+                document.getElementById('btn-montar-legado').disabled = false;
+            }
+        });
+
+        document.getElementById('btn-baixar-legado').addEventListener('click', () => {
+            if (!legadoBlob) return;
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(legadoBlob);
+            a.download = legadoNome;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
+
+        function histTipos() {
+            const t = [];
+            if (document.getElementById('hist-tipo-venda').checked) t.push('VENDA');
+            if (document.getElementById('hist-tipo-interesse').checked) t.push('INTERESSE');
+            if (document.getElementById('hist-tipo-prevenda').checked) t.push('PRE_VENDA');
+            return t;
+        }
+
+        function pintarHist(s) {
+            if (!s) return;
+            document.getElementById('hist-resumo').classList.remove('d-none');
+            const pt = s.por_tipo || {};
+            const linhasTipo = ['VENDA', 'INTERESSE', 'PRE_VENDA'].map(k => {
+                const x = pt[k] || {};
+                if (!x.encontrados && !x.novos && !x.ignorados) return '';
+                return `<li>${k}: encontrados ${x.encontrados || 0} · novos ${x.novos || 0} · já na base ${x.ignorados || 0}</li>`;
+            }).filter(Boolean);
+            document.getElementById('hist-metricas').innerHTML = [
+                `<li>Período: <strong>${s.data_inicio || '—'}</strong> a <strong>${s.data_fim || '—'}</strong> · PDV ${s.pdv || '—'}</li>`,
+                `<li>Status: <strong>${s.status || '—'}</strong></li>`,
+                `<li>Encontrados: ${s.encontrados || 0} · <strong>Novos: ${s.novos || 0}</strong> · Já existiam (Pedido): ${s.ignorados || 0}</li>`,
+                ...linhasTipo,
+                `<li class="text-success">Nenhuma venda foi gravada no CRM.</li>`
+            ].join('');
+            document.getElementById('btn-hist-baixar').disabled = !(s.status === 'concluido' && (s.novos || 0) > 0);
+            if (s.mensagem) document.getElementById('hist-status').textContent = s.mensagem;
+        }
+
+        async function carregarConfigHist() {
+            const token = getToken();
+            if (!token || !podeAcessar()) return;
+            try {
+                const r = await fetch(API_HIST + 'config/', { headers: { 'Authorization': 'Bearer ' + token } });
+                if (!r.ok) return;
+                const cfg = await r.json();
+                if (cfg.pdv_sap && !document.getElementById('hist-pdv').value) document.getElementById('hist-pdv').value = cfg.pdv_sap;
+                if (cfg.data_inicio) document.getElementById('hist-inicio').value = cfg.data_inicio;
+                if (cfg.data_fim) document.getElementById('hist-fim').value = cfg.data_fim;
+                const cred = document.getElementById('hist-credencial');
+                cred.textContent = cfg.tem_credencial_pap
+                    ? `Base: ${cfg.pedidos_conhecidos || 0} pedidos já registrados.`
+                    : 'Cadastre matrícula/senha PAP em Gestão de Acessos para buscar ao vivo.';
+                cred.className = 'small ms-2 ' + (cfg.tem_credencial_pap ? 'text-muted' : 'text-warning');
+                const andamento = cfg.busca_em_andamento;
+                if (andamento) {
+                    pintarHist(andamento);
+                    document.getElementById('hist-status').textContent = 'Busca em andamento…';
+                    iniciarPollHist(andamento.id);
+                } else if (cfg.ultima_busca) {
+                    pintarHist(cfg.ultima_busca);
+                }
+            } catch (e) {}
+        }
+
+        function iniciarPollHist(id) {
+            if (histPoll) clearInterval(histPoll);
+            histPoll = setInterval(() => pollHist(id), 3500);
+        }
+
+        async function pollHist(id) {
+            const token = getToken();
+            try {
+                const r = await fetch(API_HIST + 'status/?id=' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + token } });
+                const s = await r.json();
+                pintarHist(s);
+                document.getElementById('hist-status').textContent = s.em_andamento
+                    ? (`Buscando… ${s.encontrados || 0} lidos, ${s.novos || 0} novos.`)
+                    : (s.mensagem || s.status || '');
+                if (!s.em_andamento) {
+                    clearInterval(histPoll);
+                    histPoll = null;
+                    document.getElementById('btn-hist-buscar').disabled = false;
+                }
+            } catch (e) {}
+        }
+
+        document.getElementById('btn-hist-registrar').addEventListener('click', async () => {
+            const status = document.getElementById('hist-status');
+            const arq = document.getElementById('hist-export').files[0];
+            if (!arq) { status.textContent = 'Selecione a exportação PAP (coluna Pedido).'; return; }
+            const token = getToken();
+            if (!token) { window.location.href = '/'; return; }
+            const fd = new FormData();
+            fd.append('arquivo', arq);
+            status.textContent = 'Registrando protocolos…';
+            try {
+                const r = await fetch(API_HIST + 'registrar/', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
+                const data = await r.json();
+                if (!r.ok) { status.textContent = data.error || data.detail || 'Falha ao registrar.'; return; }
+                status.textContent = `Lidos ${data.lidos}: ${data.novos} novos na base, ${data.ja_existiam} já existiam. Total ${data.total_base}.`;
+            } catch (e) {
+                status.textContent = 'Erro ao registrar a exportação.';
+            }
+        });
+
+        document.getElementById('btn-hist-buscar').addEventListener('click', async () => {
+            const status = document.getElementById('hist-status');
+            const tipos = histTipos();
+            if (!tipos.length) { status.textContent = 'Marque ao menos um tipo.'; return; }
+            const token = getToken();
+            if (!token) { window.location.href = '/'; return; }
+            document.getElementById('btn-hist-buscar').disabled = true;
+            histBlob = null;
+            status.textContent = 'Abrindo sessão PAP e buscando os três tipos…';
+            try {
+                const r = await fetch(API_HIST, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        data_inicio: document.getElementById('hist-inicio').value,
+                        data_fim: document.getElementById('hist-fim').value,
+                        pdv: document.getElementById('hist-pdv').value.trim(),
+                        tipos
+                    })
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    status.textContent = data.error || data.detail || 'Não foi possível iniciar a busca.';
+                    document.getElementById('btn-hist-buscar').disabled = false;
+                    return;
+                }
+                iniciarPollHist(data.busca_id);
+            } catch (e) {
+                status.textContent = 'Erro ao iniciar a busca.';
+                document.getElementById('btn-hist-buscar').disabled = false;
+            }
+        });
+
+        document.getElementById('btn-hist-baixar').addEventListener('click', async () => {
+            const token = getToken();
+            const r = await fetch(API_HIST + 'download/', { headers: { 'Authorization': 'Bearer ' + token } });
+            const data = await r.json();
+            if (!r.ok || !data.arquivo_base64) {
+                document.getElementById('hist-status').textContent = data.error || 'Sem arquivo para baixar.';
+                return;
+            }
+            histBlob = b64ToBlob(data.arquivo_base64);
+            histNome = data.nome_arquivo || histNome;
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(histBlob);
+            a.download = histNome;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
+
         carregar();
+        carregarConfigLegado();
+        carregarConfigHist();
     </script>
 {% endblock %}

@@ -216,6 +216,14 @@ from .auditoria_inclusao_api import (
 )
 from .pendencia_indevida_api import PendenciaIndevidaRegistrarView, PendenciaIndevidaRelatorioView
 from .funil_venda_wpp_api import FunilVendaWppTentativaDetailView, FunilVendaWppTentativaListView
+from .funil_legado_api import FunilMontarLegadoConfigView, FunilMontarLegadoView
+from .historico_pap_api import (
+    FunilHistoricoPapBuscarView,
+    FunilHistoricoPapConfigView,
+    FunilHistoricoPapDownloadView,
+    FunilHistoricoPapRegistrarView,
+    FunilHistoricoPapStatusView,
+)
 from .esteira_sync_status_pap_api import (
     SyncStatusEsteiraCancelarView,
     SyncStatusEsteiraIniciarView,
@@ -278,6 +286,13 @@ urlpatterns = [
     path('whatsapp-telefones-sem-ia/<int:pk>/', whatsapp_telefone_sem_ia_detail_view, name='whatsapp-telefone-sem-ia-detail'),
     path('funil-venda-wpp/tentativas/', FunilVendaWppTentativaListView.as_view(), name='funil-venda-wpp-tentativas'),
     path('funil-venda-wpp/tentativas/<int:pk>/', FunilVendaWppTentativaDetailView.as_view(), name='funil-venda-wpp-tentativa-detail'),
+    path('funil-venda-wpp/montar-legado/', FunilMontarLegadoView.as_view(), name='funil-montar-legado'),
+    path('funil-venda-wpp/montar-legado/config/', FunilMontarLegadoConfigView.as_view(), name='funil-montar-legado-config'),
+    path('funil-venda-wpp/historico-pap/', FunilHistoricoPapBuscarView.as_view(), name='funil-historico-pap-buscar'),
+    path('funil-venda-wpp/historico-pap/config/', FunilHistoricoPapConfigView.as_view(), name='funil-historico-pap-config'),
+    path('funil-venda-wpp/historico-pap/status/', FunilHistoricoPapStatusView.as_view(), name='funil-historico-pap-status'),
+    path('funil-venda-wpp/historico-pap/download/', FunilHistoricoPapDownloadView.as_view(), name='funil-historico-pap-download'),
+    path('funil-venda-wpp/historico-pap/registrar/', FunilHistoricoPapRegistrarView.as_view(), name='funil-historico-pap-registrar'),
     path('consultar-biometria-brpronto/', consultar_biometria_brpronto_view, name='consultar-biometria-brpronto'),
     # --- Endpoint para busca automática de fatura NIO (Bonus M-10) ---
     path('bonus-m10/buscar-fatura-nio/', buscar_fatura_nio_bonus_m10, name='buscar-fatura-nio-bonus-m10'),
