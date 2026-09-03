@@ -100,11 +100,7 @@
                         <label class="form-label small mb-0">Data fim</label>
                         <input type="date" id="hist-fim" class="form-control form-control-sm" readonly>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">PDV SAP</label>
-                        <input type="text" id="hist-pdv" class="form-control form-control-sm" placeholder="1069321">
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
+                    <div class="col-md-6 d-flex align-items-end">
                         <div class="small">
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" id="hist-tipo-venda" checked>
@@ -354,7 +350,7 @@
                 return `<li>${k}: encontrados ${x.encontrados || 0} · novos ${x.novos || 0} · já na base ${x.ignorados || 0}</li>`;
             }).filter(Boolean);
             document.getElementById('hist-metricas').innerHTML = [
-                `<li>Período: <strong>${s.data_inicio || '—'}</strong> a <strong>${s.data_fim || '—'}</strong> · PDV ${s.pdv || '—'}</li>`,
+                `<li>Período: <strong>${s.data_inicio || '—'}</strong> a <strong>${s.data_fim || '—'}</strong></li>`,
                 `<li>Login PAP: <strong>${s.login_pap || '—'}</strong> · Status: <strong>${s.status || '—'}</strong></li>`,
                 `<li>Encontrados: ${s.encontrados || 0} · <strong>Novos: ${s.novos || 0}</strong> · Já existiam (Pedido): ${s.ignorados || 0}</li>`,
                 ...linhasTipo,
@@ -371,7 +367,6 @@
                 const r = await fetch(API_HIST + 'config/', { headers: { 'Authorization': 'Bearer ' + token } });
                 if (!r.ok) return;
                 const cfg = await r.json();
-                if (cfg.pdv_sap && !document.getElementById('hist-pdv').value) document.getElementById('hist-pdv').value = cfg.pdv_sap;
                 aplicarPeriodo('hoje');
                 const pool = cfg.pool || {};
                 const cred = document.getElementById('hist-credencial');
@@ -432,7 +427,6 @@
                     body: JSON.stringify({
                         data_inicio: document.getElementById('hist-inicio').value,
                         data_fim: document.getElementById('hist-fim').value,
-                        pdv: document.getElementById('hist-pdv').value.trim(),
                         tipos
                     })
                 });

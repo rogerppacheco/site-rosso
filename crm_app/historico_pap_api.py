@@ -6,33 +6,16 @@ import base64
 import logging
 from datetime import date, datetime
 
-from django.conf import settings
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from crm_app.historico_pap import MAX_DIAS_BUSCA, tipos_solicitados
-from crm_app.legado_pap_osab import default_parceiro_por_marca, validar_upload
+from crm_app.legado_pap_osab import validar_upload
 from crm_app.utils import is_member
 
 logger = logging.getLogger(__name__)
-
-
-def _marca_site() -> str:
-    return (
-        getattr(settings, "SITE_BRAND", "")
-        or getattr(settings, "SITE_BRAND_NAME", "")
-        or ""
-    )
-
-
-def _pdv_default() -> str:
-    pdv = (getattr(settings, "LEGADO_OSAB_PDV_SAP", "") or "").strip()
-    if pdv:
-        return pdv
-    _, inf_pdv = default_parceiro_por_marca(_marca_site())
-    return inf_pdv
 
 
 def _parse_date(valor, fallback: date) -> date:
@@ -63,7 +46,6 @@ class FunilHistoricoPapConfigView(APIView):
         pool = resumo_pool()
         return Response(
             {
-                "pdv_sap": _pdv_default(),
                 "tipos": ["VENDA", "INTERESSE", "PRE_VENDA"],
                 "data_inicio": date(hoje.year, hoje.month, 1).isoformat(),
                 "data_fim": hoje.isoformat(),
@@ -121,7 +103,6 @@ class FunilHistoricoPapBuscarView(APIView):
         data = request.data if isinstance(request.data, dict) else {}
         data_inicio = _parse_date(data.get("data_inicio"), date(hoje.year, hoje.month, 1))
         data_fim = _parse_date(data.get("data_fim"), hoje)
-        pdv = (data.get("pdv") or data.get("pdv_sap") or _pdv_default() or "").strip()
         tipos_raw = data.get("tipos") or []
         if isinstance(tipos_raw, str):
             tipos_raw = [p.strip() for p in tipos_raw.split(",") if p.strip()]
@@ -133,7 +114,7 @@ class FunilHistoricoPapBuscarView(APIView):
             request.user,
             data_inicio=data_inicio,
             data_fim=data_fim,
-            pdv=pdv,
+            pdv="",
             tipos=tipos,
         )
         if err:

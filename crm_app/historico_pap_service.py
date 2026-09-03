@@ -190,9 +190,8 @@ def criar_e_iniciar_busca(usuario, *, data_inicio: date, data_fim: date, pdv: st
         return None, f"O intervalo máximo é {MAX_DIAS_BUSCA} dias."
 
     tipos_ok = tipos_solicitados(tipos)
+    # Com login Diretoria do parceiro o PAP já restringe ao PDV do login — não filtramos PDV SAP.
     pdv = (pdv or "").strip()
-    if not pdv:
-        return None, "Informe o PDV SAP."
 
     with transaction.atomic():
         login_pap, err_pool = obter_login_historico_pap()

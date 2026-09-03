@@ -491,11 +491,12 @@ def montar_url_vendas(
         "dataInicio": data_inicio,
         "dataFim": data_fim,
         "segmento": segmento,
-        "pdv": pdv,
         "tipoVenda": tipo_api,
         "page": page,
         "limit": limit,
     }
+    if (pdv or "").strip():
+        params["pdv"] = (pdv or "").strip()
     if status:
         params["status"] = status
     return f"{PAP_API_VENDAS}?{urlencode(params)}"
