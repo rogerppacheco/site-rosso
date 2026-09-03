@@ -107,10 +107,18 @@ def _extrair_token(page) -> str:
 
 
 def _headers_auth(token: str) -> dict[str, str]:
-    headers = {"Accept": "application/json"}
+    headers = {
+        "Accept": "application/json",
+        "Origin": "https://pap.niointernet.com.br",
+        "Referer": "https://pap.niointernet.com.br/administrativo/historico",
+    }
     if not token:
         return headers
-    headers["Authorization"] = token if token.startswith("Bearer") else f"Bearer {token}"
+    t = token.strip()
+    if t.lower().startswith("bearer "):
+        headers["Authorization"] = t
+    else:
+        headers["Authorization"] = f"Bearer {t}"
     return headers
 
 
@@ -124,7 +132,7 @@ def _fetch_json(page, url: str, token: str = "") -> dict:
     tok = (token or "").strip() or _extrair_token(page)
     headers = _headers_auth(tok)
 
-    # 1) APIRequestContext — mesma cookie jar do browser, sem CORS
+    # 1) APIRequestContext — Bearer + Origin/Referer (evita cookie stale conflitando)
     try:
         api = page.context.request
         resp = api.get(url, headers=headers, timeout=60000)
@@ -145,6 +153,12 @@ def _fetch_json(page, url: str, token: str = "") -> dict:
                     "error": "parse",
                     "preview": (text or "")[:280],
                 }
+        if status in (401, 403):
+            logger.warning(
+                "[HISTORICO PAP] API %s — preview=%s",
+                status,
+                (text or "")[:180].replace("\n", " "),
+            )
         return {"ok": 200 <= status < 300, "status": status, "json": json_body}
     except Exception as exc:
         logger.warning("[HISTORICO PAP] context.request falhou (%s); tentando fetch na página", exc)
@@ -157,6 +171,72 @@ def _fetch_json(page, url: str, token: str = "") -> dict:
         return {"ok": False, "status": 0, "error": "resposta inválida do evaluate"}
     except Exception as exc:
         return {"ok": False, "status": 0, "error": f"evaluate: {exc}"}
+
+
+def _aguardar_token_spa(page, timeout_ms: int = 25000) -> str:
+    """
+    Vai ao Histórico e espera a própria SPA disparar chamada autenticada à API.
+    Assim reutilizamos o Authorization real (evita cookie/JWT stale do storage_state).
+    """
+    captured: dict[str, str] = {"auth": ""}
+
+    def _on_request(request):
+        try:
+            url = (request.url or "").lower()
+            if "pap-api.niointernet.com.br" not in url:
+                return
+            if "/api/portal/" not in url:
+                return
+            auth = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+            if auth and len(auth) > 20:
+                captured["auth"] = auth
+        except Exception:
+            pass
+
+    page.on("request", _on_request)
+    try:
+        try:
+            with page.expect_response(
+                lambda r: "pap-api.niointernet.com.br" in (r.url or "")
+                and "/api/portal/" in (r.url or ""),
+                timeout=timeout_ms,
+            ) as ri:
+                page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=45000)
+            try:
+                resp = ri.value
+                auth = resp.request.headers.get("authorization") or resp.request.headers.get("Authorization") or ""
+                if auth:
+                    captured["auth"] = auth
+                logger.info(
+                    "[HISTORICO PAP] SPA respondeu %s em %s",
+                    getattr(resp, "status", "?"),
+                    (resp.url or "")[:100],
+                )
+            except Exception:
+                pass
+        except Exception as exc:
+            logger.warning("[HISTORICO PAP] timeout/espera SPA: %s — fallback goto", exc)
+            try:
+                page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=45000)
+            except Exception as exc2:
+                logger.warning("[HISTORICO PAP] goto histórico: %s", exc2)
+        page.wait_for_timeout(1500)
+        try:
+            page.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            pass
+
+        if captured["auth"]:
+            raw = captured["auth"]
+            if raw.lower().startswith("bearer "):
+                return raw[7:].strip()
+            return raw.strip()
+        return _extrair_token(page)
+    finally:
+        try:
+            page.remove_listener("request", _on_request)
+        except Exception:
+            pass
 
 
 def _run_django_sync(func, timeout_seconds: int = 120):
@@ -445,6 +525,11 @@ def _executar_busca(busca_id: int, login_pap_id: int):
         capture_screenshots=False,
         optimize_for_credit=False,
     )
+    # Evita JWT/cookie antigo do storage_state (parece logado na UI e a API responde 401).
+    try:
+        automacao._invalidar_storage_state()
+    except Exception:
+        pass
     encontrados = 0
     novos = 0
     ignorados = 0
@@ -464,22 +549,12 @@ def _executar_busca(busca_id: int, login_pap_id: int):
             return
 
         page = automacao.page
-        try:
-            page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=45000)
-        except Exception as exc:
-            logger.warning("[HISTORICO PAP] goto histórico: %s", exc)
-        page.wait_for_timeout(2000)
-        try:
-            page.wait_for_load_state("networkidle", timeout=10000)
-        except Exception:
-            pass
-
+        token = _aguardar_token_spa(page)
         url_atual = ""
         try:
             url_atual = page.url or ""
         except Exception:
             pass
-        token = _extrair_token(page)
         logger.info(
             "[HISTORICO PAP] url=%s token=%s",
             (url_atual or "")[:120],
@@ -620,7 +695,11 @@ def _buscar_tipo(
                         "ignorados": 0,
                         "novos_numeros": [],
                         "tipo_api": alias,
-                        "erro": last_err,
+                        "erro": (
+                            f"{last_err}. Sessão/token rejeitado pela API do PAP. "
+                            "Não é bloqueio de login; verifique se a Ana abre o Histórico no PAP "
+                            "e se a matrícula/senha estão corretas."
+                        ),
                         "erro_fatal": True,
                     }
                 continue
