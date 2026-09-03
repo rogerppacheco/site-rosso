@@ -33,23 +33,130 @@ from crm_app.historico_pap import (
 
 logger = logging.getLogger(__name__)
 
-JS_FETCH = """
-async (url) => {
-  const raw = (document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('token=')) || '').slice(6);
-  const headers = { Accept: 'application/json' };
-  if (raw) {
-    const t = decodeURIComponent(raw);
-    headers.Authorization = t.startsWith('Bearer') ? t : ('Bearer ' + t);
+# Extrai Bearer do cookie/localStorage (mesmo padrão da SPA do PAP).
+JS_TOKEN = """
+() => {
+  const fromCookie = (document.cookie || '').split(';').map(c => c.trim()).find(c => c.startsWith('token='));
+  if (fromCookie) {
+    try { return decodeURIComponent(fromCookie.slice(6)); } catch (e) { return fromCookie.slice(6); }
   }
-  const r = await fetch(url, { credentials: 'include', headers });
-  const text = await r.text();
-  let json = null;
-  try { json = JSON.parse(text); } catch (e) {
-    return { ok: false, status: r.status, error: 'parse', preview: text.slice(0, 280) };
+  for (const store of [localStorage, sessionStorage]) {
+    try {
+      for (const key of ['token', 'accessToken', 'access_token', 'authToken']) {
+        const v = store.getItem(key);
+        if (v && v.length > 20) return v;
+      }
+      const persist = store.getItem('persist');
+      if (persist) {
+        const walk = (o, depth) => {
+          if (!o || depth > 6) return '';
+          if (typeof o === 'string' && o.length > 40 && (o.startsWith('eyJ') || o.split('.').length === 3)) return o;
+          if (typeof o !== 'object') return '';
+          for (const k of Object.keys(o)) {
+            if (/token|jwt|access|auth|bearer/i.test(k)) {
+              const v = o[k];
+              if (typeof v === 'string' && v.length > 20) return v;
+            }
+            const found = walk(o[k], depth + 1);
+            if (found) return found;
+          }
+          return '';
+        };
+        try {
+          const found = walk(JSON.parse(persist), 0);
+          if (found) return found;
+        } catch (e) {}
+      }
+    } catch (e) {}
   }
-  return { ok: r.ok, status: r.status, json };
+  return '';
 }
 """
+
+# Fallback no browser; try/catch evita derrubar o job com TypeError: Failed to fetch.
+JS_FETCH = """
+async (url) => {
+  try {
+    const raw = (document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('token=')) || '').slice(6);
+    const headers = { Accept: 'application/json' };
+    if (raw) {
+      const t = decodeURIComponent(raw);
+      headers.Authorization = t.startsWith('Bearer') ? t : ('Bearer ' + t);
+    }
+    const r = await fetch(url, { credentials: 'include', headers });
+    const text = await r.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch (e) {
+      return { ok: false, status: r.status, error: 'parse', preview: text.slice(0, 280) };
+    }
+    return { ok: r.ok, status: r.status, json };
+  } catch (e) {
+    return { ok: false, status: 0, error: String((e && e.message) || e || 'fetch_failed') };
+  }
+}
+"""
+
+
+def _extrair_token(page) -> str:
+    try:
+        raw = page.evaluate(JS_TOKEN)
+    except Exception as exc:
+        logger.warning("[HISTORICO PAP] Não foi possível ler token da página: %s", exc)
+        return ""
+    return (raw or "").strip()
+
+
+def _headers_auth(token: str) -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if not token:
+        return headers
+    headers["Authorization"] = token if token.startswith("Bearer") else f"Bearer {token}"
+    return headers
+
+
+def _fetch_json(page, url: str, token: str = "") -> dict:
+    """
+    Busca JSON da API do PAP.
+
+    Preferência: context.request (não sofre CORS do Chromium).
+    Fallback: fetch no page.evaluate com try/catch.
+    """
+    tok = (token or "").strip() or _extrair_token(page)
+    headers = _headers_auth(tok)
+
+    # 1) APIRequestContext — mesma cookie jar do browser, sem CORS
+    try:
+        api = page.context.request
+        resp = api.get(url, headers=headers, timeout=60000)
+        status = resp.status
+        text = resp.text()
+        try:
+            json_body = resp.json()
+        except Exception:
+            json_body = None
+            try:
+                import json as _json
+
+                json_body = _json.loads(text)
+            except Exception:
+                return {
+                    "ok": False,
+                    "status": status,
+                    "error": "parse",
+                    "preview": (text or "")[:280],
+                }
+        return {"ok": 200 <= status < 300, "status": status, "json": json_body}
+    except Exception as exc:
+        logger.warning("[HISTORICO PAP] context.request falhou (%s); tentando fetch na página", exc)
+
+    # 2) Fallback browser fetch (com try/catch no JS)
+    try:
+        resp = page.evaluate(JS_FETCH, url)
+        if isinstance(resp, dict):
+            return resp
+        return {"ok": False, "status": 0, "error": "resposta inválida do evaluate"}
+    except Exception as exc:
+        return {"ok": False, "status": 0, "error": f"evaluate: {exc}"}
 
 
 def _run_django_sync(func, timeout_seconds: int = 120):
@@ -260,14 +367,15 @@ def _runner(busca_id: int, login_pap_id: int):
     django.db.close_old_connections()
     try:
         _executar_busca(busca_id, login_pap_id)
-    except Exception:
+    except Exception as exc:
         logger.exception("[HISTORICO PAP] Falha no job %s", busca_id)
+        msg = f"Falha ao buscar o histórico PAP: {exc}"[:500]
         try:
             _run_django_sync(
                 lambda: _atualizar(
                     busca_id,
                     status="erro",
-                    mensagem="Falha inesperada ao buscar o histórico PAP.",
+                    mensagem=msg,
                     finalizado_em=timezone.now(),
                 )
             )
@@ -356,8 +464,40 @@ def _executar_busca(busca_id: int, login_pap_id: int):
             return
 
         page = automacao.page
-        page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(1500)
+        try:
+            page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=45000)
+        except Exception as exc:
+            logger.warning("[HISTORICO PAP] goto histórico: %s", exc)
+        page.wait_for_timeout(2000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            pass
+
+        url_atual = ""
+        try:
+            url_atual = page.url or ""
+        except Exception:
+            pass
+        token = _extrair_token(page)
+        logger.info(
+            "[HISTORICO PAP] url=%s token=%s",
+            (url_atual or "")[:120],
+            "sim" if token else "nao",
+        )
+        if not token:
+            _run_django_sync(
+                lambda: _atualizar(
+                    busca_id,
+                    status=HistoricoPapBusca.STATUS_ERRO,
+                    mensagem=(
+                        "Login PAP ok, mas o token de API não foi encontrado na sessão. "
+                        "Confira se o usuário Diretoria consegue abrir o Histórico no PAP."
+                    ),
+                    finalizado_em=timezone.now(),
+                )
+            )
+            return
 
         data_ini = _iso_inicio(busca.data_inicio)
         data_fim = _iso_fim(busca.data_fim)
@@ -374,7 +514,19 @@ def _executar_busca(busca_id: int, login_pap_id: int):
                 data_ini=data_ini,
                 data_fim=data_fim,
                 pdv=pdv,
+                token=token,
             )
+            if stats.get("erro_fatal"):
+                _run_django_sync(
+                    lambda m=stats.get("erro") or "Falha na API do PAP": _atualizar(
+                        busca_id,
+                        status=HistoricoPapBusca.STATUS_ERRO,
+                        mensagem=str(m)[:500],
+                        finalizado_em=timezone.now(),
+                        por_tipo=por_tipo,
+                    )
+                )
+                return
             por_tipo[tipo] = {
                 "encontrados": stats["encontrados"],
                 "novos": stats["novos"],
@@ -439,7 +591,9 @@ def _job_cancelado(busca_id: int) -> bool:
         return False
 
 
-def _buscar_tipo(page, *, busca_id: int, tipo: str, data_ini: str, data_fim: str, pdv: str) -> dict:
+def _buscar_tipo(
+    page, *, busca_id: int, tipo: str, data_ini: str, data_fim: str, pdv: str, token: str = ""
+) -> dict:
     aliases = TIPO_API_ALIASES.get(tipo, (tipo,))
     last_err = ""
     for alias in aliases:
@@ -452,15 +606,27 @@ def _buscar_tipo(page, *, busca_id: int, tipo: str, data_ini: str, data_fim: str
                 page=1,
                 status=status,
             )
-            resp = page.evaluate(JS_FETCH, url)
+            resp = _fetch_json(page, url, token=token)
             if not isinstance(resp, dict):
                 last_err = "resposta inválida"
                 continue
             if not resp.get("ok"):
                 last_err = f"HTTP {resp.get('status')} {resp.get('error') or ''}".strip()
+                # 401/403: token/sessão inválidos — aborta todos os tipos
+                if resp.get("status") in (401, 403):
+                    return {
+                        "encontrados": 0,
+                        "novos": 0,
+                        "ignorados": 0,
+                        "novos_numeros": [],
+                        "tipo_api": alias,
+                        "erro": last_err,
+                        "erro_fatal": True,
+                    }
                 continue
             lista, total = extrair_lista_api(resp.get("json"))
-            if resp.get("status") == 200 and (lista or total):
+            if resp.get("status") == 200 and (lista is not None):
+                # lista vazia com total 0 ainda é sucesso (período sem pedidos)
                 return _paginar_tipo(
                     page,
                     busca_id=busca_id,
@@ -470,8 +636,9 @@ def _buscar_tipo(page, *, busca_id: int, tipo: str, data_ini: str, data_fim: str
                     data_fim=data_fim,
                     pdv=pdv,
                     status=status,
-                    primeira=lista,
-                    total=total,
+                    primeira=lista or [],
+                    total=total or 0,
+                    token=token,
                 )
         time.sleep(_intervalo())
     logger.warning("[HISTORICO PAP] Tipo %s não retornou dados (%s)", tipo, last_err)
@@ -497,6 +664,7 @@ def _paginar_tipo(
     status: Optional[str],
     primeira: list[dict],
     total: int,
+    token: str = "",
 ) -> dict:
     encontrados = 0
     novos = 0
@@ -537,9 +705,9 @@ def _paginar_tipo(
             page=page_n,
             status=status,
         )
-        resp = page.evaluate(JS_FETCH, url)
+        resp = _fetch_json(page, url, token=token)
         if not isinstance(resp, dict) or not resp.get("ok"):
-            logger.warning("[HISTORICO PAP] Falha página %s tipo %s", page_n, tipo)
+            logger.warning("[HISTORICO PAP] Falha página %s tipo %s: %s", page_n, tipo, resp)
             break
         lista, _ = extrair_lista_api(resp.get("json"))
         if not lista:
