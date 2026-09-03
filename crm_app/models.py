@@ -5227,6 +5227,14 @@ class HistoricoPapBusca(models.Model):
         blank=True,
         related_name="historico_pap_buscas",
     )
+    login_pap = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="historico_pap_logins_usados",
+        help_text="Login Diretoria do pool usado na sessão PAP.",
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

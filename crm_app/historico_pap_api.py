@@ -55,10 +55,12 @@ class FunilHistoricoPapConfigView(APIView):
             return Response({"detail": "Sem permissão."}, status=403)
         from crm_app.historico_pap_service import busca_em_andamento, serializar_busca
         from crm_app.models import HistoricoPapBusca, HistoricoPapPedido
+        from crm_app.pool_historico_pap import resumo_pool
 
         hoje = date.today()
         busca = busca_em_andamento()
-        ultima = HistoricoPapBusca.objects.order_by("-iniciado_em").first()
+        ultima = HistoricoPapBusca.objects.select_related("login_pap").order_by("-iniciado_em").first()
+        pool = resumo_pool()
         return Response(
             {
                 "pdv_sap": _pdv_default(),
@@ -66,10 +68,8 @@ class FunilHistoricoPapConfigView(APIView):
                 "data_inicio": date(hoje.year, hoje.month, 1).isoformat(),
                 "data_fim": hoje.isoformat(),
                 "max_dias": MAX_DIAS_BUSCA,
-                "tem_credencial_pap": bool(
-                    (getattr(request.user, "matricula_pap", None) or "").strip()
-                    and (getattr(request.user, "senha_pap", None) or "").strip()
-                ),
+                "tem_credencial_pap": pool["disponiveis"] > 0 or pool["em_uso"] > 0,
+                "pool": pool,
                 "pedidos_conhecidos": HistoricoPapPedido.objects.count(),
                 "grava_venda": False,
                 "busca_em_andamento": serializar_busca(busca, em_andamento=True) if busca else None,
@@ -137,7 +137,8 @@ class FunilHistoricoPapBuscarView(APIView):
             tipos=tipos,
         )
         if err:
-            code = 409 if "andamento" in err.lower() else 400
+            low = err.lower()
+            code = 409 if ("em uso" in low or "andamento" in low) else 400
             return Response({"error": err}, status=code)
         return Response(
             {
@@ -162,7 +163,7 @@ class FunilHistoricoPapStatusView(APIView):
 
         busca_id = request.query_params.get("id") or request.query_params.get("busca_id")
         if busca_id:
-            busca = HistoricoPapBusca.objects.filter(pk=busca_id).first()
+            busca = HistoricoPapBusca.objects.filter(pk=busca_id).select_related("login_pap").first()
             if not busca:
                 return Response({"error": "Busca não encontrada."}, status=404)
             em = busca.status in (
@@ -174,7 +175,7 @@ class FunilHistoricoPapStatusView(APIView):
         atual = busca_em_andamento()
         if atual:
             return Response(serializar_busca(atual, em_andamento=True))
-        ultima = HistoricoPapBusca.objects.order_by("-iniciado_em").first()
+        ultima = HistoricoPapBusca.objects.select_related("login_pap").order_by("-iniciado_em").first()
         if not ultima:
             return Response({"em_andamento": False, "ultima": None})
         return Response({"em_andamento": False, "ultima": serializar_busca(ultima, em_andamento=False)})

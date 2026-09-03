@@ -101,6 +101,11 @@ class Usuario(AbstractUser):
         verbose_name="Vendedor solo",
         help_text="Permite ao vendedor acessar a ferramenta Presença para registrar a própria selfie/confirmar presença sem equipe."
     )
+    recebe_selfie_presenca = models.BooleanField(
+        default=False,
+        verbose_name="Recebe selfie de presença no WhatsApp?",
+        help_text="Envia a foto de confirmação diária do módulo Presença para o WhatsApp 1 deste usuário.",
+    )
 
     # --- WHATSAPP ---
     # Envios do sistema (notificações, OSAB, etc.) vão SEMPRE apenas para WhatsApp 1 (tel_whatsapp).
@@ -184,6 +189,15 @@ class Usuario(AbstractUser):
         default=True,
         verbose_name="PAP: automação Status",
         help_text="Se marcado, este login pode ser usado pela automação STATUS (consulta online de pedido no PAP)."
+    )
+    autorizar_historico_pap = models.BooleanField(
+        default=False,
+        verbose_name="Autorizar busca do histórico PAP (Funil)",
+        help_text=(
+            "Se marcado (perfil Diretoria + matrícula/senha PAP), este login entra no pool "
+            "usado pelo Funil para buscar o histórico PAP. Enquanto estiver em uso, outro "
+            "usuário só consegue buscar se houver outro Diretoria disponível no pool."
+        ),
     )
 
     # --- BR PRONTO PDV (Biometria - Auditoria / WhatsApp BIO) ---

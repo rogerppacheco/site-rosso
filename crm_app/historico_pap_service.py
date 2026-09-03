@@ -92,8 +92,8 @@ def _validar_credenciais(usuario) -> Tuple[bool, str]:
     senha = (getattr(usuario, "senha_pap", None) or "").strip()
     if not matricula or not senha:
         return False, (
-            "Seu usuário não tem matrícula/senha PAP vinculadas. "
-            "Cadastre em Gestão de Acessos antes de buscar o histórico."
+            "O login Diretoria selecionado não tem matrícula/senha PAP. "
+            "Cadastre na Governança antes de buscar o histórico."
         )
     return True, matricula
 
@@ -108,6 +108,7 @@ def busca_em_andamento():
                 HistoricoPapBusca.STATUS_EM_ANDAMENTO,
             ]
         )
+        .select_related("login_pap")
         .order_by("-iniciado_em")
         .first()
     )
@@ -156,6 +157,7 @@ def registrar_exportacao(usuario, nome: str, content: bytes) -> dict:
 
 
 def serializar_busca(busca, *, em_andamento: bool) -> dict:
+    login_user = getattr(busca, "login_pap", None)
     return {
         "id": busca.id,
         "status": busca.status,
@@ -170,17 +172,17 @@ def serializar_busca(busca, *, em_andamento: bool) -> dict:
         "por_tipo": busca.por_tipo or {},
         "mensagem": busca.mensagem or "",
         "grava_venda": False,
+        "login_pap": getattr(login_user, "username", None) or "",
         "iniciado_em": busca.iniciado_em.isoformat() if busca.iniciado_em else "",
         "finalizado_em": busca.finalizado_em.isoformat() if busca.finalizado_em else "",
     }
 
 
 def criar_e_iniciar_busca(usuario, *, data_inicio: date, data_fim: date, pdv: str, tipos: list[str]):
-    from crm_app.models import HistoricoPapBusca
+    from django.db import transaction
 
-    ok, msg = _validar_credenciais(usuario)
-    if not ok:
-        return None, msg
+    from crm_app.models import HistoricoPapBusca
+    from crm_app.pool_historico_pap import obter_login_historico_pap
 
     if data_fim < data_inicio:
         return None, "Data fim anterior à data início."
@@ -192,26 +194,37 @@ def criar_e_iniciar_busca(usuario, *, data_inicio: date, data_fim: date, pdv: st
     if not pdv:
         return None, "Informe o PDV SAP."
 
-    if busca_em_andamento():
-        return None, "Já existe uma busca de histórico PAP em andamento."
+    with transaction.atomic():
+        login_pap, err_pool = obter_login_historico_pap()
+        if err_pool:
+            return None, err_pool
 
-    busca = HistoricoPapBusca.objects.create(
-        usuario=usuario,
-        status=HistoricoPapBusca.STATUS_EM_ANDAMENTO,
-        data_inicio=data_inicio,
-        data_fim=data_fim,
-        pdv=pdv,
-        tipos=tipos_ok,
-        relatorio_json={"fase": "iniciando"},
-    )
+        ok, msg = _validar_credenciais(login_pap)
+        if not ok:
+            return None, msg
+
+        busca = HistoricoPapBusca.objects.create(
+            usuario=usuario,
+            login_pap=login_pap,
+            status=HistoricoPapBusca.STATUS_EM_ANDAMENTO,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            pdv=pdv,
+            tipos=tipos_ok,
+            mensagem=f"Usando login Diretoria: {login_pap.username}",
+            relatorio_json={"fase": "iniciando", "login_pap": login_pap.username},
+        )
+        login_id = login_pap.id
+        busca_id = busca.id
+
     t = threading.Thread(
         target=_runner,
-        args=(busca.id, usuario.id),
-        name=f"hist-pap-{busca.id}",
+        args=(busca_id, login_id),
+        name=f"hist-pap-{busca_id}",
         daemon=True,
     )
     t.start()
-    return busca.id, None
+    return busca_id, None
 
 
 def xlsx_novos_da_busca(busca_id: int) -> tuple[bytes, str]:
@@ -242,12 +255,12 @@ def _atualizar(busca_id: int, **kwargs):
     HistoricoPapBusca.objects.filter(pk=busca_id).update(**kwargs)
 
 
-def _runner(busca_id: int, usuario_id: int):
+def _runner(busca_id: int, login_pap_id: int):
     import django.db
 
     django.db.close_old_connections()
     try:
-        _executar_busca(busca_id, usuario_id)
+        _executar_busca(busca_id, login_pap_id)
     except Exception:
         logger.exception("[HISTORICO PAP] Falha no job %s", busca_id)
         try:
@@ -305,22 +318,22 @@ def _salvar_novo(numero: str, tipo: str, pdv: str, payload: dict) -> bool:
     return True
 
 
-def _executar_busca(busca_id: int, usuario_id: int):
+def _executar_busca(busca_id: int, login_pap_id: int):
     from django.contrib.auth import get_user_model
 
     from crm_app.models import HistoricoPapBusca
     from crm_app.services_pap_nio import PAPNioAutomation
 
     User = get_user_model()
-    usuario = _run_django_sync(lambda: User.objects.get(pk=usuario_id))
+    login_pap = _run_django_sync(lambda: User.objects.get(pk=login_pap_id))
     busca = _run_django_sync(lambda: HistoricoPapBusca.objects.get(pk=busca_id))
 
-    matricula = (getattr(usuario, "matricula_pap", None) or "").strip()
-    senha = (getattr(usuario, "senha_pap", None) or "").strip()
+    matricula = (getattr(login_pap, "matricula_pap", None) or "").strip()
+    senha = (getattr(login_pap, "senha_pap", None) or "").strip()
     automacao = PAPNioAutomation(
         matricula_pap=matricula,
         senha_pap=senha,
-        vendedor_nome=getattr(usuario, "username", "Historico-PAP") or "Historico-PAP",
+        vendedor_nome=getattr(login_pap, "username", "Historico-PAP") or "Historico-PAP",
         headless=getattr(settings, "PAP_HEADLESS", True),
         capture_screenshots=False,
         optimize_for_credit=False,

@@ -969,6 +969,11 @@
                                             <label class="form-check-label fw-bold" for="participa_controle_presenca">Participa Controle Presença?</label>
                                             <small class="text-muted d-block ms-4 mt-1">Exibe o usuário na tela de controle de presença.</small>
                                         </div>
+                                        <div class="form-check form-switch mb-3 p-3 rounded bg-light border">
+                                            <input class="form-check-input" type="checkbox" id="recebe_selfie_presenca">
+                                            <label class="form-check-label fw-bold" for="recebe_selfie_presenca">Recebe selfie de presença no WhatsApp?</label>
+                                            <small class="text-muted d-block ms-4 mt-1">Envia a foto de confirmação diária do módulo Presença para o WhatsApp 1.</small>
+                                        </div>
                                         <div class="form-check form-switch mb-3 p-3 rounded bg-light border" id="container-vendedor-solo" style="display: none;">
                                             <input class="form-check-input" type="checkbox" id="vendedor_solo">
                                             <label class="form-check-label fw-bold" for="vendedor_solo">Vendedor solo</label>
@@ -1011,6 +1016,11 @@
                                             <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pap_automacao_pedido"><label class="form-check-label" for="pap_automacao_pedido">Pedido</label></div>
                                             <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="pap_automacao_status"><label class="form-check-label" for="pap_automacao_status">Status</label></div>
                                             <small class="text-muted d-block mt-1">Marque em quais automações do bot este login BackOffice pode ser usado.</small>
+                                        </div>
+                                        <div class="form-check form-switch mb-3 p-3 rounded bg-light border border-info">
+                                            <input class="form-check-input" type="checkbox" id="autorizar_historico_pap">
+                                            <label class="form-check-label fw-bold" for="autorizar_historico_pap">Autorizar busca do histórico PAP (Funil)</label>
+                                            <small class="text-muted d-block ms-4 mt-1">Perfil Diretoria com matrícula/senha PAP. Enquanto este login estiver buscando, outro usuário só consegue se houver outro Diretoria liberado no pool.</small>
                                         </div>
                                         <div class="form-check form-switch mb-3 p-3 rounded bg-light border border-primary">
                                             <input class="form-check-input" type="checkbox" id="pode_gestao_acessos">
@@ -2590,6 +2600,7 @@
             document.getElementById('user_canal').value = user.canal || 'PAP';
             document.getElementById('user_cluster').value = user.cluster || '';
             document.getElementById('participa_controle_presenca').checked = user.participa_controle_presenca;
+            document.getElementById('recebe_selfie_presenca').checked = user.recebe_selfie_presenca || false;
             document.getElementById('vendedor_solo').checked = user.vendedor_solo || false;
             document.getElementById('autorizar_venda_sem_auditoria').checked = user.autorizar_venda_sem_auditoria || false;
             document.getElementById('autorizar_venda_automatica').checked = user.autorizar_venda_automatica || false;
@@ -2601,6 +2612,7 @@
             document.getElementById('pap_automacao_credito').checked = user.pap_automacao_credito !== false;
             document.getElementById('pap_automacao_pedido').checked = user.pap_automacao_pedido !== false;
             document.getElementById('pap_automacao_status').checked = user.pap_automacao_status !== false;
+            document.getElementById('autorizar_historico_pap').checked = !!user.autorizar_historico_pap;
             document.getElementById('pode_gestao_acessos').checked = user.pode_gestao_acessos || false;
             document.getElementById('recebe_adiantamento_cnpj').checked = user.recebe_adiantamento_cnpj !== false;
             document.getElementById('recebe_adiantamento_sabado').checked = user.recebe_adiantamento_sabado === true;
@@ -2624,8 +2636,10 @@
             document.getElementById('pap_automacao_credito').checked = true;
             document.getElementById('pap_automacao_pedido').checked = true;
             document.getElementById('pap_automacao_status').checked = true;
+            document.getElementById('autorizar_historico_pap').checked = false;
             document.getElementById('pode_gestao_acessos').checked = false;
             document.getElementById('vendedor_solo').checked = false;
+            document.getElementById('recebe_selfie_presenca').checked = false;
             document.getElementById('recebe_adiantamento_cnpj').checked = true;
             document.getElementById('recebe_adiantamento_sabado').checked = false;
         }
@@ -2776,6 +2790,7 @@
             adiantamento_cnpj: cleanValue(document.getElementById('adiantamento_cnpj').value, true),
             desconto_inss_fixo: cleanValue(document.getElementById('desconto_inss_fixo').value, true),
             participa_controle_presenca: document.getElementById('participa_controle_presenca').checked,
+            recebe_selfie_presenca: document.getElementById('recebe_selfie_presenca').checked,
             vendedor_solo: document.getElementById('vendedor_solo').checked,
             autorizar_venda_sem_auditoria: document.getElementById('autorizar_venda_sem_auditoria').checked,
             autorizar_venda_automatica: document.getElementById('autorizar_venda_automatica').checked,
@@ -2787,6 +2802,7 @@
             pap_automacao_credito: document.getElementById('pap_automacao_credito').checked,
             pap_automacao_pedido: document.getElementById('pap_automacao_pedido').checked,
             pap_automacao_status: document.getElementById('pap_automacao_status').checked,
+            autorizar_historico_pap: document.getElementById('autorizar_historico_pap').checked,
             pode_gestao_acessos: document.getElementById('pode_gestao_acessos').checked,
             recebe_adiantamento_cnpj: document.getElementById('recebe_adiantamento_cnpj').checked,
             recebe_adiantamento_sabado: document.getElementById('recebe_adiantamento_sabado').checked,
