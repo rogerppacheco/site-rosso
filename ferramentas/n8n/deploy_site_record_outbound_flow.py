@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional
 import requests
 
 FLOW_FILE = Path(__file__).resolve().parent / "site-record-n8n-outbound-flow.json"
-FLOW_NAME = "Site Record — CRM → WhatsApp (Outbound)"
-WEBHOOK_PATH = "site-record-enviar-mensagem"
+FLOW_NAME = "Rosso — CRM → WhatsApp (Outbound)"
+WEBHOOK_PATH = "site-rosso-enviar-mensagem"
 DEFAULT_N8N_BASE = "https://n8n-production-574f.up.railway.app"
 
 
@@ -120,10 +120,10 @@ def main() -> int:
     print("Webhook (N8N_OUTBOUND_WEBHOOK_URL):")
     print(f"  {expected_webhook}")
     print()
-    print("Variáveis Railway site-record (+ webhook worker):")
+    print("Variáveis Railway site-rosso (+ webhook worker):")
     print(f"  N8N_OUTBOUND_WEBHOOK_URL={expected_webhook}")
-    print("  EVOLUTION_API_URL=https://evolution-api-production-8bbb.up.railway.app")
-    print("  EVOLUTION_INSTANCE_NAME=site_record_zap")
+    print("  EVOLUTION_API_URL=https://evolution-api-production-b36a.up.railway.app")
+    print("  EVOLUTION_INSTANCE_NAME=site_rosso_zap")
     print("  EVOLUTION_API_KEY=<mesma do servidor Evolution>")
     print()
 

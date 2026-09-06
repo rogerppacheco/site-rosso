@@ -10,7 +10,7 @@ from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-fallback-secret-key-12345')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = [
@@ -347,6 +347,16 @@ DFV_POWERBI_SUL_RESOURCE_KEY = config(
     default='cc212c25-1b6a-4301-877b-703e2c7aa788',
 )
 DFV_POWERBI_SUL_MODEL_ID = config('DFV_POWERBI_SUL_MODEL_ID', default=6062850, cast=int)
+DFV_POWERBI_CO_RESOURCE_KEY = config(
+    'DFV_POWERBI_CO_RESOURCE_KEY',
+    default='a321b404-8186-4645-8070-507a8fea6abb',
+)
+DFV_POWERBI_CO_MODEL_ID = config('DFV_POWERBI_CO_MODEL_ID', default=6063900, cast=int)
+DFV_POWERBI_NN_RESOURCE_KEY = config(
+    'DFV_POWERBI_NN_RESOURCE_KEY',
+    default='7b6cd391-63ef-4af2-9b09-1b0b1caa29a9',
+)
+DFV_POWERBI_NN_MODEL_ID = config('DFV_POWERBI_NN_MODEL_ID', default=6064171, cast=int)
 DFV_POWERBI_TIMEOUT_SECONDS = config('DFV_POWERBI_TIMEOUT_SECONDS', default=18, cast=float)
 DFV_POWERBI_CACHE_TTL_SECONDS = config('DFV_POWERBI_CACHE_TTL_SECONDS', default=600, cast=int)
 DFV_POWERBI_WINDOW_COUNT = config('DFV_POWERBI_WINDOW_COUNT', default=5000, cast=int)

@@ -36,14 +36,18 @@ class FunilHistoricoPapConfigView(APIView):
     def get(self, request):
         if not is_member(request.user, ["Diretoria", "Admin"]):
             return Response({"detail": "Sem permissão."}, status=403)
-        from crm_app.historico_pap_service import busca_em_andamento, serializar_busca
+        from crm_app.historico_pap_service import busca_em_andamento, obter_status_sessao_pap, serializar_busca
         from crm_app.models import HistoricoPapBusca, HistoricoPapPedido
-        from crm_app.pool_historico_pap import resumo_pool
+        from crm_app.pool_historico_pap import candidatos_historico_pap, resumo_pool
 
         hoje = date.today()
         busca = busca_em_andamento()
         ultima = HistoricoPapBusca.objects.select_related("login_pap").order_by("-iniciado_em").first()
         pool = resumo_pool()
+        cand = list(candidatos_historico_pap())
+        mat_cand = getattr(cand[0], "matricula_pap", "") if cand else ""
+        sessao_info = obter_status_sessao_pap(mat_cand)
+
         return Response(
             {
                 "tipos": ["VENDA", "INTERESSE", "PRE_VENDA"],
@@ -52,6 +56,7 @@ class FunilHistoricoPapConfigView(APIView):
                 "max_dias": MAX_DIAS_BUSCA,
                 "tem_credencial_pap": pool["disponiveis"] > 0 or pool["em_uso"] > 0,
                 "pool": pool,
+                "sessao_pap": sessao_info,
                 "pedidos_conhecidos": HistoricoPapPedido.objects.count(),
                 "grava_venda": False,
                 "busca_em_andamento": serializar_busca(busca, em_andamento=True) if busca else None,
@@ -107,6 +112,12 @@ class FunilHistoricoPapBuscarView(APIView):
         if isinstance(tipos_raw, str):
             tipos_raw = [p.strip() for p in tipos_raw.split(",") if p.strip()]
         tipos = tipos_solicitados(tipos_raw)
+        token_manual = (
+            data.get("token_manual")
+            or data.get("token")
+            or request.headers.get("X-PAP-Token")
+            or ""
+        ).strip()
 
         from crm_app.historico_pap_service import criar_e_iniciar_busca
 
@@ -116,6 +127,7 @@ class FunilHistoricoPapBuscarView(APIView):
             data_fim=data_fim,
             pdv="",
             tipos=tipos,
+            token_manual=token_manual,
         )
         if err:
             low = err.lower()
@@ -128,6 +140,7 @@ class FunilHistoricoPapBuscarView(APIView):
                 "status": "em_andamento",
                 "grava_venda": False,
                 "tipos": tipos,
+                "token_manual_utilizado": bool(token_manual),
             },
             status=202,
         )

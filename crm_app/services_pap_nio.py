@@ -712,12 +712,14 @@ class PAPNioAutomation:
             self.playwright = sync_playwright().start()
             playwright = self.playwright
             launch_opts: Dict[str, Any] = {"headless": self.headless}
-            if self.headless:
-                launch_opts["args"] = [
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                ]
+            browser_args = [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-web-security",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ]
+            launch_opts["args"] = browser_args
             _sm = self.slow_mo
             if _sm is None and not self.headless:
                 _sm = 300  # pausa entre ações para visualizar cliques

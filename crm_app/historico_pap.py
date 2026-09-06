@@ -32,8 +32,8 @@ TIPO_ALIASES = {
 }
 TIPO_API_ALIASES = {
     "VENDA": ("VENDA",),
-    "INTERESSE": ("INTERESSE",),
-    "PRE_VENDA": ("PRE_VENDA", "PRE-VENDA", "PRE_VENDAS", "PREVENDAS", "PREVENDA"),
+    "INTERESSE": ("INTERESSE_SALVO", "INTERESSE"),
+    "PRE_VENDA": ("PRE_VENDA",),
 }
 
 STATUS_LISTA_PADRAO = (
@@ -338,18 +338,27 @@ def extrair_lista_api(payload: Any) -> tuple[list[dict], int]:
         return [p for p in payload if isinstance(p, dict)], len(payload)
     if not isinstance(payload, dict):
         return [], 0
+    data_dict = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     lista = (
-        payload.get("data")
+        data_dict.get("vendas")
+        or data_dict.get("pedidos")
+        or data_dict.get("pedidosValidos")
+        or data_dict.get("content")
+        or data_dict.get("items")
+        or data_dict.get("data")
+        or payload.get("vendas")
+        or payload.get("pedidos")
         or payload.get("content")
         or payload.get("items")
         or payload.get("results")
-        or payload.get("vendas")
-        or payload.get("pedidos")
+        or payload.get("data")
         or _get(payload, "lists", "pedidosValidos", default=None)
     )
     if isinstance(lista, dict):
         lista = (
-            lista.get("pedidosValidos")
+            lista.get("vendas")
+            or lista.get("pedidos")
+            or lista.get("pedidosValidos")
             or lista.get("content")
             or lista.get("items")
             or lista.get("data")
@@ -357,7 +366,10 @@ def extrair_lista_api(payload: Any) -> tuple[list[dict], int]:
     if not isinstance(lista, list):
         lista = []
     total = (
-        payload.get("total")
+        data_dict.get("total")
+        or data_dict.get("totalElements")
+        or data_dict.get("count")
+        or payload.get("total")
         or payload.get("totalElements")
         or payload.get("count")
         or _get(payload, "fields", "total", default=None)

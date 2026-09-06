@@ -115,6 +115,30 @@
                                 <label class="form-check-label" for="hist-tipo-prevenda">Pré-venda</label>
                             </div>
                         </div>
+                    <div class="col-12">
+                        <div class="p-2 border rounded bg-light">
+                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="small fw-semibold">Sessão PAP:</span>
+                                    <span id="hist-sessao-badge" class="badge bg-secondary">Verificando...</span>
+                                </div>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="btn-toggle-token-manual">
+                                    🔑 Informar Token Manual (Sem risco de login)
+                                </button>
+                            </div>
+                            <div id="wrap-token-manual" class="mt-2 d-none">
+                                <label class="form-label small text-muted mb-1" for="hist-token-manual">
+                                    Bearer Token do PAP (copiado do DevTools do navegador onde o PAP já está aberto):
+                                </label>
+                                <div class="input-group input-group-sm">
+                                    <input type="password" id="hist-token-manual" class="form-control" placeholder="Cole o token eyJhbGciOi...">
+                                    <button class="btn btn-outline-secondary" type="button" id="btn-ver-token" title="Mostrar/Ocultar">👁️</button>
+                                </div>
+                                <div class="form-text small text-muted">
+                                    💡 <strong>Como pegar o token:</strong> No PAP aberto no Chrome, pressione <kbd>F12</kbd> &gt; aba <strong>Application</strong> &gt; <strong>Local Storage</strong> &gt; chave <code>token</code>, ou copie o cabeçalho <code>Authorization</code> na aba <strong>Network</strong>.
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-12 d-flex align-items-center gap-2 flex-wrap">
                         <button type="button" class="btn btn-primary btn-sm" id="btn-hist-buscar">Buscar no PAP</button>
@@ -377,6 +401,20 @@
                     cred.textContent = `Pool: ${pool.disponiveis || 0} livre(s) · ${pool.em_uso || 0} em uso · Base: ${cfg.pedidos_conhecidos || 0} pedidos.`;
                     cred.className = 'small ms-2 text-muted';
                 }
+                const sess = cfg.sessao_pap || {};
+                const badge = document.getElementById('hist-sessao-badge');
+                if (badge) {
+                    if (sess.cooldown_ativo) {
+                        badge.className = 'badge bg-danger';
+                        badge.textContent = `⚠️ Cooldown anti-bloqueio ativo (${sess.cooldown_restante_minutos} min restantes)`;
+                    } else if (sess.tem_token_valido) {
+                        badge.className = 'badge bg-success';
+                        badge.textContent = `✓ Sessão ativa (expira em ~${sess.expira_em_minutos} min)`;
+                    } else {
+                        badge.className = 'badge bg-secondary';
+                        badge.textContent = 'Sem token em cache';
+                    }
+                }
                 const andamento = cfg.busca_em_andamento;
                 if (andamento) {
                     pintarHist(andamento);
@@ -419,7 +457,10 @@
             if (!token) { window.location.href = '/'; return; }
             document.getElementById('btn-hist-buscar').disabled = true;
             histBlob = null;
-            status.textContent = 'Reservando login Diretoria e abrindo sessão PAP…';
+            const tokenManual = (document.getElementById('hist-token-manual')?.value || '').trim();
+            status.textContent = tokenManual
+                ? 'Validando token e buscando histórico diretamente na API (sem abrir navegador)...'
+                : 'Verificando sessão PAP e iniciando busca...';
             try {
                 const r = await fetch(API_HIST, {
                     method: 'POST',
@@ -427,7 +468,8 @@
                     body: JSON.stringify({
                         data_inicio: document.getElementById('hist-inicio').value,
                         data_fim: document.getElementById('hist-fim').value,
-                        tipos
+                        tipos,
+                        token_manual: tokenManual
                     })
                 });
                 const data = await r.json();
@@ -442,6 +484,16 @@
                 document.getElementById('btn-hist-buscar').disabled = false;
             }
         }
+
+        document.getElementById('btn-toggle-token-manual')?.addEventListener('click', () => {
+            const wrap = document.getElementById('wrap-token-manual');
+            if (wrap) wrap.classList.toggle('d-none');
+        });
+
+        document.getElementById('btn-ver-token')?.addEventListener('click', () => {
+            const inp = document.getElementById('hist-token-manual');
+            if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+        });
 
         document.getElementById('btn-hist-buscar').addEventListener('click', () => {
             if (!modalPeriodo) modalPeriodo = new bootstrap.Modal(document.getElementById('modalPeriodoHist'));

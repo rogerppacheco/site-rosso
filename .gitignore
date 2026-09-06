@@ -48,4 +48,7 @@ pap_sessions/*.json
 relatorio_churn_*.md
 diff_ids.csv
 .railway/
+scratch/
+teste_historico_*.xlsx
+
 

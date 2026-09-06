@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "site-record-enviar-mensagem",
+        "path": "site-rosso-enviar-mensagem",
         "responseMode": "onReceived",
         "options": {}
       },
@@ -13,7 +13,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [240, 300],
-      "webhookId": "site-record-crm-outbound"
+      "webhookId": "site-rosso-crm-outbound"
     },
     {
       "parameters": {
@@ -59,7 +59,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://evolution-api-production-8bbb.up.railway.app/message/sendText/site_record_zap",
+        "url": "https://evolution-api-production-b36a.up.railway.app/message/sendText/site_rosso_zap",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -82,7 +82,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://evolution-api-production-8bbb.up.railway.app/message/sendMedia/site_record_zap",
+        "url": "https://evolution-api-production-b36a.up.railway.app/message/sendMedia/site_rosso_zap",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {

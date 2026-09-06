@@ -197,6 +197,33 @@ def _usuario_ativo_por_telefone(telefone):
         return None
 
 
+_ETAPAS_BOT_PUBLICO = frozenset(
+    {
+        "dfv_cep",
+        "cdoe_codigo",
+        "cdoe_uf",
+        "cdoe_escolher_cidade",
+        "cdoe_escolher_rua",
+    }
+)
+
+
+def _sessao_bot_publica_ativa(telefone: str) -> bool:
+    """Fluxos DFV/CDOE abertos sem usuário interno cadastrado."""
+    try:
+        from crm_app.models import SessaoWhatsapp
+
+        etapa = (
+            SessaoWhatsapp.objects.filter(telefone=telefone)
+            .values_list("etapa", flat=True)
+            .first()
+        )
+        return bool(etapa and etapa in _ETAPAS_BOT_PUBLICO)
+    except Exception as e:
+        logger.warning("[Webhook] Erro ao verificar sessão pública: %s", e)
+        return False
+
+
 def _saudacao_por_hora():
     """Retorna 'Bom Dia', 'Boa Tarde' ou 'Boa Noite' conforme o horário (timezone do servidor)."""
     try:
@@ -8467,7 +8494,16 @@ def processar_webhook_whatsapp(data, request=None):
 
     # Verificar se o número está associado a um usuário ativo (em grupo, usar participant_phone)
     usuario_whatsapp = _usuario_ativo_por_telefone(telefone_formatado_usuario)
-    if not usuario_whatsapp:
+    comandos_liberados_sem_cadastro = (
+        mensagem_limpa in {"DFV", "CDOE", "FACHADA", "FACADA"}
+        or mensagem_limpa.startswith("CDOE ")
+    )
+    sessao_publica_ativa = _sessao_bot_publica_ativa(telefone_formatado)
+    if (
+        not usuario_whatsapp
+        and not comandos_liberados_sem_cadastro
+        and not sessao_publica_ativa
+    ):
         # Cliente com telefone cadastrado em venda: resposta com dados do pedido + aviso BO/Diretoria
         if mensagem_texto and (mensagem_texto or "").strip():
             try:
@@ -8807,7 +8843,7 @@ def processar_webhook_whatsapp(data, request=None):
             _registrar_estatistica(telefone_formatado, 'DFV')
             resposta = (
                 "Por favor, digite o *CEP* para consultar fachadas no Power BI ao vivo "
-                "(Sudeste, SP e Sul — apenas números; hífen é aceito):"
+                "(todas as regionais — apenas números; hífen é aceito):"
             )
             return _enviar_resposta_e_retornar(_com_prefixo_primeira_mensagem(resposta))
 
@@ -9148,6 +9184,15 @@ def processar_webhook_whatsapp(data, request=None):
                 sessao.dados_temp = {}
                 sessao.save()
                 return _enviar_resposta_e_retornar("Consulta *DFV* cancelada.")
+
+            if mensagem_limpa == 'DFV':
+                sessao.dados_temp = {}
+                sessao.save()
+                resposta = (
+                    "Por favor, digite o *CEP* para consultar fachadas no Power BI ao vivo "
+                    "(todas as regionais — apenas números; hífen é aceito):"
+                )
+                return _enviar_resposta_e_retornar(resposta)
 
             cep_limpo = limpar_cep_dfv(mensagem_texto)
             if len(cep_limpo) != 8:
