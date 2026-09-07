@@ -205,3 +205,126 @@ class FunilHistoricoPapDownloadView(APIView):
                 "grava_venda": False,
             }
         )
+
+
+class FunilHistoricoPapPedidosView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_member(request.user, ["Diretoria", "Admin"]):
+            return Response({"detail": "Sem permissão."}, status=403)
+
+        from crm_app.historico_pap_service import map_pedido_api, normalizar_pedido
+        from crm_app.models import HistoricoPapBusca, HistoricoPapPedido
+
+        busca_id = request.query_params.get("busca_id")
+        tipo = request.query_params.get("tipo")
+
+        busca = None
+        novos_set: set[str] = set()
+        if busca_id:
+            busca = HistoricoPapBusca.objects.filter(pk=busca_id).first()
+        else:
+            busca = HistoricoPapBusca.objects.order_by("-iniciado_em").first()
+
+        if busca and busca.novos_numeros:
+            novos_set = {normalizar_pedido(n) for n in busca.novos_numeros if n}
+
+        qs = HistoricoPapPedido.objects.all()
+        if tipo:
+            qs = qs.filter(tipo_venda__iexact=tipo)
+
+        qs = qs.order_by("-capturado_em")[:500]
+
+        res = []
+        for p in qs:
+            payload = p.payload or {}
+            mapped = map_pedido_api(payload, p.tipo_venda)
+            num_norm = normalizar_pedido(p.numero_pedido)
+
+            cliente_val = mapped.get("cliente") or payload.get("cliente") or payload.get("nomeCliente") or "Desconhecido"
+            doc_val = mapped.get("cpf") or mapped.get("documento") or payload.get("cpf") or payload.get("documento") or ""
+            status_val = mapped.get("status_primario") or p.status or payload.get("chaveStatusPrimario") or payload.get("status") or "Desconhecido"
+
+            res.append({
+                "id": p.id,
+                "protocolo": mapped.get("pedido") or p.numero_pedido,
+                "cliente": cliente_val,
+                "documento": doc_val,
+                "tipo_venda": p.tipo_venda,
+                "status_primario": status_val,
+                "novo_nesta_busca": num_norm in novos_set,
+                "data_status": mapped.get("data_pedido") or "",
+            })
+
+        return Response(res)
+
+
+class FunilHistoricoPapImportarView(APIView):
+    """Dispara busca PAP de VENDAS e importa pedidos locais para o CRM."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not is_member(request.user, ["Diretoria", "Admin"]):
+            return Response({"error": "Sem permissão."}, status=403)
+
+        from datetime import timedelta
+
+        from crm_app.historico_pap_service import busca_em_andamento, criar_e_iniciar_busca
+        from crm_app.models import HistoricoPapPedido
+        from crm_app.services_sincronizacao import sincronizar_pedido_pap_para_venda
+
+        if busca_em_andamento():
+            return Response(
+                {"error": "Já existe uma busca no PAP em andamento. Aguarde terminar para importar."},
+                status=400,
+            )
+
+        try:
+            periodo = request.data.get("periodo", "hoje")
+            hoje = date.today()
+            if periodo == "mes":
+                data_inicio = date(hoje.year, hoje.month, 1)
+            elif periodo == "semana":
+                data_inicio = hoje - timedelta(days=7)
+            elif periodo == "ontem":
+                data_inicio = hoje - timedelta(days=1)
+            else:
+                data_inicio = hoje
+
+            criar_e_iniciar_busca(
+                request.user,
+                data_inicio=data_inicio,
+                data_fim=hoje,
+                pdv="",
+                tipos=["VENDA"],
+                token_manual="",
+            )
+        except Exception as e:
+            logger.error("Erro ao iniciar busca online do PAP: %s", e, exc_info=True)
+
+        pedidos = HistoricoPapPedido.objects.filter(tipo_venda="VENDA").order_by("-capturado_em")[:100]
+
+        sucessos = 0
+        falhas = 0
+        erros_msgs: list[str] = []
+
+        for p in pedidos:
+            try:
+                res = sincronizar_pedido_pap_para_venda(p.id)
+                if res.get("sucesso"):
+                    sucessos += 1
+                else:
+                    msg = res.get("mensagem") or ""
+                    if "já existe" not in msg:
+                        falhas += 1
+                        erros_msgs.append(f"Pedido {p.numero_pedido}: {msg}")
+            except Exception as e:
+                logger.error("Erro ao importar pedido %s: %s", p.id, e, exc_info=True)
+                falhas += 1
+
+        msg_final = f"Busca online iniciada (pode levar 1 minuto). Do banco local, {sucessos} novas vendas criadas."
+        if falhas > 0:
+            msg_final += f" ({falhas} com erro)."
+
+        return Response({"sucesso": True, "mensagem": msg_final, "erros": erros_msgs})

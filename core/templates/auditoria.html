@@ -809,7 +809,11 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
                         </ul>
                     </div>
 
-                    <div class="dropdown ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-success ms-auto me-2" id="btn-sync-pap" onclick="iniciarBuscaPapOnline()">
+                        <i class="bi bi-cloud-download"></i><span class="d-none d-md-inline ms-1">Buscar do PAP</span>
+                    </button>
+
+                    <div class="dropdown">
                         <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Opções">
                             <i class="bi bi-three-dots-vertical"></i><span class="d-none d-md-inline ms-1">Opções</span>
                         </button>
@@ -852,6 +856,11 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
                                 </button>
                             </li>
                             <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button type="button" class="dropdown-item" onclick="abrirModalConfigPap()" title="Configurar período da busca online">
+                                    <i class="bi bi-gear"></i> Config. Busca PAP
+                                </button>
+                            </li>
                             <li>
                                 <button type="button" class="dropdown-item" id="btn-atualizar-lista" onclick="carregarVendasPendentes(); carregarProximoTTBanner();">
                                     <i class="bi bi-arrow-clockwise"></i> Atualizar lista
@@ -1665,6 +1674,34 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
 {% include "partials/pedido_ajuda_gc_modal.html" %}
 {% include "partials/pedido_ajuda_gc_export_modal.html" %}
 
+<!-- Modal Configurar Busca PAP -->
+<div class="modal fade" id="modal-config-pap" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title">Configurar Busca PAP</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Período de busca</label>
+                    <select id="config-pap-periodo" class="form-select">
+                        <option value="hoje">Hoje</option>
+                        <option value="ontem">Ontem e Hoje</option>
+                        <option value="semana">Últimos 7 dias</option>
+                        <option value="mes">Mês atual</option>
+                    </select>
+                    <div class="form-text mt-2">Escolha qual intervalo de tempo o robô deve consultar na Vtal. "Hoje" é mais rápido.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarConfigPap()">Salvar Configuração</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -1673,6 +1710,50 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
 <script src="{% static 'js/menu.js' %}?v=8.0"></script>
 <script src="{% static 'js/painel_tempo_tratamento.js' %}?v=1.0"></script>
 <script>
+function abrirModalConfigPap() {
+    const periodo = localStorage.getItem('pap_busca_periodo') || 'hoje';
+    document.getElementById('config-pap-periodo').value = periodo;
+    new bootstrap.Modal(document.getElementById('modal-config-pap')).show();
+}
+
+function salvarConfigPap() {
+    const periodo = document.getElementById('config-pap-periodo').value;
+    localStorage.setItem('pap_busca_periodo', periodo);
+    bootstrap.Modal.getInstance(document.getElementById('modal-config-pap')).hide();
+    alert('Configuração salva! A próxima busca usará este período.');
+}
+
+async function iniciarBuscaPapOnline() {
+    const btn = document.getElementById('btn-sync-pap');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando...';
+    try {
+        const token = localStorage.getItem('accessToken');
+        const periodo = localStorage.getItem('pap_busca_periodo') || 'hoje';
+        const resp = await fetch('/api/crm/historico/importar-vendas/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ periodo: periodo })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            alert('Importação concluída: ' + (data.mensagem || 'Vendas importadas com sucesso!'));
+            carregarVendasPendentes();
+        } else {
+            alert('Erro na importação: ' + (data.error || 'Ocorreu um erro ao importar vendas.'));
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Erro de conexão. Não foi possível conectar ao servidor.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-download"></i><span class="d-none d-md-inline ms-1">Buscar do PAP</span>';
+    }
+}
         const API_BASE = '/api/crm/vendas';
         const API_AUX = '/api/crm';
         
@@ -2652,7 +2733,8 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
 
                     const bioHtml = renderBotaoBiometriaLista(v.id, v.biometria_aprovada, v.biometria_data_apta);
                     
-                    tbody.append(`<tr class="${classeLinha}" data-venda-id="${v.id}"><td class="fw-bold text-primary">#${v.id}</td><td>${dataFormatada}</td><td><div class="fw-bold text-dark">${nomeCliente}</div><div class="small text-muted" style="font-size: 0.8rem;">${cpfCliente}</div></td><td>${nomeVendedor}</td><td>${produto}</td><td><span class="badge bg-warning text-dark">${statusNome}</span></td><td>${infoEdicao}</td><td>${auditorInfo}</td><td class="text-center" id="bio-cell-${v.id}">${bioHtml}</td><td class="text-end">${btnHtml}</td></tr>`);
+                    const pedidoPapHtml = v.pedido_pap ? `<br><small class="text-muted" style="font-size:0.75rem;">${v.pedido_pap}</small>` : '';
+                    tbody.append(`<tr class="${classeLinha}" data-venda-id="${v.id}"><td class="fw-bold text-primary">#${v.id}${pedidoPapHtml}</td><td>${dataFormatada}</td><td><div class="fw-bold text-dark">${nomeCliente}</div><div class="small text-muted" style="font-size: 0.8rem;">${cpfCliente}</div></td><td>${nomeVendedor}</td><td>${produto}</td><td><span class="badge bg-warning text-dark">${statusNome}</span></td><td>${infoEdicao}</td><td>${auditorInfo}</td><td class="text-center" id="bio-cell-${v.id}">${bioHtml}</td><td class="text-end">${btnHtml}</td></tr>`);
                 });
             })
             .catch(e => {

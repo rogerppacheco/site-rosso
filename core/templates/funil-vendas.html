@@ -1,44 +1,131 @@
 {% extends "base.html" %}
 
-{% block title %}Funil de Vendas - {{ SITE_BRAND }}{% endblock %}
+{% block title %}Funil de Tratamento - {{ SITE_BRAND }}{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
-{% endblock %}
-
-{% block extra_css %}
 <style>
-.funil-json { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
-.funil-tabs .nav-link { color: var(--text-secondary); font-weight: 600; }
-.funil-tabs .nav-link.active { color: var(--accent-primary, #0d6efd); border-bottom: 3px solid var(--accent-primary, #0d6efd); }
+.nav-pills-custom .nav-link {
+    color: var(--text-secondary);
+    border-radius: 50rem;
+    padding: 0.5rem 1.5rem;
+    margin-right: 0.5rem;
+    transition: all 0.2s ease;
+}
+.nav-pills-custom .nav-link.active {
+    background-color: var(--accent-primary, #0d6efd);
+    color: white;
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3);
+}
+.card-modern { border-radius: 12px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+.table-modern th { border-bottom: 2px solid #eaeaea; color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.table-modern td { vertical-align: middle; font-size: 0.9rem; border-bottom: 1px solid #f2f2f2; }
+.badge-status { font-weight: 500; padding: 0.4em 0.8em; border-radius: 6px; font-size: 0.75rem;}
+.spinner-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.7); display:flex; align-items:center; justify-content:center; z-index: 10; border-radius: 12px;}
+
+.tab-res-custom { transition: all 0.2s; font-size: 0.95rem; }
+.tab-res-custom:hover { background-color: #f8f9fa; }
+.tab-res-active { background-color: white !important; border-top: 3px solid #0d6efd !important; color: #212529 !important; box-shadow: 0 -4px 10px rgba(0,0,0,0.02); }
 </style>
 {% endblock %}
 
 {% block content %}
-<main class="container py-4" style="max-width:1200px">
-        <h1 class="h4 mb-1"><i class="bi bi-funnel text-primary"></i> Funil de vendas</h1>
-        <p class="text-muted small mb-3">Acesso: <strong>Diretoria</strong> ou <strong>Admin</strong>.</p>
-
-        <div id="alert-403" class="alert alert-danger d-none">Sem permissão para esta ferramenta.</div>
-
-        <ul class="nav funil-tabs border-bottom mb-4" role="tablist">
+<main class="container-fluid py-4 px-4" style="max-width: 1400px;">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="h3 mb-1 fw-bold"><i class="bi bi-funnel text-primary"></i> Funil de Tratamento</h1>
+            <p class="text-muted small mb-0">Gestão e tratamento de Interesses, Pré-Vendas e Vendas do PAP.</p>
+        </div>
+        <ul class="nav nav-pills nav-pills-custom" role="tablist">
             <li class="nav-item">
-                <button class="nav-link active bg-transparent border-0 px-3 py-2" id="tab-wpp" type="button">WhatsApp (VENDER)</button>
+                <button class="nav-link active" id="tab-hist" type="button"><i class="bi bi-cloud-download me-2"></i>Histórico PAP</button>
             </li>
             <li class="nav-item">
-                <button class="nav-link bg-transparent border-0 px-3 py-2" id="tab-hist" type="button">Histórico PAP</button>
+                <button class="nav-link" id="tab-wpp" type="button"><i class="bi bi-whatsapp me-2"></i>WhatsApp (Vender)</button>
             </li>
         </ul>
+    </div>
 
-        <div id="painel-wpp">
-        <div id="alert-env" class="alert alert-warning d-none">Em produção, defina <code>FUNIL_VENDAS_REGISTRAR=true</code> para gravar novas tentativas.</div>
-        <p class="text-muted small mb-3">Tentativas do fluxo <strong>VENDER</strong> (a partir do CEP).</p>
+    <div id="alert-403" class="alert alert-danger d-none rounded-3 shadow-sm">Sem permissão para acessar esta ferramenta.</div>
 
-        <div class="card card-modern shadow-sm mb-3">
-            <div class="card-body row g-2 align-items-end">
+    <!-- PAINEL HISTORICO PAP (TRATAMENTO) -->
+    <div id="painel-hist">
+
+        <!-- Resultados e Tratamento em Tela Cheia -->
+        <div id="hist-resumo" class="position-relative mt-2">
+            <div id="hist-spinner" class="spinner-overlay d-none">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="ms-3 fw-bold text-primary" id="hist-spinner-text">Buscando no PAP...</div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-end mb-0 px-2">
+                <ul class="nav nav-tabs border-bottom-0 gap-1" id="tabs-resultados" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link tab-res-custom tab-res-active fw-bold border-0 bg-light rounded-top text-muted py-3 px-4" id="tab-res-interesse" data-tipo="INTERESSE" type="button">
+                            <i class="bi bi-star-fill text-warning me-2"></i> INTERESSE <span class="badge bg-secondary ms-2 rounded-pill" id="count-interesse">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light rounded-top text-muted py-3 px-4" id="tab-res-prevenda" data-tipo="PRE_VENDA" type="button">
+                            <i class="bi bi-clock-history text-info me-2"></i> PRÉ-VENDA <span class="badge bg-secondary ms-2 rounded-pill" id="count-prevenda">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light rounded-top text-muted py-3 px-4" id="tab-res-venda" data-tipo="VENDA" type="button">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i> VENDA <span class="badge bg-secondary ms-2 rounded-pill" id="count-venda">0</span>
+                        </button>
+                    </li>
+                </ul>
+                <div class="pb-2 pe-2 d-flex gap-2">
+                    <!-- Botão Discreto de Nova Busca -->
+                    <button class="btn btn-outline-primary fw-bold shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#modalBusca">
+                        <i class="bi bi-search me-2"></i> Nova Busca
+                    </button>
+                    <!-- Exportar Novos -->
+                    <button class="btn btn-success fw-bold shadow-sm" id="btn-baixar-excel" disabled>
+                        <i class="bi bi-file-earmark-excel me-2"></i> Exportar Novos
+                    </button>
+                </div>
+            </div>
+
+            <div class="card card-modern border-top-0 shadow-sm" style="border-top-left-radius: 0;">
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 75vh; overflow-y: auto;">
+                        <table class="table table-modern table-hover mb-0 align-middle">
+                            <thead class="table-light sticky-top shadow-sm">
+                                <tr>
+                                    <th class="ps-4 py-3">Protocolo / Pedido</th>
+                                    <th class="py-3">Cliente</th>
+                                    <th class="py-3">Documento</th>
+                                    <th class="py-3">Status PAP</th>
+                                    <th class="py-3">Data Status</th>
+                                    <th class="py-3">Situação CRM</th>
+                                    <th class="text-end pe-4 py-3">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-resultados">
+                                <tr><td colspan="7" class="text-center py-5 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>Sem registros.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-0 py-3 px-4 d-flex justify-content-between align-items-center">
+                    <span class="small fw-medium text-success" id="hist-status-msg"></span>
+                    <span class="small text-muted" id="rodape-info"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAINEL WHATSAPP -->
+    <div id="painel-wpp" class="d-none">
+        <div id="alert-env" class="alert alert-warning d-none rounded-3">Em produção, defina <code>FUNIL_VENDAS_REGISTRAR=true</code> para gravar novas tentativas.</div>
+        
+        <div class="card card-modern shadow-sm mb-4 border-0">
+            <div class="card-body row g-3 align-items-end p-4">
                 <div class="col-md-3">
-                    <label class="form-label small mb-0">Status</label>
-                    <select id="filtro-status" class="form-select form-select-sm">
+                    <label class="form-label small mb-1 fw-bold text-muted">Status</label>
+                    <select id="filtro-status" class="form-select bg-light border-0">
                         <option value="">Todos</option>
                         <option value="em_andamento">Em andamento</option>
                         <option value="concluido">Concluído</option>
@@ -47,489 +134,441 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small mb-0">Telefone (contém)</label>
-                    <input type="text" id="filtro-telefone" class="form-control form-control-sm" placeholder="55...">
+                    <label class="form-label small mb-1 fw-bold text-muted">Telefone (contém)</label>
+                    <input type="text" id="filtro-telefone" class="form-control bg-light border-0" placeholder="55...">
                 </div>
                 <div class="col-md-2">
-                    <button type="button" class="btn btn-primary btn-sm w-100" id="btn-buscar">Buscar</button>
+                    <button type="button" class="btn btn-secondary w-100 fw-bold" id="btn-buscar">Filtrar</button>
                 </div>
             </div>
         </div>
 
-        <div class="table-responsive card card-modern shadow-sm">
-            <table class="table table-sm table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>#</th>
-                        <th>Telefone</th>
-                        <th>Vendedor</th>
-                        <th>Status</th>
-                        <th>Funil (máx)</th>
-                        <th>Protocolo</th>
-                        <th>Início</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="tbody">
-                    <tr><td colspan="8" class="text-center text-muted py-4">Carregando…</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <nav class="mt-2 d-flex justify-content-between align-items-center">
-            <span class="small text-muted" id="pag-info"></span>
-            <div>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-prev" disabled>Anterior</button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-next" disabled>Próxima</button>
+        <div class="card card-modern shadow-sm border-0">
+            <div class="table-responsive">
+                <table class="table table-modern table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">#</th>
+                            <th>Telefone</th>
+                            <th>Vendedor</th>
+                            <th>Status</th>
+                            <th>Funil (máx)</th>
+                            <th>Protocolo</th>
+                            <th>Início</th>
+                            <th class="text-end pe-4"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-wpp">
+                        <tr><td colspan="8" class="text-center text-muted py-5">Carregando…</td></tr>
+                    </tbody>
+                </table>
             </div>
-        </nav>
-        </div>
-
-        <div id="painel-hist" class="d-none">
-            <div class="alert alert-info small">
-                Busca <strong>venda</strong>, <strong>interesse</strong> e <strong>pré-venda</strong> direto no PAP
-                com login de <strong>Diretoria</strong> do pool (matrícula/senha + “Autorizar busca do histórico PAP”).
-                O protocolo <strong>Pedido</strong> evita duplicar. <strong>Nenhuma venda é criada</strong>.
-            </div>
-            <div class="card card-modern shadow-sm mb-3">
-                <div class="card-body row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">Data início</label>
-                        <input type="date" id="hist-inicio" class="form-control form-control-sm" readonly>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">Data fim</label>
-                        <input type="date" id="hist-fim" class="form-control form-control-sm" readonly>
-                    </div>
-                    <div class="col-md-6 d-flex align-items-end">
-                        <div class="small">
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="hist-tipo-venda" checked>
-                                <label class="form-check-label" for="hist-tipo-venda">Venda</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="hist-tipo-interesse" checked>
-                                <label class="form-check-label" for="hist-tipo-interesse">Interesse</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" id="hist-tipo-prevenda" checked>
-                                <label class="form-check-label" for="hist-tipo-prevenda">Pré-venda</label>
-                            </div>
-                        </div>
-                    <div class="col-12">
-                        <div class="p-2 border rounded bg-light">
-                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="small fw-semibold">Sessão PAP:</span>
-                                    <span id="hist-sessao-badge" class="badge bg-secondary">Verificando...</span>
-                                </div>
-                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="btn-toggle-token-manual">
-                                    🔑 Informar Token Manual (Sem risco de login)
-                                </button>
-                            </div>
-                            <div id="wrap-token-manual" class="mt-2 d-none">
-                                <label class="form-label small text-muted mb-1" for="hist-token-manual">
-                                    Bearer Token do PAP (copiado do DevTools do navegador onde o PAP já está aberto):
-                                </label>
-                                <div class="input-group input-group-sm">
-                                    <input type="password" id="hist-token-manual" class="form-control" placeholder="Cole o token eyJhbGciOi...">
-                                    <button class="btn btn-outline-secondary" type="button" id="btn-ver-token" title="Mostrar/Ocultar">👁️</button>
-                                </div>
-                                <div class="form-text small text-muted">
-                                    💡 <strong>Como pegar o token:</strong> No PAP aberto no Chrome, pressione <kbd>F12</kbd> &gt; aba <strong>Application</strong> &gt; <strong>Local Storage</strong> &gt; chave <code>token</code>, ou copie o cabeçalho <code>Authorization</code> na aba <strong>Network</strong>.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 d-flex align-items-center gap-2 flex-wrap">
-                        <button type="button" class="btn btn-primary btn-sm" id="btn-hist-buscar">Buscar no PAP</button>
-                        <span class="small text-muted" id="hist-status"></span>
-                        <span class="small ms-2" id="hist-credencial"></span>
-                    </div>
-                </div>
-            </div>
-            <div id="hist-resumo" class="d-none">
-                <div class="card card-modern shadow-sm mb-3">
-                    <div class="card-body">
-                        <h2 class="h6">Resultado da busca</h2>
-                        <ul class="small mb-3" id="hist-metricas"></ul>
-                        <button type="button" class="btn btn-success btn-sm" id="btn-hist-baixar" disabled>Baixar só os novos</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <div class="modal fade" id="modalDetalhe" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Tentativa #<span id="d-id"></span></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body small">
-                    <pre id="d-json" class="funil-json p-2 rounded" style="white-space:pre-wrap;max-height:70vh;font-size:11px"></pre>
+            <div class="card-footer bg-white border-0 p-3 d-flex justify-content-between align-items-center">
+                <span class="small text-muted fw-bold" id="pag-info"></span>
+                <div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="btn-prev" disabled>Anterior</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" id="btn-next" disabled>Próxima</button>
                 </div>
             </div>
         </div>
     </div>
+</main>
 
-    <div class="modal fade" id="modalPeriodoHist" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Período da busca</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="modal fade" id="modalBusca" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h6 class="modal-title fw-bold"><i class="bi bi-cloud-download text-primary me-2"></i>Nova Busca PAP</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pb-0">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Data Inicial</label>
+                    <input type="date" id="hist-inicio" class="form-control form-control-lg bg-light border-0">
                 </div>
-                <div class="modal-body">
-                    <p class="small text-muted">O filtro de datas do PAP será preenchido com o período escolhido.</p>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="radio" name="hist-periodo" id="periodo-hoje" value="hoje" checked>
-                        <label class="form-check-label" for="periodo-hoje">Somente o dia de hoje</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="radio" name="hist-periodo" id="periodo-mes-atual" value="mes_atual">
-                        <label class="form-check-label" for="periodo-mes-atual">Mês atual todo (dia 1 até hoje)</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="radio" name="hist-periodo" id="periodo-mes" value="mes">
-                        <label class="form-check-label" for="periodo-mes">Especificar um mês</label>
-                    </div>
-                    <div class="ms-4 mt-2" id="wrap-mes-especifico">
-                        <label class="form-label small mb-0" for="hist-mes">Mês</label>
-                        <input type="month" id="hist-mes" class="form-control form-control-sm" disabled>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Data Final</label>
+                    <input type="date" id="hist-fim" class="form-control form-control-lg bg-light border-0">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted d-block mb-2">Tipos a buscar</label>
+                    <div class="d-flex flex-column gap-2 ps-1">
+                        <div class="form-check">
+                            <input class="form-check-input tipo-check" type="checkbox" value="VENDA" id="chk-venda" checked>
+                            <label class="form-check-label fw-medium" for="chk-venda">
+                                <i class="bi bi-check-circle-fill text-success me-1"></i> Venda
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input tipo-check" type="checkbox" value="INTERESSE" id="chk-interesse" checked>
+                            <label class="form-check-label fw-medium" for="chk-interesse">
+                                <i class="bi bi-star-fill text-warning me-1"></i> Interesse
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input tipo-check" type="checkbox" value="PRE_VENDA" id="chk-prevenda" checked>
+                            <label class="form-check-label fw-medium" for="chk-prevenda">
+                                <i class="bi bi-clock-history text-info me-1"></i> Pré-venda
+                            </label>
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="btn-hist-confirmar-periodo">Continuar e buscar</button>
-                </div>
+                <div id="modal-hist-status" class="small text-muted mb-3"></div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary fw-bold rounded-pill px-4" id="btn-hist-buscar">Buscar</button>
             </div>
         </div>
     </div>
+</div>
+
+<div class="modal fade" id="modalDetalhe" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">Tentativa #<span id="d-id"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body small">
+                <pre id="d-json" class="p-3 rounded-3 bg-light border" style="white-space:pre-wrap;max-height:60vh;font-size:12px; font-family: monospace;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-        const API_BASE = '/api/crm/funil-venda-wpp/tentativas/';
-        const API_HIST = '/api/crm/funil-venda-wpp/historico-pap/';
-        let page = 1;
-        const pageSize = 25;
-        let histBlob = null;
-        let histNome = 'Historico_PAP.xlsx';
-        let histPoll = null;
-        let modalPeriodo = null;
+    const API_BASE = '/api/crm/funil-venda-wpp/tentativas/';
+    const API_HIST = '/api/crm/funil-venda-wpp/historico-pap/';
+    
+    let pageWpp = 1;
+    let histPoll = null;
+    let activeTipo = 'INTERESSE';
+    let currentBuscaId = null;
 
-        function getToken() {
-            return localStorage.getItem('accessToken');
-        }
+    function getToken() { return localStorage.getItem('accessToken'); }
+    function podeAcessar() {
+        try {
+            const t = getToken();
+            if (!t) return false;
+            const p = jwt_decode(t);
+            const role = (p.user_role || p.perfil || '').toString();
+            return role === 'Diretoria' || role === 'Admin' || p.is_staff === true;
+        } catch (e) { return false; }
+    }
 
-        function podeAcessar() {
-            try {
-                const t = getToken();
-                if (!t) return false;
-                const p = jwt_decode(t);
-                const role = (p.user_role || p.perfil || '').toString();
-                return role === 'Diretoria' || role === 'Admin' || p.is_staff === true;
-            } catch (e) { return false; }
-        }
+    function iso(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
 
-        function mostrarPainel(qual) {
-            document.getElementById('painel-wpp').classList.toggle('d-none', qual !== 'wpp');
-            document.getElementById('painel-hist').classList.toggle('d-none', qual !== 'hist');
-            document.getElementById('tab-wpp').classList.toggle('active', qual === 'wpp');
-            document.getElementById('tab-hist').classList.toggle('active', qual === 'hist');
-        }
-        document.getElementById('tab-wpp').addEventListener('click', () => mostrarPainel('wpp'));
-        document.getElementById('tab-hist').addEventListener('click', () => mostrarPainel('hist'));
+    // Navegação de Abas Principais
+    document.getElementById('tab-hist').addEventListener('click', () => {
+        document.getElementById('painel-hist').classList.remove('d-none');
+        document.getElementById('painel-wpp').classList.add('d-none');
+        document.getElementById('tab-hist').classList.add('active');
+        document.getElementById('tab-wpp').classList.remove('active');
+    });
+    document.getElementById('tab-wpp').addEventListener('click', () => {
+        document.getElementById('painel-wpp').classList.remove('d-none');
+        document.getElementById('painel-hist').classList.add('d-none');
+        document.getElementById('tab-wpp').classList.add('active');
+        document.getElementById('tab-hist').classList.remove('active');
+        carregarWpp();
+    });
 
-        function iso(d) {
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-        }
+    // Iniciar datas do histórico PAP
+    const hoje = new Date();
+    document.getElementById('hist-fim').value = iso(hoje);
+    const primDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    document.getElementById('hist-inicio').value = iso(primDia);
 
-        function ultimoDiaMes(ano, mes1a12) {
-            return new Date(ano, mes1a12, 0);
-        }
+    // Lógica do WhatsApp (Antiga)
+    async function carregarWpp() {
+        const tbody = document.getElementById('tbody-wpp');
+        const token = getToken();
+        if (!token) { window.location.href = '/'; return; }
+        
+        const st = document.getElementById('filtro-status').value;
+        const tel = document.getElementById('filtro-telefone').value.trim();
+        let url = API_BASE + `?page=${pageWpp}&page_size=25`;
+        if (st) url += `&status=${encodeURIComponent(st)}`;
+        if (tel) url += `&telefone=${encodeURIComponent(tel)}`;
 
-        function aplicarPeriodo(tipo) {
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
-            let ini, fim;
-            if (tipo === 'hoje') {
-                ini = fim = hoje;
-            } else if (tipo === 'mes_atual') {
-                ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-                fim = hoje;
+        try {
+            const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+            if (r.status === 403) return;
+            const data = await r.json();
+            if (!data.results || !data.results.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>Nenhum registro encontrado.</td></tr>';
             } else {
-                const mesVal = document.getElementById('hist-mes').value;
-                if (!mesVal) return false;
-                const [y, m] = mesVal.split('-').map(Number);
-                ini = new Date(y, m - 1, 1);
-                fim = ultimoDiaMes(y, m);
-                if (y === hoje.getFullYear() && m === hoje.getMonth() + 1 && fim > hoje) fim = hoje;
+                tbody.innerHTML = data.results.map(t => `
+                    <tr>
+                        <td class="ps-4 text-muted fw-bold">#${t.id}</td>
+                        <td class="fw-medium">${t.telefone || ''}</td>
+                        <td>${t.usuario_username || '—'}</td>
+                        <td><span class="badge bg-${t.status==='concluido'?'success':(t.status==='erro'?'danger':'secondary')} badge-status">${t.status}</span></td>
+                        <td>${t.funil_estagio_max || '—'}</td>
+                        <td class="font-monospace text-muted">${t.protocolo_pap || '—'}</td>
+                        <td class="small text-muted">${t.iniciado_em ? t.iniciado_em.replace('T', ' ').slice(0, 16) : '—'}</td>
+                        <td class="text-end pe-4"><button class="btn btn-light btn-sm rounded-pill ver-detalhe" data-id="${t.id}"><i class="bi bi-eye"></i></button></td>
+                    </tr>`).join('');
             }
-            document.getElementById('hist-inicio').value = iso(ini);
-            document.getElementById('hist-fim').value = iso(fim);
-            return true;
+            document.getElementById('pag-info').textContent = `Pág. ${data.page || 1} / ${data.total_pages || 1} (${data.count || 0} itens)`;
+            document.getElementById('btn-prev').disabled = (data.page || 1) <= 1;
+            document.getElementById('btn-next').disabled = (data.page || 1) >= (data.total_pages || 1);
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-danger text-center py-4">Erro de conexão.</td></tr>';
         }
+    }
 
-        document.querySelectorAll('input[name="hist-periodo"]').forEach(el => {
-            el.addEventListener('change', () => {
-                const mes = document.getElementById('hist-mes');
-                mes.disabled = document.getElementById('periodo-mes').checked !== true;
-                if (!mes.disabled && !mes.value) {
-                    const h = new Date();
-                    mes.value = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
-                }
-            });
+    document.getElementById('btn-buscar').addEventListener('click', () => { pageWpp = 1; carregarWpp(); });
+    document.getElementById('btn-prev').addEventListener('click', () => { if (pageWpp > 1) { pageWpp--; carregarWpp(); } });
+    document.getElementById('btn-next').addEventListener('click', () => { pageWpp++; carregarWpp(); });
+
+    document.getElementById('tbody-wpp').addEventListener('click', async (ev) => {
+        const btn = ev.target.closest('.ver-detalhe');
+        if (!btn) return;
+        const id = btn.getAttribute('data-id');
+        const r = await fetch(API_BASE + id + '/', { headers: { 'Authorization': 'Bearer ' + getToken() } });
+        const j = await r.json();
+        document.getElementById('d-id').textContent = id;
+        document.getElementById('d-json').textContent = JSON.stringify(j, null, 2);
+        new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
+    });
+
+    // LÓGICA DE TRATAMENTO HISTORICO PAP
+    
+    // Troca de abas de resultados
+    document.querySelectorAll('.tab-res-custom').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.tab-res-custom').forEach(b => b.classList.remove('tab-res-active'));
+            e.currentTarget.classList.add('tab-res-active');
+            activeTipo = e.currentTarget.getAttribute('data-tipo');
+            carregarPedidos(currentBuscaId, activeTipo);
         });
+    });
 
-        async function carregar() {
-            const tbody = document.getElementById('tbody');
-            const token = getToken();
-            if (!token) { window.location.href = '/'; return; }
-            if (!podeAcessar()) {
-                document.getElementById('alert-403').classList.remove('d-none');
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">—</td></tr>';
-                return;
-            }
-
-            const st = document.getElementById('filtro-status').value;
-            const tel = document.getElementById('filtro-telefone').value.trim();
-            let url = API_BASE + `?page=${page}&page_size=${pageSize}`;
-            if (st) url += `&status=${encodeURIComponent(st)}`;
-            if (tel) url += `&telefone=${encodeURIComponent(tel)}`;
-
+    async function atualizarBadgesCount(busca_id) {
+        const tipos = ['INTERESSE', 'PRE_VENDA', 'VENDA'];
+        const badgeMap = { 'INTERESSE': 'count-interesse', 'PRE_VENDA': 'count-prevenda', 'VENDA': 'count-venda' };
+        
+        tipos.forEach(async (t) => {
             try {
-                const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
-                if (r.status === 403) {
-                    document.getElementById('alert-403').classList.remove('d-none');
-                    return;
-                }
-                const data = await r.json();
-                if (!data.results || !data.results.length) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum registro.</td></tr>';
-                } else {
-                    tbody.innerHTML = data.results.map(t => `
-                        <tr>
-                            <td>${t.id}</td>
-                            <td>${t.telefone || ''}</td>
-                            <td>${t.usuario_username || '—'}</td>
-                            <td><span class="badge bg-secondary">${t.status}</span></td>
-                            <td>${t.funil_estagio_max || '—'}</td>
-                            <td>${t.protocolo_pap || '—'}</td>
-                            <td>${t.iniciado_em ? t.iniciado_em.replace('T', ' ').slice(0, 19) : '—'}</td>
-                            <td><button type="button" class="btn btn-link btn-sm p-0 ver-detalhe" data-id="${t.id}">Detalhe</button></td>
-                        </tr>`).join('');
-                }
-                document.getElementById('pag-info').textContent =
-                    `Página ${data.page || 1} de ${data.total_pages || 1} (${data.count || 0} itens)`;
-                document.getElementById('btn-prev').disabled = (data.page || 1) <= 1;
-                document.getElementById('btn-next').disabled = (data.page || 1) >= (data.total_pages || 1);
-            } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-danger">Erro ao carregar.</td></tr>';
-            }
-        }
-
-        document.getElementById('btn-buscar').addEventListener('click', () => { page = 1; carregar(); });
-        document.getElementById('btn-prev').addEventListener('click', () => { if (page > 1) { page--; carregar(); } });
-        document.getElementById('btn-next').addEventListener('click', () => { page++; carregar(); });
-
-        document.getElementById('tbody').addEventListener('click', async (ev) => {
-            const btn = ev.target.closest('.ver-detalhe');
-            if (!btn) return;
-            const id = btn.getAttribute('data-id');
-            const token = getToken();
-            const r = await fetch(API_BASE + id + '/', { headers: { 'Authorization': 'Bearer ' + token } });
-            const j = await r.json();
-            document.getElementById('d-id').textContent = id;
-            document.getElementById('d-json').textContent = JSON.stringify(j, null, 2);
-            new bootstrap.Modal(document.getElementById('modalDetalhe')).show();
-        });
-
-        function b64ToBlob(b64) {
-            const bin = atob(b64);
-            const bytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        }
-
-        function histTipos() {
-            const t = [];
-            if (document.getElementById('hist-tipo-venda').checked) t.push('VENDA');
-            if (document.getElementById('hist-tipo-interesse').checked) t.push('INTERESSE');
-            if (document.getElementById('hist-tipo-prevenda').checked) t.push('PRE_VENDA');
-            return t;
-        }
-
-        function pintarHist(s) {
-            if (!s) return;
-            document.getElementById('hist-resumo').classList.remove('d-none');
-            const pt = s.por_tipo || {};
-            const linhasTipo = ['VENDA', 'INTERESSE', 'PRE_VENDA'].map(k => {
-                const x = pt[k] || {};
-                if (!x.encontrados && !x.novos && !x.ignorados) return '';
-                return `<li>${k}: encontrados ${x.encontrados || 0} · novos ${x.novos || 0} · já na base ${x.ignorados || 0}</li>`;
-            }).filter(Boolean);
-            document.getElementById('hist-metricas').innerHTML = [
-                `<li>Período: <strong>${s.data_inicio || '—'}</strong> a <strong>${s.data_fim || '—'}</strong></li>`,
-                `<li>Login PAP: <strong>${s.login_pap || '—'}</strong> · Status: <strong>${s.status || '—'}</strong></li>`,
-                `<li>Encontrados: ${s.encontrados || 0} · <strong>Novos: ${s.novos || 0}</strong> · Já existiam (Pedido): ${s.ignorados || 0}</li>`,
-                ...linhasTipo,
-                `<li class="text-success">Nenhuma venda foi gravada no CRM.</li>`
-            ].join('');
-            document.getElementById('btn-hist-baixar').disabled = !(s.status === 'concluido' && (s.novos || 0) > 0);
-            if (s.mensagem) document.getElementById('hist-status').textContent = s.mensagem;
-        }
-
-        async function carregarConfigHist() {
-            const token = getToken();
-            if (!token || !podeAcessar()) return;
-            try {
-                const r = await fetch(API_HIST + 'config/', { headers: { 'Authorization': 'Bearer ' + token } });
-                if (!r.ok) return;
-                const cfg = await r.json();
-                aplicarPeriodo('hoje');
-                const pool = cfg.pool || {};
-                const cred = document.getElementById('hist-credencial');
-                if ((pool.total_autorizados || 0) === 0) {
-                    cred.textContent = 'Nenhum Diretoria no pool. Marque “Autorizar busca do histórico PAP” na Governança.';
-                    cred.className = 'small ms-2 text-warning';
-                } else {
-                    cred.textContent = `Pool: ${pool.disponiveis || 0} livre(s) · ${pool.em_uso || 0} em uso · Base: ${cfg.pedidos_conhecidos || 0} pedidos.`;
-                    cred.className = 'small ms-2 text-muted';
-                }
-                const sess = cfg.sessao_pap || {};
-                const badge = document.getElementById('hist-sessao-badge');
-                if (badge) {
-                    if (sess.cooldown_ativo) {
-                        badge.className = 'badge bg-danger';
-                        badge.textContent = `⚠️ Cooldown anti-bloqueio ativo (${sess.cooldown_restante_minutos} min restantes)`;
-                    } else if (sess.tem_token_valido) {
-                        badge.className = 'badge bg-success';
-                        badge.textContent = `✓ Sessão ativa (expira em ~${sess.expira_em_minutos} min)`;
-                    } else {
-                        badge.className = 'badge bg-secondary';
-                        badge.textContent = 'Sem token em cache';
+                const url = API_HIST + `pedidos/?tipo=${t}` + (busca_id ? `&busca_id=${busca_id}` : '');
+                const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+                if (r.ok) {
+                    const data = await r.json();
+                    if (badgeMap[t]) {
+                        document.getElementById(badgeMap[t]).textContent = data.length;
                     }
                 }
-                const andamento = cfg.busca_em_andamento;
-                if (andamento) {
-                    pintarHist(andamento);
-                    document.getElementById('hist-status').textContent = 'Busca em andamento…';
-                    iniciarPollHist(andamento.id);
-                } else if (cfg.ultima_busca) {
-                    pintarHist(cfg.ultima_busca);
-                }
-            } catch (e) {}
-        }
+            } catch(e) {}
+        });
+    }
 
-        function iniciarPollHist(id) {
-            if (histPoll) clearInterval(histPoll);
-            histPoll = setInterval(() => pollHist(id), 3500);
+    async function carregarConfigHist() {
+        if (!podeAcessar()) {
+            document.getElementById('alert-403').classList.remove('d-none');
+            document.getElementById('painel-hist').classList.add('d-none');
+            return;
         }
-
-        async function pollHist(id) {
-            const token = getToken();
-            try {
-                const r = await fetch(API_HIST + 'status/?id=' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + token } });
-                const s = await r.json();
-                pintarHist(s);
-                document.getElementById('hist-status').textContent = s.em_andamento
-                    ? (`Buscando… ${s.encontrados || 0} lidos, ${s.novos || 0} novos` + (s.login_pap ? ` (${s.login_pap})` : ''))
-                    : (s.mensagem || s.status || '');
-                if (!s.em_andamento) {
-                    clearInterval(histPoll);
-                    histPoll = null;
-                    document.getElementById('btn-hist-buscar').disabled = false;
-                    carregarConfigHist();
-                }
-            } catch (e) {}
-        }
-
-        async function iniciarBuscaHist() {
-            const status = document.getElementById('hist-status');
-            const tipos = histTipos();
-            if (!tipos.length) { status.textContent = 'Marque ao menos um tipo.'; return; }
-            const token = getToken();
-            if (!token) { window.location.href = '/'; return; }
-            document.getElementById('btn-hist-buscar').disabled = true;
-            histBlob = null;
-            const tokenManual = (document.getElementById('hist-token-manual')?.value || '').trim();
-            status.textContent = tokenManual
-                ? 'Validando token e buscando histórico diretamente na API (sem abrir navegador)...'
-                : 'Verificando sessão PAP e iniciando busca...';
-            try {
-                const r = await fetch(API_HIST, {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        data_inicio: document.getElementById('hist-inicio').value,
-                        data_fim: document.getElementById('hist-fim').value,
-                        tipos,
-                        token_manual: tokenManual
-                    })
-                });
-                const data = await r.json();
-                if (!r.ok) {
-                    status.textContent = data.error || data.detail || 'Não foi possível iniciar a busca.';
-                    document.getElementById('btn-hist-buscar').disabled = false;
-                    return;
-                }
-                iniciarPollHist(data.busca_id);
-            } catch (e) {
-                status.textContent = 'Erro ao iniciar a busca.';
-                document.getElementById('btn-hist-buscar').disabled = false;
+        try {
+            const r = await fetch(API_HIST + 'config/', { headers: { 'Authorization': 'Bearer ' + getToken() } });
+            if (!r.ok) return;
+            const cfg = await r.json();
+            
+            const andamento = cfg.busca_em_andamento;
+            if (andamento) {
+                document.getElementById('hist-spinner').classList.remove('d-none');
+                document.getElementById('btn-hist-buscar').disabled = true;
+                iniciarPollHist(andamento.id);
+            } else if (cfg.ultima_busca) {
+                currentBuscaId = cfg.ultima_busca.id;
+                atualizarMetricas(cfg.ultima_busca);
+                carregarPedidos(currentBuscaId, activeTipo);
+                atualizarBadgesCount(currentBuscaId);
+            } else {
+                carregarPedidos(null, activeTipo);
+                atualizarBadgesCount(null);
             }
+        } catch (e) {}
+    }
+
+    function atualizarMetricas(s) {
+        // Mostra novos da última busca nas badges (atualizado depois por carregarPedidos)
+        document.getElementById('rodape-info').innerHTML = `
+            Última Busca #${s.id || '-'} concluída. 
+            <strong>${s.encontrados || 0}</strong> lidos no PAP. 
+            <strong>${s.novos || 0}</strong> novos. 
+            <strong>${s.ignorados || 0}</strong> já na base.
+        `;
+        
+        document.getElementById('btn-baixar-excel').disabled = !(s.status === 'concluido' && (s.novos || 0) > 0);
+        if (s.mensagem) {
+            document.getElementById('hist-status-msg').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${s.mensagem}`;
         }
+    }
 
-        document.getElementById('btn-toggle-token-manual')?.addEventListener('click', () => {
-            const wrap = document.getElementById('wrap-token-manual');
-            if (wrap) wrap.classList.toggle('d-none');
-        });
-
-        document.getElementById('btn-ver-token')?.addEventListener('click', () => {
-            const inp = document.getElementById('hist-token-manual');
-            if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
-        });
-
-        document.getElementById('btn-hist-buscar').addEventListener('click', () => {
-            if (!modalPeriodo) modalPeriodo = new bootstrap.Modal(document.getElementById('modalPeriodoHist'));
-            document.getElementById('periodo-hoje').checked = true;
-            document.getElementById('hist-mes').disabled = true;
-            modalPeriodo.show();
-        });
-
-        document.getElementById('btn-hist-confirmar-periodo').addEventListener('click', () => {
-            const tipo = (document.querySelector('input[name="hist-periodo"]:checked') || {}).value || 'hoje';
-            if (!aplicarPeriodo(tipo)) {
-                document.getElementById('hist-status').textContent = 'Escolha o mês.';
+    async function carregarPedidos(busca_id, tipo) {
+        const tbody = document.getElementById('tbody-resultados');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div> Carregando dados...</td></tr>';
+        
+        try {
+            const url = API_HIST + `pedidos/?tipo=${tipo}` + (busca_id ? `&busca_id=${busca_id}` : '');
+            const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+            if (!r.ok) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-4">Erro HTTP ${r.status} ao carregar dados.</td></tr>`;
                 return;
             }
-            if (modalPeriodo) modalPeriodo.hide();
-            iniciarBuscaHist();
-        });
-
-        document.getElementById('btn-hist-baixar').addEventListener('click', async () => {
-            const token = getToken();
-            const r = await fetch(API_HIST + 'download/', { headers: { 'Authorization': 'Bearer ' + token } });
             const data = await r.json();
-            if (!r.ok || !data.arquivo_base64) {
-                document.getElementById('hist-status').textContent = data.error || 'Sem arquivo para baixar.';
+            
+            // Atualiza o badge da aba atual com a contagem real do banco
+            const badgeMap = { 'INTERESSE': 'count-interesse', 'PRE_VENDA': 'count-prevenda', 'VENDA': 'count-venda' };
+            if (badgeMap[tipo]) {
+                document.getElementById(badgeMap[tipo]).textContent = data.length;
+            }
+            
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>Nenhum item nesta categoria.</td></tr>';
                 return;
             }
-            histBlob = b64ToBlob(data.arquivo_base64);
-            histNome = data.nome_arquivo || histNome;
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(histBlob);
-            a.download = histNome;
-            a.click();
-            URL.revokeObjectURL(a.href);
-        });
+            
+            tbody.innerHTML = data.map(p => `
+                <tr>
+                    <td class="ps-4 fw-bold font-monospace text-primary">${p.protocolo || '-'}</td>
+                    <td class="fw-medium text-dark">${p.cliente || 'Desconhecido'}</td>
+                    <td class="text-muted small">${p.documento || '-'}</td>
+                    <td><span class="badge bg-secondary badge-status">${(p.status_primario || 'Desconhecido').replace(/_/g, ' ')}</span></td>
+                    <td class="text-muted small">${p.data_status ? p.data_status.split('T')[0].split('-').reverse().join('/') : '-'}</td>
+                    <td>
+                        ${p.novo_nesta_busca 
+                            ? '<span class="badge bg-success-subtle text-success border border-success-subtle badge-status"><i class="bi bi-stars"></i> Novo</span>' 
+                            : '<span class="badge bg-light text-muted border badge-status">Já na Base</span>'}
+                    </td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="alert('Funcionalidade de Tratamento em desenvolvimento')">Tratar</button>
+                    </td>
+                </tr>
+            `).join('');
+            
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-4">Erro ao carregar os dados: ${e.message}</td></tr>`;
+        }
+    }
 
-        carregar();
-        carregarConfigHist();
+    function iniciarPollHist(id) {
+        if (histPoll) clearInterval(histPoll);
+        histPoll = setInterval(() => pollHist(id), 3500);
+    }
+
+    async function pollHist(id) {
+        try {
+            const r = await fetch(API_HIST + 'status/?id=' + id, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+            const s = await r.json();
+            
+            if (s.em_andamento) {
+                const porTipo = s.por_tipo || {};
+                const detalhes = Object.entries(porTipo).map(([t, v]) => `${t}: ${v.encontrados || 0} lidos, ${v.novos || 0} novos`).join(' | ');
+                document.getElementById('hist-spinner-text').innerHTML = `Buscando no PAP... Lidos: ${s.encontrados || 0}, Novos: ${s.novos || 0}${detalhes ? '<br><small class="text-muted">' + detalhes + '</small>' : ''}`;
+            } else {
+                clearInterval(histPoll);
+                histPoll = null;
+                document.getElementById('hist-spinner').classList.add('d-none');
+                document.getElementById('btn-hist-buscar').disabled = false;
+                currentBuscaId = s.id;
+                atualizarMetricas(s);
+                // Recarrega a aba ativa e atualiza todos os badges
+                await carregarPedidos(currentBuscaId, activeTipo);
+                atualizarBadgesCount(currentBuscaId);
+            }
+        } catch (e) {}
+    }
+
+    document.getElementById('btn-hist-buscar').addEventListener('click', async () => {
+        const token = getToken();
+        if (!token) { alert('Sessão expirada. Faça login novamente.'); return; }
+        
+        const inicio = document.getElementById('hist-inicio').value;
+        const fim = document.getElementById('hist-fim').value;
+        if (!inicio || !fim) {
+            document.getElementById('modal-hist-status').innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> Preencha as datas de início e fim.`;
+            return;
+        }
+        
+        // Coletar tipos selecionados
+        const tiposSelecionados = [...document.querySelectorAll('.tipo-check:checked')].map(c => c.value);
+        if (!tiposSelecionados.length) {
+            document.getElementById('modal-hist-status').innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> Selecione ao menos um tipo.`;
+            return;
+        }
+        
+        document.getElementById('btn-hist-buscar').disabled = true;
+        document.getElementById('modal-hist-status').innerHTML = `<div class="spinner-border spinner-border-sm me-2"></div> Iniciando busca...`;
+        
+        const modalEl = document.getElementById('modalBusca');
+        
+        try {
+            const r = await fetch(API_HIST, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    data_inicio: inicio,
+                    data_fim: fim,
+                    tipos: tiposSelecionados
+                })
+            });
+            const data = await r.json();
+            if (!r.ok) {
+                document.getElementById('modal-hist-status').innerHTML = `<i class="bi bi-exclamation-triangle text-danger"></i> ${data.error || 'Erro ao iniciar busca.'}`;
+                document.getElementById('btn-hist-buscar').disabled = false;
+                return;
+            }
+            // Fechar o modal APÓS confirmar que a busca foi aceita
+            const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modalInstance.hide();
+            document.getElementById('hist-spinner-text').innerHTML = `Buscando no PAP (${tiposSelecionados.join(', ')})...`;
+            document.getElementById('hist-spinner').classList.remove('d-none');
+            // NÃO apaga a tabela aqui — mantém os dados existentes visíveis enquanto aguarda
+            iniciarPollHist(data.busca_id);
+        } catch (e) {
+            document.getElementById('modal-hist-status').innerHTML = `<i class="bi bi-exclamation-triangle text-danger"></i> Erro de conexão: ${e.message}`;
+            document.getElementById('btn-hist-buscar').disabled = false;
+            document.getElementById('hist-spinner').classList.add('d-none');
+        }
+    });
+
+    // Resetar estado do modal ao abrir (mantém checkboxes)
+    document.getElementById('modalBusca').addEventListener('show.bs.modal', () => {
+        document.getElementById('modal-hist-status').innerHTML = '';
+        document.getElementById('btn-hist-buscar').disabled = false;
+    });
+
+    document.getElementById('btn-baixar-excel').addEventListener('click', async () => {
+        const r = await fetch(API_HIST + 'download/', { headers: { 'Authorization': 'Bearer ' + getToken() } });
+        const data = await r.json();
+        if (!r.ok || !data.arquivo_base64) {
+            alert(data.error || 'Sem arquivo para baixar.');
+            return;
+        }
+        const bin = atob(data.arquivo_base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = data.nome_arquivo || 'Historico_PAP.xlsx';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
+
+    // Iniciar
+    carregarConfigHist();
+
 </script>
 {% endblock %}

@@ -285,6 +285,10 @@ class Venda(models.Model):
     data_ultima_alteracao = models.DateTimeField(auto_now=True, verbose_name="Data da Última Alteração")
     # --------------------------------------------
 
+    pedido_pap = models.CharField(max_length=50, null=True, blank=True, unique=True, db_index=True, verbose_name="Pedido PAP")
+    valor_plano_pap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Valor Mensal PAP")
+    vendedor_matricula_pap = models.CharField(max_length=50, null=True, blank=True, verbose_name="Matrícula Vendedor PAP")
+
     forma_entrada = models.CharField(max_length=10, choices=[('APP', 'APP'), ('SEM_APP', 'SEM_APP')], default='APP')
     tem_fixo = models.BooleanField(default=False, verbose_name="Tem Fixo")
     # Débito em conta (DACC)
