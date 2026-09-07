@@ -846,6 +846,11 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
+                                <button type="button" class="dropdown-item" onclick="exportarListaAuditoriaExcel()" title="Exportar todos os registros da lista em Excel">
+                                    <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+                                </button>
+                            </li>
+                            <li>
                                 <button type="button" class="dropdown-item" onclick="abrirModalRelatorioSemSlot()" title="Exportar Sem SLOT">
                                     <i class="bi bi-file-earmark-spreadsheet"></i> Relatório Sem SLOT
                                 </button>
@@ -3603,6 +3608,54 @@ async function iniciarBuscaPapOnline() {
             document.getElementById('rel-sem-slot-data-inicio').value = hoje;
             document.getElementById('rel-sem-slot-data-fim').value = hoje;
             if (modalRelSemSlot) modalRelSemSlot.show();
+        }
+
+        async function exportarListaAuditoriaExcel() {
+            const params = new URLSearchParams();
+            const statusId = $('#filtro-status-tratamento').val();
+            if (statusId) params.set('status_tratamento_id', statusId);
+            const pesquisa = ($('#filtro-pesquisa').val() || '').trim();
+            if (pesquisa) params.set('search', pesquisa);
+            const dataParams = getParamsDataAuditoria();
+            if (dataParams.data_inicio) params.set('data_inicio', dataParams.data_inicio);
+            if (dataParams.data_fim) params.set('data_fim', dataParams.data_fim);
+            const token = localStorage.getItem('accessToken');
+            const msgEl = document.getElementById('loadingOverlayMsg');
+            const msgAnterior = msgEl ? msgEl.textContent : '';
+            $('#loadingOverlay').show();
+            if (msgEl) msgEl.textContent = 'Gerando Excel...';
+            try {
+                const qs = params.toString();
+                const url = `${API_BASE}/exportar-auditoria-excel/${qs ? `?${qs}` : ''}`;
+                const res = await fetch(url, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert(err.detail || 'Erro ao gerar Excel.');
+                    return;
+                }
+                const blob = await res.blob();
+                const cd = res.headers.get('Content-Disposition') || '';
+                const matchNome = cd.match(/filename="?([^"]+)"?/i);
+                const nome = (matchNome && matchNome[1])
+                    ? matchNome[1]
+                    : `auditoria_pendentes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = nome;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(objectUrl);
+            } catch (e) {
+                alert('Erro ao baixar Excel: ' + (e.message || e));
+            } finally {
+                if (msgEl) msgEl.textContent = msgAnterior || 'Processando...';
+                $('#loadingOverlay').hide();
+            }
         }
 
         async function baixarRelatorioSemSlot() {

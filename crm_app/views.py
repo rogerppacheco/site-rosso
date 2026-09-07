@@ -1986,7 +1986,7 @@ class VendaViewSet(viewsets.ModelViewSet):
             'retrieve', 'update', 'partial_update', 'destroy',
             'alocar_auditoria', 'liberar_auditoria', 'finalizar_auditoria',
             'verificar_os_cadastrada',
-            'pendentes_auditoria', 'resumo_auditoria',
+            'pendentes_auditoria', 'resumo_auditoria', 'exportar_auditoria_excel',
             'reenviar_whatsapp_aprovacao', 'enviar_resumo_plano_whatsapp',
             'toggle_adiantamento_comissao',
             'toggle_adiantamento_cnpj',
@@ -1995,7 +1995,8 @@ class VendaViewSet(viewsets.ModelViewSet):
             'marcar_adiantamento_sabado_lote',
         ]
         acoes_gestao_leitura = frozenset({
-            'retrieve', 'pendentes_auditoria', 'resumo_auditoria', 'verificar_os_cadastrada',
+            'retrieve', 'pendentes_auditoria', 'resumo_auditoria',
+            'verificar_os_cadastrada', 'exportar_auditoria_excel',
         })
 
         if self.action in acoes_gestao:
@@ -2647,16 +2648,18 @@ class VendaViewSet(viewsets.ModelViewSet):
             'sem_status_agendamento_por_data': sem_status_agendamento_por_data,
         })
 
-    @action(detail=False, methods=['get'])
-    def pendentes_auditoria(self, request):
+    def _queryset_pendentes_auditoria(self, request):
+        """Fila da auditoria: tratamento aberto, fora da esteira, com os filtros da lista."""
         request.GET._mutable = True
         request.GET['flow'] = 'auditoria'
         request.GET['view'] = 'geral'
         request.GET._mutable = False
         qs = self.filter_queryset(self.get_queryset())
-        qs = qs.exclude(status_tratamento__estado__iexact='FECHADO').order_by('-id')
+        qs = qs.filter(
+            status_tratamento__isnull=False,
+            status_esteira__isnull=True,
+        ).exclude(status_tratamento__estado__iexact='FECHADO').order_by('-id')
 
-        # Aplicar filtros de data e status aqui (garantia: não depender só do get_queryset)
         data_inicio_str = request.query_params.get('data_inicio')
         data_fim_str = request.query_params.get('data_fim')
         if data_inicio_str and data_fim_str:
@@ -2672,13 +2675,40 @@ class VendaViewSet(viewsets.ModelViewSet):
         status_tratamento_id = request.query_params.get('status_tratamento_id')
         if status_tratamento_id and str(status_tratamento_id).isdigit():
             qs = qs.filter(status_tratamento_id=int(status_tratamento_id))
+        return qs
 
+    @action(detail=False, methods=['get'])
+    def pendentes_auditoria(self, request):
+        qs = self._queryset_pendentes_auditoria(request)
         page = self.paginate_queryset(qs)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='exportar-auditoria-excel')
+    def exportar_auditoria_excel(self, request):
+        """Exporta todos os registros da fila de auditoria (filtros da lista, sem paginação)."""
+        from django.http import HttpResponse
+
+        from crm_app.auditoria_sem_slot_utils import PERFIS_AUDITORIA
+        from crm_app.services.auditoria_export_service import montar_xlsx_pendentes_auditoria
+
+        if not is_member(request.user, PERFIS_AUDITORIA):
+            return Response({'detail': 'Permissão negada.'}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = self._queryset_pendentes_auditoria(request).select_related(
+            'vendedor', 'cliente', 'plano', 'status_tratamento',
+            'auditor_atual', 'editado_por',
+        )
+        blob, filename = montar_xlsx_pendentes_auditoria(qs.iterator(chunk_size=500))
+        response = HttpResponse(
+            blob,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
     @action(detail=False, methods=['get'], url_path='resumo_auditoria')
     def resumo_auditoria(self, request):
