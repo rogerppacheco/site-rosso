@@ -8,6 +8,10 @@ from django.utils import timezone
 
 from crm_app.models import FilaEnvioBoasVindas
 from crm_app.services.boas_vindas_envio_service import enviar_boas_vindas_venda
+from crm_app.services.whatsapp_config_service import (
+    canal_cliente_pronto,
+    motivo_canal_cliente_bloqueado,
+)
 
 logger = __import__('logging').getLogger(__name__)
 
@@ -23,6 +27,12 @@ class Command(BaseCommand):
         dry_run = options.get('dry_run', False)
         limite = options.get('limite', 10)
         agora = timezone.now()
+
+        if not canal_cliente_pronto():
+            msg = motivo_canal_cliente_bloqueado()
+            logger.warning("[BoasVindas] Fila não processada: %s", msg)
+            self.stdout.write(self.style.WARNING(f"[BoasVindas] {msg}"))
+            return
 
         pendentes = list(
             FilaEnvioBoasVindas.objects.filter(

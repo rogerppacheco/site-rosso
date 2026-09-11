@@ -21,7 +21,45 @@
 {% block content %}
 <main class="whatsapp-config-page">
         <h2 class="fw-bold mb-1"><i class="bi bi-whatsapp text-success"></i> Configuração WhatsApp</h2>
-        <p class="text-muted mb-4">Escolha o provedor ativo. Em produção recomendamos o <strong>modo híbrido</strong>: Z-API para a equipe e WhatsAtende oficial para o cliente.</p>
+        <p class="text-muted mb-4">Separe o número do time comercial (bot, grupos, vendedores) do número que fala com o cliente final. Envios a clientes só saem pelo número oficial do plano registrado na Meta.</p>
+
+        <div id="aviso-canal-cliente" class="alert alert-warning d-none" role="alert"></div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card card-modern h-100 shadow-sm">
+                    <div class="card-header fw-bold bg-secondary text-white">Time comercial</div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">Bot, grupos e comunicados internos. Usa a conexão Z-API (ou WhatsAtende A). <strong>Não envia boas-vindas nem templates a clientes.</strong></p>
+                        <p class="mb-2" id="canal-equipe-status">—</p>
+                        <label class="form-label small mb-1" for="numero-equipe-label">Número / rótulo deste canal</label>
+                        <input type="text" class="form-control form-control-sm" id="numero-equipe-label" placeholder="Ex.: 31 9xxxx-xxxx (comercial)" maxlength="32">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-modern h-100 shadow-sm">
+                    <div class="card-header fw-bold text-white" style="background:#0f766e;">Clientes (Meta / Cloud API)</div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">Boas-vindas, confirmação, cobrança e respostas do cliente. Somente o número do plano registrado na Meta (WhatsAtende B).</p>
+                        <p class="mb-2" id="canal-cliente-status">—</p>
+                        <label class="form-label small mb-1" for="numero-cliente-label">Número / rótulo deste canal</label>
+                        <input type="text" class="form-control form-control-sm mb-3" id="numero-cliente-label" placeholder="Ex.: número oficial Nio (Meta)" maxlength="32">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="toggle-envios-cliente">
+                            <label class="form-check-label fw-bold" for="toggle-envios-cliente">Liberar envios a clientes neste número</label>
+                        </div>
+                        <p class="small text-muted mt-1 mb-0">Só habilite depois de configurar TOKEN_B / ID_B no servidor. Enquanto estiver desligado, a fila de boas-vindas não dispara.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mb-4">
+            <button type="button" class="btn btn-success" id="btn-salvar-canais" onclick="salvarCanais()">
+                <i class="bi bi-hdd"></i> Salvar canais
+            </button>
+            <span id="cfg-canais-msg" class="ms-2 small"></span>
+        </div>
 
         <div class="card card-modern shadow-sm mb-4">
             <div class="card-header fw-bold">Provedor ativo</div>
@@ -242,6 +280,25 @@
             document.getElementById('zapi-cred-status').innerHTML = cfgAtual.zapiConfigured
                 ? '<span class="text-success"><i class="bi bi-check-circle"></i> ZAPI_INSTANCE_ID e ZAPI_TOKEN configurados.</span>'
                 : '<span class="text-danger"><i class="bi bi-x-circle"></i> Credenciais Z-API não encontradas nas variáveis do servidor.</span>';
+            document.getElementById('numero-equipe-label').value = cfgAtual.numeroEquipeLabel || '';
+            document.getElementById('numero-cliente-label').value = cfgAtual.numeroClienteLabel || '';
+            const toggleCli = document.getElementById('toggle-envios-cliente');
+            toggleCli.checked = !!cfgAtual.enviosClienteAtivos;
+            toggleCli.disabled = !cfgAtual.whatsatendeClienteConfigured;
+            document.getElementById('canal-equipe-status').innerHTML = cfgAtual.zapiConfigured
+                ? '<span class="text-success"><i class="bi bi-check-circle"></i> Canal comercial pronto (Z-API).</span>'
+                : '<span class="text-danger"><i class="bi bi-x-circle"></i> Canal comercial sem credenciais Z-API.</span>';
+            document.getElementById('canal-cliente-status').innerHTML = cfgAtual.canalClientePronto
+                ? '<span class="text-success"><i class="bi bi-check-circle"></i> Canal de clientes ativo no número Meta.</span>'
+                : `<span class="text-warning"><i class="bi bi-exclamation-triangle"></i> ${cfgAtual.canalClienteMotivo || 'Canal de clientes bloqueado.'}</span>`;
+            const aviso = document.getElementById('aviso-canal-cliente');
+            if (!cfgAtual.canalClientePronto) {
+                aviso.classList.remove('d-none');
+                aviso.textContent = cfgAtual.canalClienteMotivo || 'Envios a clientes bloqueados até o número Meta estar configurado e liberado.';
+            } else {
+                aviso.classList.add('d-none');
+            }
+            carregarNumeroZapi();
             const hybridB = document.getElementById('hybrid-b-cred-status');
             if (hybridB) {
                 hybridB.innerHTML = cfgAtual.whatsatendeClienteConfigured
@@ -270,6 +327,47 @@
                 document.getElementById('cfg-save-msg').innerHTML =
                     '<span class="text-info">Provedor ativo: Z-API. Escaneie o QR Evolution e só depois salve Evolution.</span>';
             }
+        }
+
+        async function salvarCanais() {
+            const msg = document.getElementById('cfg-canais-msg');
+            const btn = document.getElementById('btn-salvar-canais');
+            btn.disabled = true;
+            msg.textContent = 'Salvando...';
+            try {
+                const res = await apiFetch('/whatsapp/config/', {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        enviosClienteAtivos: document.getElementById('toggle-envios-cliente').checked,
+                        numeroEquipeLabel: document.getElementById('numero-equipe-label').value,
+                        numeroClienteLabel: document.getElementById('numero-cliente-label').value,
+                    }),
+                });
+                cfgAtual = res;
+                msg.textContent = res.message || 'Canais salvos.';
+                msg.className = 'ms-2 small text-success';
+                await carregarConfig();
+            } catch (e) {
+                msg.textContent = e.message || 'Erro ao salvar canais.';
+                msg.className = 'ms-2 small text-danger';
+                alert('Erro ao salvar canais: ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function carregarNumeroZapi() {
+            if (!cfgAtual?.zapiConfigured) return;
+            try {
+                const data = await apiFetch('/whatsapp/status/?backend=zapi');
+                if (data.phone) {
+                    const el = document.getElementById('canal-equipe-status');
+                    const extra = data.connected ? 'conectado' : 'consultado';
+                    el.innerHTML += ` <span class="text-muted">· aparelho ${extra}: ${data.phone}</span>`;
+                    const input = document.getElementById('numero-equipe-label');
+                    if (!input.value) input.placeholder = data.phone;
+                }
+            } catch (e) { /* status Z-API é informativo */ }
         }
 
         async function salvarProvider() {

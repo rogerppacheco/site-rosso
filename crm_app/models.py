@@ -4950,6 +4950,26 @@ class WhatsAppIntegracaoConfig(models.Model):
         default=PROVIDER_ZAPI,
         verbose_name="Provedor ativo",
     )
+    envios_cliente_ativos = models.BooleanField(
+        default=False,
+        verbose_name="Envios a clientes ativos",
+        help_text=(
+            "Só ligar quando o número oficial do plano (Meta Cloud API / WhatsAtende B) "
+            "estiver configurado. O WhatsApp do time comercial nunca envia a clientes."
+        ),
+    )
+    numero_equipe_label = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        verbose_name="Número do time comercial (exibição)",
+    )
+    numero_cliente_label = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        verbose_name="Número oficial Meta / clientes (exibição)",
+    )
     atualizado_em = models.DateTimeField(auto_now=True)
     atualizado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,

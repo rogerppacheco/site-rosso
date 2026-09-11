@@ -3317,7 +3317,7 @@ class VendaViewSet(viewsets.ModelViewSet):
             and 'INSTALADA' not in status_antes_nome
         )
         if virou_instalada:
-            enviar_bv = _resolver_flag_enviar_boas_vindas(self.request, default=True)
+            enviar_bv = _resolver_flag_enviar_boas_vindas(self.request, default=False)
             try:
                 from crm_app.services.boas_vindas_envio_service import tentar_agendar_ao_instalar
 
@@ -15444,6 +15444,36 @@ class EnviarPossoReagendarConsultorView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def _resposta_canal_cliente_indisponivel():
+    from crm_app.services.whatsapp_config_service import (
+        canal_cliente_pronto,
+        motivo_canal_cliente_bloqueado,
+    )
+
+    if canal_cliente_pronto():
+        return None
+    return Response(
+        {
+            'detail': motivo_canal_cliente_bloqueado(),
+            'canalClientePronto': False,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
+def _payload_canal_cliente() -> dict:
+    from crm_app.services.whatsapp_config_service import (
+        canal_cliente_pronto,
+        motivo_canal_cliente_bloqueado,
+    )
+
+    pronto = canal_cliente_pronto()
+    return {
+        'canalClientePronto': pronto,
+        'canalClienteMotivo': '' if pronto else motivo_canal_cliente_bloqueado(),
+    }
+
+
 class EnviarBoasVindasView(APIView):
     """Envia mensagem de boas-vindas para clientes com venda Instalada na data de instalação informada.
     Envio em lotes com intervalo ALEATÓRIO entre mensagens (padrão diferente a cada vez) para evitar bloqueio.
@@ -15451,6 +15481,9 @@ class EnviarBoasVindasView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        bloqueio = _resposta_canal_cliente_indisponivel()
+        if bloqueio is not None:
+            return bloqueio
         import time
         import random
         from datetime import datetime
@@ -15565,6 +15598,7 @@ class BoasVindasInstalacoesView(APIView):
             'pendentes': pendentes.count(),
             'enviados': enviados.count(),
             'items': items,
+            **_payload_canal_cliente(),
         })
 
 
@@ -15688,6 +15722,9 @@ class BoasVindasEnviarGestaoView(APIView):
     def post(self, request):
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+        bloqueio = _resposta_canal_cliente_indisponivel()
+        if bloqueio is not None:
+            return bloqueio
         import time
         import random
         from datetime import datetime
@@ -15761,6 +15798,9 @@ class BoasVindasAgendarView(APIView):
     def post(self, request):
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+        bloqueio = _resposta_canal_cliente_indisponivel()
+        if bloqueio is not None:
+            return bloqueio
         from datetime import datetime, timedelta
         import random
 
@@ -15878,6 +15918,7 @@ class BoasVindasFilaStatusView(APIView):
             'enviados': enviados,
             'com_erro': com_erro,
             'total_fila': pendentes + enviados,
+            **_payload_canal_cliente(),
         })
 
 

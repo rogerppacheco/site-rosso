@@ -254,6 +254,38 @@ class TestProviderFactory(SimpleTestCase):
         self.assertEqual(cliente.token, "tok-b")
         self.assertEqual(cliente.whatsapp_id, "194")
 
+    @override_settings(
+        WHATSAPP_PROVIDER="zapi",
+        ZAPI_INSTANCE_ID="inst",
+        ZAPI_TOKEN="z-tok",
+        WHATSATENDE_TOKEN_B="",
+        WHATSATENDE_WHATSAPP_ID_B="",
+    )
+    @patch(
+        "crm_app.services.whatsapp_config_service.get_active_whatsapp_provider_name",
+        return_value="zapi",
+    )
+    def test_zapi_cliente_nao_usa_numero_comercial(self, _mock_provider: object) -> None:
+        from crm_app.services.whatsapp.blocked_cliente_provider import (
+            ClienteCanalBloqueadoProvider,
+        )
+        from crm_app.services.whatsapp.factory import (
+            PURPOSE_CLIENTE,
+            resolve_backend_for_purpose,
+        )
+
+        clear_whatsapp_provider_cache()
+        self.assertEqual(
+            resolve_backend_for_purpose("zapi", PURPOSE_CLIENTE),
+            ("whatsatende", PURPOSE_CLIENTE),
+        )
+        self.assertIsInstance(get_whatsapp_provider(), ZapiProvider)
+        cliente = get_whatsapp_provider(purpose=PURPOSE_CLIENTE)
+        self.assertIsInstance(cliente, ClienteCanalBloqueadoProvider)
+        ok, resp = cliente.enviar_mensagem_texto_raw("31999882528", "oi")
+        self.assertFalse(ok)
+        self.assertEqual(resp.get("code"), "CANAL_CLIENTE_BLOQUEADO")
+
     @override_settings(WHATSATENDE_TOKEN="tok-a", WHATSATENDE_WHATSAPP_ID="196")
     def test_whatsatende_cliente_sem_token_b_nao_fallback_para_a(self) -> None:
         provider = WhatsAtendeProvider(role="cliente")

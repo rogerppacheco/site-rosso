@@ -27,7 +27,8 @@
 {% block content %}
 <div class="tool-container boas-vindas-page">
         <h2 class="mb-3"><i class="bi bi-chat-heart-fill text-success"></i> Boas Vindas</h2>
-        <p class="text-muted mb-4">Instalações do dia anterior e envio de boas-vindas. Retornos dos clientes para tratamento pelo BO.</p>
+        <p class="text-muted mb-4">Instalações do dia anterior e envio de boas-vindas. Retornos dos clientes para tratamento pelo BO. Envios só saem pelo número oficial Meta — o WhatsApp comercial não fala com clientes.</p>
+        <div id="aviso-canal-bv" class="alert alert-warning d-none" role="alert"></div>
 
         <div class="row g-2 mb-4" id="painel-custos-wa">
             <div class="col-md-3"><div class="p-3 bg-light rounded"><div class="small text-muted">Custo / msg Utility</div><div class="stat-mini" id="custo-utility">—</div></div></div>
@@ -169,8 +170,15 @@
                         <td>${i.boas_vindas_enviado_em ? '<span class="badge bg-success">Enviado</span>' : '<span class="badge bg-warning text-dark">Pendente</span>'}</td>
                     </tr>
                 `).join('');
-                document.getElementById('btn-agendar-boas-vindas').disabled = r.pendentes === 0;
-                document.getElementById('btn-enviar-1-agora').disabled = r.pendentes === 0;
+                document.getElementById('btn-agendar-boas-vindas').disabled = r.pendentes === 0 || !r.canalClientePronto;
+                document.getElementById('btn-enviar-1-agora').disabled = r.pendentes === 0 || !r.canalClientePronto;
+                const aviso = document.getElementById('aviso-canal-bv');
+                if (r.canalClientePronto === false) {
+                    aviso.classList.remove('d-none');
+                    aviso.textContent = r.canalClienteMotivo || 'Canal de clientes (Meta) não está ativo. Configure na aba WhatsApp.';
+                } else {
+                    aviso.classList.add('d-none');
+                }
                 carregarFilaStatus();
             } catch (e) {
                 alert('Erro: ' + (e.message || e));

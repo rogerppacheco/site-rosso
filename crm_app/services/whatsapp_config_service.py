@@ -43,8 +43,45 @@ def get_active_whatsapp_provider_name() -> str:
 
 
 def cliente_usa_cloud_api() -> bool:
-    """True quando envios a cliente final passam pela WhatsAtende (Número B)."""
+    """True quando o provedor ativo prevê Cloud API para cliente (híbrido/WhatsAtende)."""
     return get_active_whatsapp_provider_name() in _PROVIDERS_CLIENTE_CLOUD
+
+
+def canal_cliente_pronto() -> bool:
+    """
+    Envios a cliente final só saem com número Meta (WhatsAtende B) + interruptor na aba WPP.
+
+    Sem TOKEN_B: sempre False (não cai no número comercial).
+    Sem banco (testes): credenciais B bastam.
+    """
+    if not _credenciais_whatsatende_cliente_ok():
+        return False
+    try:
+        cfg = WhatsAppIntegracaoConfig.load()
+    except Exception:
+        return True
+    return bool(getattr(cfg, "envios_cliente_ativos", False))
+
+
+def motivo_canal_cliente_bloqueado() -> str:
+    """Texto para UI/API quando o canal cliente não pode enviar."""
+    from crm_app.services.whatsapp.blocked_cliente_provider import MSG_CANAL_CLIENTE_BLOQUEADO
+
+    if canal_cliente_pronto():
+        return ""
+    if not _credenciais_whatsatende_cliente_ok():
+        return (
+            "Número oficial Meta ainda não configurado no servidor "
+            "(WHATSATENDE_TOKEN_B / WHATSATENDE_WHATSAPP_ID_B). "
+            "O WhatsApp do time comercial não envia mensagens a clientes."
+        )
+    return MSG_CANAL_CLIENTE_BLOQUEADO
+
+
+def _bool_request(valor) -> bool:
+    if isinstance(valor, str):
+        return valor.strip().lower() in ("1", "true", "sim", "on", "yes")
+    return bool(valor)
 
 
 def clear_whatsapp_provider_cache() -> None:
@@ -166,6 +203,11 @@ def build_whatsapp_config_payload() -> Dict[str, Any]:
             (getattr(settings, "WHATSATENDE_WEBHOOK_TOKEN", "") or "").strip()
         ),
         "hybridReady": _credenciais_zapi_ok() and _credenciais_whatsatende_cliente_ok(),
+        "enviosClienteAtivos": bool(getattr(cfg, "envios_cliente_ativos", False)) if cfg else False,
+        "canalClientePronto": canal_cliente_pronto(),
+        "canalClienteMotivo": motivo_canal_cliente_bloqueado(),
+        "numeroEquipeLabel": (getattr(cfg, "numero_equipe_label", "") or "") if cfg else "",
+        "numeroClienteLabel": (getattr(cfg, "numero_cliente_label", "") or "") if cfg else "",
         "n8nConfigured": _credenciais_n8n_ok(),
         "envDefaultProvider": env_default,
         "atualizadoEm": atualizado_em,
@@ -196,13 +238,56 @@ def build_whatsapp_config_payload() -> Dict[str, Any]:
 
 
 def set_whatsapp_provider(provider: str, user) -> WhatsAppIntegracaoConfig:
-    normalized = (provider or "").strip().lower()
-    if normalized not in _PROVIDERS_VALIDOS:
-        raise ValueError(f"Provedor inválido: {provider}")
-    _validar_credenciais_provedor(normalized)
+    return update_whatsapp_config(user=user, provider=provider)
+
+
+def update_whatsapp_config(
+    *,
+    user,
+    provider: str | None = None,
+    envios_cliente_ativos=None,
+    numero_equipe_label=None,
+    numero_cliente_label=None,
+) -> WhatsAppIntegracaoConfig:
+    """Atualiza provedor e/ou papéis dos números (equipe vs cliente)."""
     cfg = WhatsAppIntegracaoConfig.load()
-    cfg.provider = normalized
+    fields = ["atualizado_por", "atualizado_em"]
+
+    if provider is not None:
+        normalized = (provider or "").strip().lower()
+        if normalized not in _PROVIDERS_VALIDOS:
+            raise ValueError(f"Provedor inválido: {provider}")
+        _validar_credenciais_provedor(normalized)
+        cfg.provider = normalized
+        fields.append("provider")
+
+    if envios_cliente_ativos is not None:
+        ativo = _bool_request(envios_cliente_ativos)
+        if ativo and not _credenciais_whatsatende_cliente_ok():
+            raise ValueError(
+                "Não é possível liberar envios a clientes sem o número Meta "
+                "(WHATSATENDE_TOKEN_B / WHATSATENDE_WHATSAPP_ID_B) no servidor."
+            )
+        cfg.envios_cliente_ativos = ativo
+        fields.append("envios_cliente_ativos")
+        if (
+            ativo
+            and cfg.provider == WhatsAppIntegracaoConfig.PROVIDER_ZAPI
+            and _credenciais_zapi_ok()
+            and _credenciais_whatsatende_cliente_ok()
+        ):
+            cfg.provider = WhatsAppIntegracaoConfig.PROVIDER_HYBRID
+            if "provider" not in fields:
+                fields.append("provider")
+
+    if numero_equipe_label is not None:
+        cfg.numero_equipe_label = str(numero_equipe_label or "").strip()[:32]
+        fields.append("numero_equipe_label")
+    if numero_cliente_label is not None:
+        cfg.numero_cliente_label = str(numero_cliente_label or "").strip()[:32]
+        fields.append("numero_cliente_label")
+
     cfg.atualizado_por = user
-    cfg.save(update_fields=["provider", "atualizado_por", "atualizado_em"])
+    cfg.save(update_fields=list(dict.fromkeys(fields)))
     clear_whatsapp_provider_cache()
     return cfg

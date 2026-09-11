@@ -70,6 +70,14 @@ def enviar_boas_vindas_venda(
         "detail": "",
         "canal": "",
     }
+    from crm_app.services.whatsapp_config_service import (
+        canal_cliente_pronto,
+        motivo_canal_cliente_bloqueado,
+    )
+
+    if not canal_cliente_pronto():
+        resultado["detail"] = motivo_canal_cliente_bloqueado()
+        return resultado
     telefone = (getattr(venda, "telefone1", None) or "").strip()
     if not telefone:
         resultado["detail"] = "Telefone do cliente não informado."
@@ -132,8 +140,16 @@ def agendar_boas_vindas_venda(
     Coloca a venda na fila (anti-spam). Se já enviou ou já está na fila, no-op.
     """
     from crm_app.models import FilaEnvioBoasVindas
+    from crm_app.services.whatsapp_config_service import (
+        canal_cliente_pronto,
+        motivo_canal_cliente_bloqueado,
+    )
 
     resultado: dict[str, Any] = {"ok": True, "agendado": False, "detail": ""}
+    if not canal_cliente_pronto():
+        resultado["ok"] = False
+        resultado["detail"] = motivo_canal_cliente_bloqueado()
+        return resultado
     if not venda:
         resultado["ok"] = False
         resultado["detail"] = "Venda inválida."

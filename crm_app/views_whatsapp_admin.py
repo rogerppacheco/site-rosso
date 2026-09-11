@@ -12,7 +12,7 @@ from crm_app.services.evolution_connection_service import (
 )
 from crm_app.services.whatsapp_config_service import (
     build_whatsapp_config_payload,
-    set_whatsapp_provider,
+    update_whatsapp_config,
 )
 from crm_app.services.whatsatende_connection_service import (
     WhatsAtendeConnectionError,
@@ -50,7 +50,7 @@ def _backend_conexao(request) -> str:
     Em hybrid o QR do Número A fica na Z-API (painel externo).
     """
     q = (request.query_params.get("backend") or "").strip().lower()
-    if q in ("evolution", "whatsatende"):
+    if q in ("evolution", "whatsatende", "zapi"):
         return q
     provider = build_whatsapp_config_payload().get("provider") or "zapi"
     if provider == WhatsAppIntegracaoConfig.PROVIDER_WHATSATENDE:
@@ -75,24 +75,59 @@ def whatsapp_config_api(request):
     if request.method == "GET":
         return Response(build_whatsapp_config_payload())
 
-    provider = (request.data.get("provider") or "").strip().lower()
+    raw_provider = request.data.get("provider")
+    provider = (
+        str(raw_provider).strip().lower()
+        if raw_provider is not None and str(raw_provider).strip()
+        else None
+    )
+    envios = request.data.get("enviosClienteAtivos")
+    if envios is None:
+        envios = request.data.get("envios_cliente_ativos")
+    numero_equipe = request.data.get("numeroEquipeLabel")
+    if numero_equipe is None:
+        numero_equipe = request.data.get("numero_equipe_label")
+    numero_cliente = request.data.get("numeroClienteLabel")
+    if numero_cliente is None:
+        numero_cliente = request.data.get("numero_cliente_label")
+
+    if (
+        provider is None
+        and envios is None
+        and numero_equipe is None
+        and numero_cliente is None
+    ):
+        return Response(
+            {"detail": "Informe o provedor ou a configuração dos canais (equipe/cliente)."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     try:
-        set_whatsapp_provider(provider, request.user)
+        update_whatsapp_config(
+            user=request.user,
+            provider=provider,
+            envios_cliente_ativos=envios,
+            numero_equipe_label=numero_equipe,
+            numero_cliente_label=numero_cliente,
+        )
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     payload = build_whatsapp_config_payload()
-    if payload.get("provider") == WhatsAppIntegracaoConfig.PROVIDER_HYBRID:
+    if payload.get("canalClientePronto"):
         payload["message"] = (
-            "Modo híbrido ativo: Número A (equipe/grupos) via Z-API; "
-            "Número B (cliente/templates) via WhatsAtende. "
-            "Mantenha webhooks dos dois provedores apontando para "
-            "/api/crm/webhook-whatsapp/ (WhatsAtende com token no path)."
+            "Canal de clientes ativo no número Meta (WhatsAtende B). "
+            "O número do time comercial continua só para equipe/grupos."
+        )
+    elif payload.get("provider") == WhatsAppIntegracaoConfig.PROVIDER_HYBRID:
+        payload["message"] = (
+            "Modo híbrido: equipe na Z-API. Envios a clientes continuam bloqueados "
+            "até o número Meta estar configurado e liberado nesta tela."
         )
     else:
         payload["message"] = (
-            "Provedor alterado. Confirme que o webhook inbound aponta para "
-            "/api/crm/webhook-whatsapp/ no provedor escolhido."
+            "Configuração salva. Envios a clientes só saem pelo número oficial Meta, "
+            "quando ele estiver configurado e ativado nesta aba."
         )
     return Response(payload)
 
@@ -105,6 +140,38 @@ def whatsapp_status_api(request):
 
     config = build_whatsapp_config_payload()
     backend = _backend_conexao(request)
+
+    if backend == "zapi":
+        from crm_app.services.whatsapp.zapi_provider import ZapiProvider
+
+        if not config.get("zapiConfigured"):
+            return Response(
+                {
+                    "provider": config["provider"],
+                    "backend": "zapi",
+                    "connected": False,
+                    "state": "unconfigured",
+                    "phone": config.get("numeroEquipeLabel") or "",
+                    "message": "Credenciais Z-API ausentes (ZAPI_INSTANCE_ID / ZAPI_TOKEN).",
+                }
+            )
+        me = ZapiProvider().obter_dados_instancia() or {}
+        phone = (
+            str(me.get("phone") or me.get("wid") or me.get("id") or "").strip()
+            if isinstance(me, dict)
+            else ""
+        )
+        connected = bool(isinstance(me, dict) and me and not me.get("error"))
+        return Response(
+            {
+                "provider": config["provider"],
+                "backend": "zapi",
+                "connected": connected,
+                "state": "open" if connected else "close",
+                "phone": phone or (config.get("numeroEquipeLabel") or ""),
+                "instanceName": config.get("zapiConfigured") and "z-api" or "",
+            }
+        )
 
     if backend == "whatsatende":
         if not _whatsatende_conexao_disponivel():
