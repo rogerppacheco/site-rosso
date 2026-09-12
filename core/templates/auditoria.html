@@ -2599,6 +2599,23 @@ async function iniciarBuscaPapOnline() {
                 return;
             }
 
+            // Prioridade: Valor mensal do PAP (contratado), se o plano selecionado
+            // ainda for o da venda. Evita GDP/catálogo (ex.: 160) sobrescrever 75/135/150.
+            const valorPap = vendaEmAuditoria && vendaEmAuditoria.valor_plano_pap;
+            const planoVendaId = vendaEmAuditoria
+                ? (vendaEmAuditoria.plano && vendaEmAuditoria.plano.id != null
+                    ? vendaEmAuditoria.plano.id
+                    : vendaEmAuditoria.plano)
+                : null;
+            if (
+                valorPap != null && valorPap !== '' &&
+                planoVendaId != null && String(planoId) === String(planoVendaId)
+            ) {
+                aplicarValorPlanoScript(valorPap, 'pap');
+                $('#txt-plano-valor').attr('title', 'Valor mensal do PAP (contratado)');
+                return;
+            }
+
             const params = new URLSearchParams({
                 plano_id: planoId,
                 cidade: cidade,

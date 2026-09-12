@@ -1020,13 +1020,17 @@ def _job_cancelado(busca_id: int) -> bool:
 def _buscar_tipo(
     page, *, busca_id: int, tipo: str, data_ini: str, data_fim: str, pdv: str, token: str = ""
 ) -> dict:
+    from crm_app.historico_pap import STATUS_SECUNDARIO_INTERESSE
+
     aliases = TIPO_API_ALIASES.get(tipo, (tipo,))
     last_err = ""
     for alias in aliases:
+        status_sec = None
         if tipo == "PRE_VENDA":
             lista_status = ("PRE_VENDA", None)
         elif tipo in ("INTERESSE", "INTERESSE_SALVO"):
             lista_status = ("MINHAS_PENDENCIAS", None)
+            status_sec = STATUS_SECUNDARIO_INTERESSE
         else:
             lista_status = (STATUS_LISTA_PADRAO, None)
 
@@ -1038,6 +1042,7 @@ def _buscar_tipo(
                 tipo_api=alias,
                 page=1,
                 status=status,
+                status_secundario=status_sec,
             )
             resp = _fetch_json(page, url, token=token)
             if not isinstance(resp, dict):
@@ -1130,6 +1135,14 @@ def _paginar_tipo(
                 ignorados += 1
 
     _ingerir(primeira)
+    status_sec = None
+    if (tipo or "").upper() in ("INTERESSE", "INTERESSE_SALVO") or (tipo_api or "").upper() in (
+        "INTERESSE",
+        "INTERESSE_SALVO",
+    ):
+        from crm_app.historico_pap import STATUS_SECUNDARIO_INTERESSE
+
+        status_sec = STATUS_SECUNDARIO_INTERESSE
     for page_n in range(2, paginas + 1):
         if _job_cancelado(busca_id):
             break
@@ -1141,6 +1154,7 @@ def _paginar_tipo(
             tipo_api=tipo_api,
             page=page_n,
             status=status,
+            status_secundario=status_sec,
         )
         resp = _fetch_json(page, url, token=token)
         if not isinstance(resp, dict) or not resp.get("ok"):
