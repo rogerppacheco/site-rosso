@@ -529,6 +529,29 @@ PAP_SESSIONS_DIR = config(
     default=os.path.join(BASE_DIR, 'pap_sessions'),
 )
 
+
+# Gestão de Terceiros NIO (gestaodeterceiros.nashai.ai) → importação em Gestão de Usuários.
+# Login automático usa matrícula/senha PAP de um usuário com perfil Diretoria.
+NIO_TERCEIROS_BASE_URL = config(
+    'NIO_TERCEIROS_BASE_URL',
+    default='https://gestaodeterceiros.nashai.ai',
+)
+NIO_TERCEIROS_EMPRESA_ID = config('NIO_TERCEIROS_EMPRESA_ID', default='370721')
+NIO_TERCEIROS_MATRICULA_DIRETOR = config('NIO_TERCEIROS_MATRICULA_DIRETOR', default='TT833162')
+NIO_TERCEIROS_STORAGE_STATE = config(
+    'NIO_TERCEIROS_STORAGE_STATE',
+    default=os.path.join(PAP_SESSIONS_DIR, 'nio_gestaodeterceiros_session.json'),
+)
+NIO_TERCEIROS_CACHE = config(
+    'NIO_TERCEIROS_CACHE',
+    default=os.path.join(PAP_SESSIONS_DIR, 'nio_terceiros_cache.json'),
+)
+NIO_TERCEIROS_HEADLESS = config(
+    'NIO_TERCEIROS_HEADLESS',
+    default=True,
+    cast=lambda v: str(v).lower() not in ('false', '0', 'no'),
+)
+
 # FORCE_FATURA_PDF_PLAYWRIGHT: Se True, o PDF da fatura é SEMPRE buscado abrindo o navegador (Playwright),
 # em vez de tentar primeiro a API. Use só para debug: ver os cliques (Consultar → Pagar conta → Gerar boleto → Baixar PDF).
 # Variável de ambiente: FORCE_FATURA_PDF_PLAYWRIGHT=true

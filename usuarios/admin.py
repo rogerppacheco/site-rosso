@@ -56,7 +56,7 @@ class CustomUserAdmin(UserAdmin):
             ),
         }),
         ('Delegação', {
-            'fields': ('pode_gestao_acessos',),
+            'fields': ('pode_gestao_acessos', 'pode_importar_nio_terceiros'),
             'description': 'Se "Pode usar a ferramenta Gestão de Acessos?" estiver marcado, o usuário verá o card Gestão de Acessos na área interna e poderá gerenciar apenas usuários que não são Admin ou Diretoria.'
         }),
         ('WhatsApp', {'fields': ('tel_whatsapp', 'tel_whatsapp_2', 'tel_whatsapp_3')}),

@@ -243,6 +243,15 @@ class Usuario(AbstractUser):
         help_text="Se marcado, o usuário verá o card 'Gestão de Acessos' na área interna e poderá gerenciar usuários (exceto perfis Admin e Diretoria)."
     )
 
+    pode_importar_nio_terceiros = models.BooleanField(
+        default=False,
+        verbose_name="Pode importar NIO Terceiros?",
+        help_text=(
+            "Se marcado, o usuário pode sincronizar e importar colaboradores "
+            "da Gestão de Terceiros NIO na tela Gestão de Usuários."
+        ),
+    )
+
     class Meta(AbstractUser.Meta):
         pass
 

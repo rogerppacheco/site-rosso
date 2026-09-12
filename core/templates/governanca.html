@@ -298,7 +298,12 @@
             <section id="usuarios-section" class="content-section active">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h3>Gestão de Usuários</h3>
-                    <button class="btn btn-primary" onclick="abrirModalUsuario()"><i class="bi bi-person-plus-fill"></i> Novo Usuário</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-primary d-none" id="btn-importar-nio-terceiros" onclick="abrirModalNioTerceiros()">
+                            <i class="bi bi-people"></i> Importar NIO Terceiros
+                        </button>
+                        <button class="btn btn-primary" onclick="abrirModalUsuario()"><i class="bi bi-person-plus-fill"></i> Novo Usuário</button>
+                    </div>
                 </div>
                 <div class="card mt-4">
                     <div class="card-header bg-white py-3">
@@ -820,6 +825,56 @@
         </main>
     </div>
 
+
+    <div class="modal fade" id="nioTerceirosModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-people me-1"></i> Importar NIO Terceiros</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2">
+                        Lê os colaboradores da Gestão de Terceiros NIO. Se a sessão expirou, faz login automático
+                        com a matrícula/senha PAP do perfil <strong>Diretoria</strong>. Só cria/atualiza usuários
+                        locais após você confirmar a importação.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-nio-sincronizar" onclick="sincronizarNioTerceiros()">
+                            <i class="bi bi-arrow-repeat"></i> Atualizar lista da NIO
+                        </button>
+                        <span id="nio-terceiros-status" class="small text-muted"></span>
+                    </div>
+                    <div id="nio-terceiros-resultado" class="alert alert-light border d-none small"></div>
+                    <div class="table-responsive" style="max-height: 420px;">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width:36px;"><input type="checkbox" id="nio-check-todos" onclick="toggleNioChecks(this.checked)"></th>
+                                    <th>Nome</th>
+                                    <th>Matrícula</th>
+                                    <th>Função NIO</th>
+                                    <th>Perfil / Canal</th>
+                                    <th>Ação</th>
+                                    <th>Obs.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nio-terceiros-tbody">
+                                <tr><td colspan="7" class="text-muted text-center py-4">Clique em &quot;Atualizar lista da NIO&quot; ou abra o modal para carregar o cache.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-success" id="btn-nio-importar" onclick="importarNioTerceirosSelecionados()">
+                        <i class="bi bi-download"></i> Importar selecionados
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="userModal" tabindex="-1">
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 90%;">
             <div class="modal-content">
@@ -1026,6 +1081,11 @@
                                             <input class="form-check-input" type="checkbox" id="pode_gestao_acessos">
                                             <label class="form-check-label fw-bold" for="pode_gestao_acessos">Pode usar a ferramenta <strong>Gestão de Acessos</strong>?</label>
                                             <small class="text-muted d-block ms-4 mt-1">Se marcado, o usuário verá o card &quot;Gestão de Acessos&quot; na área interna e poderá gerenciar apenas usuários que não são Admin ou Diretoria.</small>
+                                        </div>
+                                        <div class="form-check form-switch mb-3 p-3 rounded bg-light border border-success">
+                                            <input class="form-check-input" type="checkbox" id="pode_importar_nio_terceiros">
+                                            <label class="form-check-label fw-bold" for="pode_importar_nio_terceiros">Pode <strong>Importar NIO Terceiros</strong>?</label>
+                                            <small class="text-muted d-block ms-4 mt-1">Se marcado, o usuário vê o botão na Gestão de Usuários para sincronizar e cadastrar colaboradores da Gestão de Terceiros NIO (login automático do Diretor).</small>
                                         </div>
                                     </div>
                                 </div>
@@ -1669,6 +1729,14 @@
     if (!userProfile || !['Diretoria', 'Admin'].includes(userProfile) && !isSuperuser) {
         alert('Acesso negado.'); window.location.href = '/area-interna/';
     }
+
+
+    (function atualizarVisibilidadeBtnNioTerceiros() {
+        const btn = document.getElementById('btn-importar-nio-terceiros');
+        if (!btn) return;
+        const pode = isSuperuser || !!(decodedToken && decodedToken.pode_importar_nio_terceiros);
+        btn.classList.toggle('d-none', !pode);
+    })();
 
     // Variáveis Globais
     const API_GRUPOS = '/grupos/';
@@ -2561,6 +2629,128 @@
         carregarUsuarios(statusAtual, paginacaoAtual.page); 
     };
 
+    let nioTerceirosCache = [];
+    let nioTerceirosModal = null;
+
+    function _badgeAcaoNio(acao) {
+        if (acao === 'criar') return '<span class="badge bg-success">Criar</span>';
+        if (acao === 'atualizar') return '<span class="badge bg-warning text-dark">Atualizar</span>';
+        return '<span class="badge bg-secondary">Já cadastrado</span>';
+    }
+
+    function renderNioTerceirosTabela(terceiros) {
+        nioTerceirosCache = Array.isArray(terceiros) ? terceiros : [];
+        const tbody = document.getElementById('nio-terceiros-tbody');
+        const statusEl = document.getElementById('nio-terceiros-status');
+        if (!tbody) return;
+        if (!nioTerceirosCache.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-4">Nenhum terceiro no cache. Atualize a lista da NIO.</td></tr>';
+            if (statusEl) statusEl.textContent = '0 terceiros';
+            return;
+        }
+        const criar = nioTerceirosCache.filter(t => t.acao === 'criar').length;
+        const atualizar = nioTerceirosCache.filter(t => t.acao === 'atualizar').length;
+        if (statusEl) statusEl.textContent = `${nioTerceirosCache.length} na NIO · ${criar} novos · ${atualizar} para atualizar`;
+        tbody.innerHTML = nioTerceirosCache.map(t => {
+            const selecionavel = t.acao === 'criar' || t.acao === 'atualizar';
+            return `<tr>
+                <td><input type="checkbox" class="nio-check" value="${t.nio_id || ''}" ${selecionavel ? 'checked' : 'disabled'}></td>
+                <td>${(t.nome || '').replace(/</g,'&lt;')}</td>
+                <td><code>${(t.matricula || '').replace(/</g,'&lt;')}</code></td>
+                <td>${(t.funcao || '').replace(/</g,'&lt;')}</td>
+                <td>${(t.perfil_sugerido || '')} / ${(t.canal_sugerido || '')}</td>
+                <td>${_badgeAcaoNio(t.acao)}</td>
+                <td class="small text-muted">${(t.observacao || '').replace(/</g,'&lt;')}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    window.toggleNioChecks = function(checked) {
+        document.querySelectorAll('.nio-check:not(:disabled)').forEach(c => { c.checked = checked; });
+    };
+
+    window.abrirModalNioTerceiros = async function() {
+        if (!nioTerceirosModal) {
+            nioTerceirosModal = new bootstrap.Modal(document.getElementById('nioTerceirosModal'));
+        }
+        nioTerceirosModal.show();
+        document.getElementById('nio-terceiros-resultado').classList.add('d-none');
+        try {
+            const data = await apiFetch('/usuarios/nio-terceiros/');
+            renderNioTerceirosTabela(data.terceiros || []);
+        } catch (e) {
+            document.getElementById('nio-terceiros-status').textContent = e.message || String(e);
+        }
+    };
+
+    let nioSyncInFlight = false;
+    window.sincronizarNioTerceiros = async function() {
+        if (nioSyncInFlight) {
+            alert('Sincronização já em andamento. Aguarde terminar (evita várias tentativas de login).');
+            return;
+        }
+        nioSyncInFlight = true;
+        const btn = document.getElementById('btn-nio-sincronizar');
+        const statusEl = document.getElementById('nio-terceiros-status');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando…'; }
+        if (statusEl) statusEl.textContent = 'Login automático do Diretor se necessário (máx. 1 tentativa)…';
+        try {
+            const data = await apiFetch('/usuarios/nio-terceiros/sincronizar/', {
+                method: 'POST',
+                body: JSON.stringify({ incluir_cadastro: true }),
+            });
+            renderNioTerceirosTabela(data.terceiros || []);
+            if (statusEl) statusEl.textContent = data.mensagem || statusEl.textContent;
+        } catch (e) {
+            alert('Falha ao sincronizar NIO: ' + (e.message || e));
+            if (statusEl) statusEl.textContent = e.message || String(e);
+        } finally {
+            nioSyncInFlight = false;
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Atualizar lista da NIO'; }
+        }
+    };
+
+    window.importarNioTerceirosSelecionados = async function() {
+        const ids = Array.from(document.querySelectorAll('.nio-check:checked')).map(c => c.value).filter(Boolean);
+        if (!ids.length) return alert('Selecione ao menos um terceiro para importar.');
+        if (!confirm(`Importar ${ids.length} terceiro(s) para a Gestão de Usuários?`)) return;
+        const btn = document.getElementById('btn-nio-importar');
+        if (btn) btn.disabled = true;
+        try {
+            const data = await apiFetch('/usuarios/nio-terceiros/importar/', {
+                method: 'POST',
+                body: JSON.stringify({ nio_ids: ids }),
+            });
+            const box = document.getElementById('nio-terceiros-resultado');
+            const linhas = [];
+            (data.criados || []).forEach(c => {
+                linhas.push(`Criado: <strong>${c.username}</strong> (${c.matricula_pap || ''}) senha temporária: <code>${c.senha_temporaria || ''}</code>`);
+            });
+            (data.atualizados || []).forEach(c => {
+                linhas.push(`Atualizado: <strong>${c.username}</strong> — campos: ${(c.campos || []).join(', ')}`);
+            });
+            (data.ignorados || []).forEach(c => {
+                linhas.push(`Ignorado: ${c.username || c.nio_id} (${c.motivo || ''})`);
+            });
+            (data.erros || []).forEach(c => {
+                linhas.push(`Erro ${c.nio_id}: ${c.erro || ''}`);
+            });
+            box.innerHTML = linhas.length ? linhas.join('<br>') : 'Nenhuma alteração.';
+            box.classList.remove('d-none');
+            todosUsuariosCache = [];
+            try {
+                const preview = await apiFetch('/usuarios/nio-terceiros/');
+                renderNioTerceirosTabela(preview.terceiros || []);
+            } catch (_) {}
+            const statusAtual = document.getElementById('lista-status-titulo').textContent.includes('Ativos') ? 'ativos' : 'inativos';
+            carregarUsuarios(statusAtual, paginacaoAtual.page);
+        } catch (e) {
+            alert('Falha ao importar: ' + (e.message || e));
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    };
+
     async function abrirModalUsuario(user = null) {
         console.log('Abrindo modal de usuário...');
         document.getElementById('user-form').reset();
@@ -2614,6 +2804,7 @@
             document.getElementById('pap_automacao_status').checked = user.pap_automacao_status !== false;
             document.getElementById('autorizar_historico_pap').checked = !!user.autorizar_historico_pap;
             document.getElementById('pode_gestao_acessos').checked = user.pode_gestao_acessos || false;
+            document.getElementById('pode_importar_nio_terceiros').checked = !!user.pode_importar_nio_terceiros;
             document.getElementById('recebe_adiantamento_cnpj').checked = user.recebe_adiantamento_cnpj !== false;
             document.getElementById('recebe_adiantamento_sabado').checked = user.recebe_adiantamento_sabado === true;
             document.getElementById('matricula_pap').value = user.matricula_pap || '';
@@ -2638,6 +2829,7 @@
             document.getElementById('pap_automacao_status').checked = true;
             document.getElementById('autorizar_historico_pap').checked = false;
             document.getElementById('pode_gestao_acessos').checked = false;
+            document.getElementById('pode_importar_nio_terceiros').checked = false;
             document.getElementById('vendedor_solo').checked = false;
             document.getElementById('recebe_selfie_presenca').checked = false;
             document.getElementById('recebe_adiantamento_cnpj').checked = true;
@@ -2804,6 +2996,7 @@
             pap_automacao_status: document.getElementById('pap_automacao_status').checked,
             autorizar_historico_pap: document.getElementById('autorizar_historico_pap').checked,
             pode_gestao_acessos: document.getElementById('pode_gestao_acessos').checked,
+            pode_importar_nio_terceiros: document.getElementById('pode_importar_nio_terceiros').checked,
             recebe_adiantamento_cnpj: document.getElementById('recebe_adiantamento_cnpj').checked,
             recebe_adiantamento_sabado: document.getElementById('recebe_adiantamento_sabado').checked,
             brpronto_login: cleanValue(document.getElementById('brpronto_login').value),

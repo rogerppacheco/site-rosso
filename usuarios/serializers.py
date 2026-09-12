@@ -183,6 +183,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'pap_automacao_status',
             'autorizar_historico_pap',
             'pode_gestao_acessos',
+            'pode_importar_nio_terceiros',
             'brpronto_login',
             'brpronto_senha',
             'brpronto_senha_preenchida',
@@ -408,6 +409,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'tel_whatsapp_3',
             'obriga_troca_senha',
             'pode_gestao_acessos',
+            'pode_importar_nio_terceiros',
             'vendedor_solo',
         ]
 
@@ -450,6 +452,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['obriga_troca_senha'] = user.obriga_troca_senha
         token['autorizar_venda_automatica'] = getattr(user, 'autorizar_venda_automatica', False)
         token['pode_gestao_acessos'] = getattr(user, 'pode_gestao_acessos', False)
+        token['pode_importar_nio_terceiros'] = getattr(user, 'pode_importar_nio_terceiros', False)
         token['vendedor_solo'] = getattr(user, 'vendedor_solo', False)
         return token
 

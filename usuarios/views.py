@@ -766,6 +766,103 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         wb.save(response)
         return response
     
+
+    def _pode_nio_terceiros(self, user) -> bool:
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, "is_superuser", False):
+            return True
+        return bool(getattr(user, "pode_importar_nio_terceiros", False))
+
+    @action(detail=False, methods=["get"], url_path="nio-terceiros")
+    def nio_terceiros_preview(self, request):
+        """Lista terceiros do cache NIO com ação sugerida (criar/atualizar/já cadastrado)."""
+        if not self._pode_nio_terceiros(request.user):
+            return Response({"detail": "Acesso negado."}, status=status.HTTP_403_FORBIDDEN)
+        from usuarios.services_nio_terceiros import carregar_cache, empresa_id, terceiros_para_preview
+
+        cache = carregar_cache()
+        terceiros = terceiros_para_preview()
+        return Response(
+            {
+                "empresa_id": empresa_id(),
+                "origem": cache.get("origem") or "nio",
+                "total": len(terceiros),
+                "terceiros": terceiros,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="nio-terceiros/sincronizar")
+    def nio_terceiros_sincronizar(self, request):
+        """Atualiza a lista da NIO (login automático do Diretor se a sessão expirou)."""
+        if not self._pode_nio_terceiros(request.user):
+            return Response({"detail": "Acesso negado."}, status=status.HTTP_403_FORBIDDEN)
+        from usuarios.services_nio_terceiros import (
+            NioTerceirosError,
+            SessaoNioExpirada,
+            sincronizar_da_nio,
+            terceiros_para_preview,
+        )
+
+        incluir_cadastro = str(request.data.get("incluir_cadastro", "true")).lower() not in (
+            "false",
+            "0",
+            "no",
+        )
+        forcar = str(request.data.get("forcar_relogin", "false")).lower() in ("true", "1", "yes")
+        try:
+            if forcar:
+                from usuarios.services_nio_terceiros import garantir_sessao_nio
+
+                garantir_sessao_nio(forcar_relogin=True)
+                sincronizar_da_nio(incluir_cadastro=incluir_cadastro, renovar_sessao=False)
+            else:
+                sincronizar_da_nio(incluir_cadastro=incluir_cadastro, renovar_sessao=True)
+            preview = terceiros_para_preview()
+            return Response(
+                {
+                    "ok": True,
+                    "total": len(preview),
+                    "terceiros": preview,
+                    "mensagem": f"Lista atualizada: {len(preview)} terceiros na NIO.",
+                }
+            )
+        except SessaoNioExpirada as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except NioTerceirosError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.exception("[NIO terceiros] Falha ao sincronizar")
+            return Response(
+                {"detail": f"Falha ao sincronizar terceiros NIO: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["post"], url_path="nio-terceiros/importar")
+    def nio_terceiros_importar(self, request):
+        """Cria/atualiza usuários locais a partir dos nio_ids selecionados."""
+        if not self._pode_nio_terceiros(request.user):
+            return Response({"detail": "Acesso negado."}, status=status.HTTP_403_FORBIDDEN)
+        from usuarios.services_nio_terceiros import NioTerceirosError, importar_terceiros
+
+        nio_ids = request.data.get("nio_ids") or []
+        if not isinstance(nio_ids, list) or not nio_ids:
+            return Response(
+                {"detail": "Informe nio_ids (lista) para importar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            resultado = importar_terceiros([str(i) for i in nio_ids])
+            return Response(resultado)
+        except NioTerceirosError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.exception("[NIO terceiros] Falha ao importar")
+            return Response(
+                {"detail": f"Falha ao importar: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated], url_path='definir-senha')
     def definir_nova_senha(self, request):
         serializer = TrocaSenhaSerializer(data=request.data)
