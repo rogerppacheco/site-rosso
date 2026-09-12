@@ -809,8 +809,11 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
                         </ul>
                     </div>
 
-                    <button type="button" class="btn btn-sm btn-outline-success ms-auto me-2" id="btn-sync-pap" onclick="iniciarBuscaPapOnline()">
+                    <button type="button" class="btn btn-sm btn-outline-success ms-auto me-1" id="btn-sync-pap" onclick="iniciarBuscaPapOnline()">
                         <i class="bi bi-cloud-download"></i><span class="d-none d-md-inline ms-1">Buscar do PAP</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary me-2" id="btn-excel-pap" onclick="baixarExcelPapOnline()" title="Baixar Excel do período da última busca PAP">
+                        <i class="bi bi-file-earmark-excel"></i><span class="d-none d-md-inline ms-1">Excel PAP</span>
                     </button>
 
                     <div class="dropdown">
@@ -1728,35 +1731,140 @@ function salvarConfigPap() {
     alert('Configuração salva! A próxima busca usará este período.');
 }
 
+async function baixarExcelPapOnline(buscaId) {
+    const token = localStorage.getItem('accessToken');
+    const headers = {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+    const qs = buscaId
+        ? `?id=${encodeURIComponent(buscaId)}&escopo=periodo`
+        : '?escopo=periodo';
+    try {
+        const resp = await fetch(`/api/crm/funil-venda-wpp/historico-pap/download/${qs}`, { headers });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.arquivo_base64) {
+            alert(data.error || data.detail || 'Sem arquivo Excel para baixar. Faça uma busca PAP antes.');
+            return false;
+        }
+        const bin = atob(data.arquivo_base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = data.nome_arquivo || 'Historico_PAP.xlsx';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        return true;
+    } catch (err) {
+        console.error(err);
+        alert('Erro ao baixar Excel do PAP.');
+        return false;
+    }
+}
+
 async function iniciarBuscaPapOnline() {
     const btn = document.getElementById('btn-sync-pap');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando...';
+    const labelPadrao = '<i class="bi bi-cloud-download"></i><span class="d-none d-md-inline ms-1">Buscar do PAP</span>';
+    const setBtn = (html) => { btn.innerHTML = html; };
+
+    const token = localStorage.getItem('accessToken');
+    const periodo = localStorage.getItem('pap_busca_periodo') || 'hoje';
+    const headers = {
+        'X-CSRFToken': getCookie('csrftoken'),
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
     try {
-        const token = localStorage.getItem('accessToken');
-        const periodo = localStorage.getItem('pap_busca_periodo') || 'hoje';
+        setBtn('<span class="spinner-border spinner-border-sm me-1"></span>Iniciando...');
         const resp = await fetch('/api/crm/historico/importar-vendas/', {
             method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken'),
-                'Content-Type': 'application/json',
-                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify({ periodo: periodo })
+            headers,
+            body: JSON.stringify({ periodo })
         });
-        const data = await resp.json();
-        if (resp.ok) {
-            alert('Importação concluída: ' + (data.mensagem || 'Vendas importadas com sucesso!'));
+        const data = await resp.json().catch(() => ({}));
+
+        if (resp.status === 409 && data.busca_id) {
+            alert('Já existe uma busca em andamento. Vou acompanhar o status.');
+        } else if (!resp.ok && resp.status !== 202) {
+            alert('Erro ao iniciar busca: ' + (data.error || data.detail || 'Falha desconhecida.'));
+            return;
+        }
+
+        const buscaId = data.busca_id || (data.status && data.status.id);
+        if (!buscaId) {
+            alert(data.mensagem || data.error || 'Busca não retornou ID.');
+            return;
+        }
+
+        // Aguarda a coleta real no PAP (thread Playwright)
+        const prazo = Date.now() + 180000; // 3 min
+        let ultimo = null;
+        while (Date.now() < prazo) {
+            setBtn('<span class="spinner-border spinner-border-sm me-1"></span>Coletando PAP...');
+            await sleep(3000);
+            const st = await fetch(`/api/crm/funil-venda-wpp/historico-pap/status/?id=${buscaId}`, { headers });
+            ultimo = await st.json().catch(() => null);
+            if (!ultimo) continue;
+            const status = (ultimo.status || '').toLowerCase();
+            const emAndamento = !!ultimo.em_andamento || status === 'em_andamento' || status === 'pendente';
+            if (!emAndamento) break;
+            const encontrados = ultimo.encontrados != null ? ` (${ultimo.encontrados})` : '';
+            setBtn(`<span class="spinner-border spinner-border-sm me-1"></span>Coletando${encontrados}`);
+        }
+
+        if (!ultimo) {
+            alert('Não foi possível obter o status da busca.');
+            return;
+        }
+
+        const statusFinal = (ultimo.status || '').toLowerCase();
+        if (statusFinal === 'erro' || statusFinal === 'error') {
+            alert('Busca no PAP falhou: ' + (ultimo.mensagem || 'erro desconhecido'));
+            return;
+        }
+        if (ultimo.em_andamento || statusFinal === 'em_andamento' || statusFinal === 'pendente') {
+            alert('A busca ainda está em andamento. Tente novamente em alguns minutos.');
+            return;
+        }
+
+        setBtn('<span class="spinner-border spinner-border-sm me-1"></span>Importando...');
+        const syncResp = await fetch('/api/crm/historico/importar-vendas/', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ apenas_sincronizar: true, busca_id: buscaId })
+        });
+        const syncData = await syncResp.json().catch(() => ({}));
+        if (!syncResp.ok) {
+            alert('Coleta OK, mas falhou ao criar vendas: ' + (syncData.error || 'erro'));
+            return;
+        }
+
+        const novos = ultimo.novos != null ? ultimo.novos : '?';
+        const encontrados = ultimo.encontrados != null ? ultimo.encontrados : '?';
+        const criadas = syncData.criadas != null ? syncData.criadas : '?';
+        const baixar = confirm(
+            `Busca concluída. Encontrados: ${encontrados}. Novos: ${novos}. Vendas criadas: ${criadas}.\n\n` +
+            `Deseja baixar o Excel do período da busca (padrão PAP)?`
+        );
+        if (baixar) {
+            await baixarExcelPapOnline(buscaId);
+        }
+        if (typeof carregarVendasPendentes === 'function') {
             carregarVendasPendentes();
-        } else {
-            alert('Erro na importação: ' + (data.error || 'Ocorreu um erro ao importar vendas.'));
         }
     } catch (err) {
         console.error(err);
         alert('Erro de conexão. Não foi possível conectar ao servidor.');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-cloud-download"></i><span class="d-none d-md-inline ms-1">Buscar do PAP</span>';
+        setBtn(labelPadrao);
     }
 }
         const API_BASE = '/api/crm/vendas';

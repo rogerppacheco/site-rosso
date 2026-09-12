@@ -43,9 +43,6 @@ STATUS_LISTA_PADRAO = (
     "ANALISE_BO,CONTATO_AGENDADO,VENDA_NAO_CONFIRMADA,PEDIDO_GERADO,"
     "CLIENTE_SEM_CONTATO,VENDA_LIQUIDA,VENDA_GROSS"
 )
-STATUS_SECUNDARIO_INTERESSE = (
-    "INTERESSE_SALVO,INTERESSE_ENCERRADO,INTERESSE_AUTOMATICO"
-)
 SEGMENTO_PADRAO = "EMPRESARIAL,VAREJO"
 PAP_API_VENDAS = "https://pap-api.niointernet.com.br/api/portal/vendas"
 PAP_HISTORICO_URL = "https://pap.niointernet.com.br/administrativo/historico"
@@ -501,7 +498,6 @@ def montar_url_vendas(
     page: int,
     limit: int = LIMIT_PAGINA,
     status: str | None = STATUS_LISTA_PADRAO,
-    status_secundario: str | None = None,
     segmento: str = SEGMENTO_PADRAO,
 ) -> str:
     from urllib.parse import urlencode
@@ -518,6 +514,4 @@ def montar_url_vendas(
         params["pdv"] = (pdv or "").strip()
     if status:
         params["status"] = status
-    if status_secundario:
-        params["statusSecundario"] = status_secundario
     return f"{PAP_API_VENDAS}?{urlencode(params)}"

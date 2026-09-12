@@ -549,7 +549,7 @@
     });
 
     document.getElementById('btn-baixar-excel').addEventListener('click', async () => {
-        const r = await fetch(API_HIST + 'download/', { headers: { 'Authorization': 'Bearer ' + getToken() } });
+        const r = await fetch(API_HIST + 'download/?escopo=periodo', { headers: { 'Authorization': 'Bearer ' + getToken() } });
         const data = await r.json();
         if (!r.ok || !data.arquivo_base64) {
             alert(data.error || 'Sem arquivo para baixar.');
