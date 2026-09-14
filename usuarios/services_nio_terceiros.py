@@ -442,10 +442,44 @@ def _clicar_login_nds(page) -> bool:
     return False
 
 
+def _empresa_id_da_url(url: str) -> str | None:
+    """Extrai id= / land_empresa= / trocaempresa= da URL do portal Nashai."""
+    if not url:
+        return None
+    for chave in ("trocaempresa", "land_empresa", "id"):
+        m = re.search(rf"[?&]{chave}=(\d+)", url, re.I)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _garantir_empresa_configurada(page) -> None:
+    """Se o SSO caiu em outra empresa, força troca para NIO_TERCEIROS_EMPRESA_ID."""
+    desejada = empresa_id()
+    atual = _empresa_id_da_url(page.url or "")
+    if atual == desejada:
+        return
+    logger.info(
+        "[NIO terceiros] Empresa na URL=%s; forçando troca para %s",
+        atual,
+        desejada,
+    )
+    page.goto(url_home_empresa(), wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(2000)
+    nova = _empresa_id_da_url(page.url or "")
+    if nova and nova != desejada:
+        logger.warning(
+            "[NIO terceiros] Após trocaempresa URL ainda em empresa=%s (esperado %s)",
+            nova,
+            desejada,
+        )
+
+
 def _selecionar_ambiente_nio(page) -> bool:
     """Clica no card NIO na tela escolher_corporativo. Retorna True se clicou."""
+    eid = empresa_id()
     for seletor in (
-        'a[href*="trocaempresa=370721"]',
+        f'a[href*="trocaempresa={eid}"]',
         'a[href*="corporativo=15000"][href*="empresas.php"]',
         'a:has-text("NIO")',
         'a:has-text("53.420.564")',
@@ -661,6 +695,9 @@ def renovar_sessao_login_diretor() -> Path:
                 page.goto(url_nio_ambiente(), wait_until="domcontentloaded", timeout=60000)
                 page.wait_for_timeout(2000)
             page.wait_for_timeout(1500)
+
+        # 3b) SSO pode cair em outra empresa (ex.: 370665); força a NIO configurada.
+        _garantir_empresa_configurada(page)
 
         # 4) Abrir aba Terceiros/Colaboradores por clique de menu (fluxo local).
         logger.info("[NIO terceiros] Passo 4: abrir Terceiros/Colaboradores")
