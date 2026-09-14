@@ -37,10 +37,17 @@ def aplicar_aliases_colunas(
         for origem, destino in aliases.items()
     }
     rename: dict[str, str] = {}
+    existentes = set(out.columns)
     for col in out.columns:
         destino = mapa.get(col)
-        if destino and destino != col and destino not in rename.values():
-            rename[col] = destino
+        if not destino or destino == col:
+            continue
+        # Não renomeia se o nome canônico já existe: o layout novo da Nio traz
+        # "Data Agendamento" e "Inicio execucao real" juntos. O alias antigo
+        # jogava a execução real por cima da agenda e o to_dict descartava a data.
+        if destino in existentes or destino in rename.values():
+            continue
+        rename[col] = destino
     if rename:
         out = out.rename(columns=rename)
     return out
@@ -64,6 +71,9 @@ OSAB_ALIASES = {
     'PLANO': 'CLASSE_PRODUTO',
     'DATA_ATIVACAO': 'DATA_FECHAMENTO',
     'REDE': 'CD_REDE',
+    # Layout antigo do Portal Parceiros não tinha "Data Agendamento".
+    # No export novo da Nio as duas colunas coexistem: a agenda prevalece
+    # e o início real só preenche quando a agenda vier vazia (ver _coalescer_data_agendamento_osab).
     'INICIO_EXECUCAO_REAL': 'DATA_AGENDAMENTO',
 }
 
@@ -102,9 +112,27 @@ def resolver_coluna_pedido_osab(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _coalescer_data_agendamento_osab(df: pd.DataFrame) -> pd.DataFrame:
+    """Mantém a data da agenda quando ela já existe ao lado do início real.
+
+    O export novo da Nio traz as duas colunas. A agenda é a data da esteira
+    (AGENDADO). O início da execução só entra se a agenda estiver vazia,
+    para não quebrar o layout antigo que só tinha INICIO_EXECUCAO_REAL.
+    """
+    out = df.copy()
+    if 'DATA_AGENDAMENTO' not in out.columns or 'INICIO_EXECUCAO_REAL' not in out.columns:
+        return out
+    agenda = out['DATA_AGENDAMENTO']
+    inicio = out['INICIO_EXECUCAO_REAL']
+    vazio = agenda.isna() | agenda.astype(str).str.strip().isin(('', 'nan', 'None', 'NaT'))
+    out['DATA_AGENDAMENTO'] = agenda.where(~vazio, inicio)
+    return out
+
+
 def normalizar_colunas_osab(df: pd.DataFrame) -> pd.DataFrame:
     out = normalizar_colunas_dataframe(df, uppercase=True)
     out = aplicar_aliases_colunas(out, OSAB_ALIASES, uppercase=True)
+    out = _coalescer_data_agendamento_osab(out)
     out = resolver_coluna_pedido_osab(out)
     return out
 

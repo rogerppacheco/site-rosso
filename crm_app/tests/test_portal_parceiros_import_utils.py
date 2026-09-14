@@ -67,6 +67,22 @@ class PortalParceirosImportUtilsTest(SimpleTestCase):
         out = resolver_coluna_pedido_osab(normalizar_colunas_osab(df))
         self.assertEqual(out['PEDIDO'].tolist(), ['11045939', '10849125'])
 
+    def test_osab_data_agendamento_nao_e_sobrescrita_pelo_inicio_real(self):
+        """Layout Nio: Data Agendamento e Inicio execucao real coexistem."""
+        df = pd.DataFrame({
+            'nr_ordem': ['11162752', '11109675'],
+            'Status': ['Em Aprovisionamento', 'Em Aprovisionamento'],
+            'Data Agendamento': ['2026-09-14 13:00:00', None],
+            'Inicio execucao real': [None, '2026-09-13 16:25:45'],
+        })
+        out = normalizar_colunas_osab(df)
+
+        self.assertEqual(list(out.columns).count('DATA_AGENDAMENTO'), 1)
+        self.assertIn('INICIO_EXECUCAO_REAL', out.columns)
+        registros = out.to_dict('records')
+        self.assertIn('2026-09-14', str(registros[0]['DATA_AGENDAMENTO']))
+        self.assertIn('2026-09-13', str(registros[1]['DATA_AGENDAMENTO']))
+
     def test_fpd_status_nao_paga(self):
         self.assertEqual(normalizar_status_fpd('NAO PAGA'), 'NAO_PAGO')
         self.assertEqual(normalizar_status_fpd('PAGA'), 'PAGO')
