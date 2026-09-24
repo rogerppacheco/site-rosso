@@ -4506,29 +4506,31 @@
     });
     
     // === PAP LOGINS ===
-    function carregarPapLogins() {
-        axios.get('/api/contas-servico-pap/')
-            .then(res => {
-                const tbody = document.getElementById('tbody-pap-logins');
-                tbody.innerHTML = '';
-                res.data.forEach(item => {
-                    const ativoBadge = item.ativo ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-danger">Não</span>';
-                    const emUsoBadge = item.em_uso ? '<span class="badge bg-warning">Sim</span>' : '<span class="badge bg-secondary">Não</span>';
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${item.funcao}</td>
-                            <td>${item.matricula}</td>
-                            <td>${ativoBadge}</td>
-                            <td>${emUsoBadge}</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-primary" onclick='editarPapLogin(${JSON.stringify(item)})'>Editar</button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="excluirPapLogin(${item.id})">Excluir</button>
-                            </td>
-                        </tr>
-                    `;
-                });
-            })
-            .catch(err => alert('Erro ao carregar logins PAP: ' + err.message));
+    async function carregarPapLogins() {
+        try {
+            const res = await apiFetch('/api/contas-servico-pap/');
+            const tbody = document.getElementById('tbody-pap-logins');
+            tbody.innerHTML = '';
+            const data = Array.isArray(res) ? res : (res?.results || []);
+            data.forEach(item => {
+                const ativoBadge = item.ativo ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-danger">Não</span>';
+                const emUsoBadge = item.em_uso ? '<span class="badge bg-warning">Sim</span>' : '<span class="badge bg-secondary">Não</span>';
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${item.funcao}</td>
+                        <td>${item.matricula}</td>
+                        <td>${ativoBadge}</td>
+                        <td>${emUsoBadge}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick='editarPapLogin(${JSON.stringify(item)})'>Editar</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="excluirPapLogin(${item.id})">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch (err) {
+            alert('Erro ao carregar logins PAP: ' + err.message);
+        }
     }
 
     function abrirModalPapLogin() {
@@ -4546,7 +4548,7 @@
         new bootstrap.Modal(document.getElementById('modalPapLogin')).show();
     }
 
-    function salvarPapLogin() {
+    async function salvarPapLogin() {
         const id = document.getElementById('pap_login_id').value;
         const data = {
             funcao: document.getElementById('pap_login_funcao').value,
@@ -4554,22 +4556,26 @@
             senha: document.getElementById('pap_login_senha').value,
             ativo: document.getElementById('pap_login_ativo').checked
         };
-        const method = id ? 'put' : 'post';
+        const method = id ? 'PUT' : 'POST';
         const url = id ? `/api/contas-servico-pap/${id}/` : '/api/contas-servico-pap/';
         
-        axios[method](url, data)
-            .then(() => {
-                bootstrap.Modal.getInstance(document.getElementById('modalPapLogin')).hide();
-                carregarPapLogins();
-            })
-            .catch(err => alert('Erro ao salvar: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message)));
+        try {
+            await apiFetch(url, { method, body: JSON.stringify(data) });
+            bootstrap.Modal.getInstance(document.getElementById('modalPapLogin')).hide();
+            carregarPapLogins();
+        } catch (err) {
+            alert('Erro ao salvar: ' + err.message);
+        }
     }
 
-    function excluirPapLogin(id) {
+    async function excluirPapLogin(id) {
         if(confirm('Tem certeza que deseja excluir esta conta de serviço?')) {
-            axios.delete(`/api/contas-servico-pap/${id}/`)
-                .then(() => carregarPapLogins())
-                .catch(err => alert('Erro ao excluir: ' + err.message));
+            try {
+                await apiFetch(`/api/contas-servico-pap/${id}/`, { method: 'DELETE' });
+                carregarPapLogins();
+            } catch (err) {
+                alert('Erro ao excluir: ' + err.message);
+            }
         }
     }
 
