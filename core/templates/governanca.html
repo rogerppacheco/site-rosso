@@ -2241,87 +2241,7 @@
         }
     }
 
-    async 
-    // === PAP LOGINS ===
-    function carregarPapLogins() {
-        axios.get('/api/contas-servico-pap/')
-            .then(res => {
-                const tbody = document.getElementById('tbody-pap-logins');
-                tbody.innerHTML = '';
-                res.data.forEach(item => {
-                    const ativoBadge = item.ativo ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-danger">Não</span>';
-                    const emUsoBadge = item.em_uso ? '<span class="badge bg-warning">Sim</span>' : '<span class="badge bg-secondary">Não</span>';
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${item.funcao}</td>
-                            <td>${item.matricula}</td>
-                            <td>${ativoBadge}</td>
-                            <td>${emUsoBadge}</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-primary" onclick='editarPapLogin(${JSON.stringify(item)})'>Editar</button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="excluirPapLogin(${item.id})">Excluir</button>
-                            </td>
-                        </tr>
-                    `;
-                });
-            })
-            .catch(err => alert('Erro ao carregar logins PAP: ' + err.message));
-    }
-
-    function abrirModalPapLogin() {
-        document.getElementById('formPapLogin').reset();
-        document.getElementById('pap_login_id').value = '';
-        new bootstrap.Modal(document.getElementById('modalPapLogin')).show();
-    }
-
-    function editarPapLogin(item) {
-        document.getElementById('pap_login_id').value = item.id;
-        document.getElementById('pap_login_funcao').value = item.funcao;
-        document.getElementById('pap_login_matricula').value = item.matricula;
-        document.getElementById('pap_login_senha').value = item.senha;
-        document.getElementById('pap_login_ativo').checked = item.ativo;
-        new bootstrap.Modal(document.getElementById('modalPapLogin')).show();
-    }
-
-    function salvarPapLogin() {
-        const id = document.getElementById('pap_login_id').value;
-        const data = {
-            funcao: document.getElementById('pap_login_funcao').value,
-            matricula: document.getElementById('pap_login_matricula').value,
-            senha: document.getElementById('pap_login_senha').value,
-            ativo: document.getElementById('pap_login_ativo').checked
-        };
-        const method = id ? 'put' : 'post';
-        const url = id ? `/api/contas-servico-pap/${id}/` : '/api/contas-servico-pap/';
-        
-        axios[method](url, data)
-            .then(() => {
-                bootstrap.Modal.getInstance(document.getElementById('modalPapLogin')).hide();
-                carregarPapLogins();
-            })
-            .catch(err => alert('Erro ao salvar: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message)));
-    }
-
-    function excluirPapLogin(id) {
-        if(confirm('Tem certeza que deseja excluir esta conta de serviço?')) {
-            axios.delete(`/api/contas-servico-pap/${id}/`)
-                .then(() => carregarPapLogins())
-                .catch(err => alert('Erro ao excluir: ' + err.message));
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const links = document.querySelectorAll('.admin-nav-link');
-        links.forEach(link => {
-            link.addEventListener('click', (e) => {
-                if (link.getAttribute('onclick')?.includes("'robos-pap'")) {
-                    carregarPapLogins();
-                }
-            });
-        });
-    });
-
-    function carregarUsuarios(status = 'ativos', page = 1, searchTerm = '') {
+    async function carregarUsuarios(status = 'ativos', page = 1, searchTerm = '') {
         const tbody = document.getElementById('user-list-body');
         if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Carregando...</td></tr>';
 
@@ -4584,5 +4504,85 @@
             carregarDadosParaFormulario().catch(() => {});
         }, 1000);
     });
-    </script>
+    
+    // === PAP LOGINS ===
+    function carregarPapLogins() {
+        axios.get('/api/contas-servico-pap/')
+            .then(res => {
+                const tbody = document.getElementById('tbody-pap-logins');
+                tbody.innerHTML = '';
+                res.data.forEach(item => {
+                    const ativoBadge = item.ativo ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-danger">Não</span>';
+                    const emUsoBadge = item.em_uso ? '<span class="badge bg-warning">Sim</span>' : '<span class="badge bg-secondary">Não</span>';
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${item.funcao}</td>
+                            <td>${item.matricula}</td>
+                            <td>${ativoBadge}</td>
+                            <td>${emUsoBadge}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick='editarPapLogin(${JSON.stringify(item)})'>Editar</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="excluirPapLogin(${item.id})">Excluir</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            })
+            .catch(err => alert('Erro ao carregar logins PAP: ' + err.message));
+    }
+
+    function abrirModalPapLogin() {
+        document.getElementById('formPapLogin').reset();
+        document.getElementById('pap_login_id').value = '';
+        new bootstrap.Modal(document.getElementById('modalPapLogin')).show();
+    }
+
+    function editarPapLogin(item) {
+        document.getElementById('pap_login_id').value = item.id;
+        document.getElementById('pap_login_funcao').value = item.funcao;
+        document.getElementById('pap_login_matricula').value = item.matricula;
+        document.getElementById('pap_login_senha').value = item.senha;
+        document.getElementById('pap_login_ativo').checked = item.ativo;
+        new bootstrap.Modal(document.getElementById('modalPapLogin')).show();
+    }
+
+    function salvarPapLogin() {
+        const id = document.getElementById('pap_login_id').value;
+        const data = {
+            funcao: document.getElementById('pap_login_funcao').value,
+            matricula: document.getElementById('pap_login_matricula').value,
+            senha: document.getElementById('pap_login_senha').value,
+            ativo: document.getElementById('pap_login_ativo').checked
+        };
+        const method = id ? 'put' : 'post';
+        const url = id ? `/api/contas-servico-pap/${id}/` : '/api/contas-servico-pap/';
+        
+        axios[method](url, data)
+            .then(() => {
+                bootstrap.Modal.getInstance(document.getElementById('modalPapLogin')).hide();
+                carregarPapLogins();
+            })
+            .catch(err => alert('Erro ao salvar: ' + (err.response?.data ? JSON.stringify(err.response.data) : err.message)));
+    }
+
+    function excluirPapLogin(id) {
+        if(confirm('Tem certeza que deseja excluir esta conta de serviço?')) {
+            axios.delete(`/api/contas-servico-pap/${id}/`)
+                .then(() => carregarPapLogins())
+                .catch(err => alert('Erro ao excluir: ' + err.message));
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const links = document.querySelectorAll('.admin-nav-link');
+        links.forEach(link => {
+            link.addEventListener('click', (e) => {
+                if (link.getAttribute('onclick')?.includes("'robos-pap'")) {
+                    carregarPapLogins();
+                }
+            });
+        });
+    });
+
+</script>
 {% endblock %}
