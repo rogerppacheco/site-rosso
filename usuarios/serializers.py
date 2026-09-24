@@ -1,4 +1,4 @@
-﻿from rest_framework import serializers
+from rest_framework import serializers
 from .models import Usuario, Perfil, PermissaoPerfil, CredencialRoboPAP
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -23,18 +23,18 @@ CAMPOS_NUMERICOS_ZERO = (
     'meta_comissao',
 )
 
-# --- SERIALIZERS DE SEGURANÃ‡A ---
+# --- SERIALIZERS DE SEGURANÇA ---
 
 class TrocaSenhaSerializer(serializers.Serializer):
     """
-    Serializer para a troca obrigatÃ³ria de senha.
+    Serializer para a troca obrigatória de senha.
     """
     nova_senha = serializers.CharField(required=True, min_length=6)
     confirmacao_senha = serializers.CharField(required=True, min_length=6)
 
     def validate(self, data):
         if data['nova_senha'] != data['confirmacao_senha']:
-            raise serializers.ValidationError("As senhas nÃ£o conferem.")
+            raise serializers.ValidationError("As senhas não conferem.")
         return data
 
 class ResetSenhaSolicitacaoSerializer(serializers.Serializer):
@@ -44,7 +44,7 @@ class ResetSenhaSolicitacaoSerializer(serializers.Serializer):
     cpf = serializers.CharField(required=True)
     whatsapp = serializers.CharField(required=True)
 
-# --- SERIALIZERS DE PERMISSÃƒO E GRUPO ---
+# --- SERIALIZERS DE PERMISSÃO E GRUPO ---
 
 class PermissionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -69,9 +69,9 @@ class RecursoSerializer(serializers.Serializer):
 class PerfilSerializer(serializers.ModelSerializer):
     def validate_cod_perfil(self, value):
         if not value:
-            raise serializers.ValidationError("O campo 'cod_perfil' Ã© obrigatÃ³rio.")
+            raise serializers.ValidationError("O campo 'cod_perfil' é obrigatório.")
         if Perfil.objects.filter(cod_perfil=value).exists():
-            raise serializers.ValidationError("JÃ¡ existe um perfil com este cÃ³digo.")
+            raise serializers.ValidationError("Já existe um perfil com este código.")
         return value
 
     class Meta:
@@ -92,7 +92,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     supervisor_nome = serializers.SerializerMethodField()
     brpronto_senha_preenchida = serializers.SerializerMethodField()
 
-    # MÃ‰TODO PARA OBTER O NOME DO LÃDER
+    # MÉTODO PARA OBTER O NOME DO LÍDER
     def get_supervisor_nome(self, obj):
         if obj.supervisor:
             nome = f"{obj.supervisor.first_name} {obj.supervisor.last_name}".strip()
@@ -112,7 +112,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             ]
 
     def validate_meta_comissao(self, value):
-        """Valida e normaliza meta_comissao - aceita 0 como valor vÃ¡lido"""
+        """Valida e normaliza meta_comissao - aceita 0 como valor válido"""
         if value is None or value == '':
             return 0
         if isinstance(value, str):
@@ -121,7 +121,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
                 return int(value)
             except (ValueError, TypeError):
                 return 0
-        # Aceita 0 como valor vÃ¡lido (0 Ã© um nÃºmero vÃ¡lido)
+        # Aceita 0 como valor válido (0 é um número válido)
         return value if value is not None else 0
 
     def validate_username(self, value):
@@ -130,11 +130,11 @@ class UsuarioSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Informe o login (username).')
         if any(ch.isspace() for ch in value):
             raise serializers.ValidationError(
-                'O login nÃ£o pode ter espaÃ§os. Use por exemplo MARCELO.LARANJO ou MARCELOLARANJO.'
+                'O login não pode ter espaços. Use por exemplo MARCELO.LARANJO ou MARCELOLARANJO.'
             )
         if not re.fullmatch(r'[\w.@+-]+', value):
             raise serializers.ValidationError(
-                'O login deve conter apenas letras, nÃºmeros e os caracteres @ . + - _ (sem espaÃ§os).'
+                'O login deve conter apenas letras, números e os caracteres @ . + - _ (sem espaços).'
             )
         return value
 
@@ -145,7 +145,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
                 attrs[campo] = 0
         if self.instance is None and not attrs.get('password'):
             raise serializers.ValidationError(
-                {'password': 'Informe a senha do novo usuÃ¡rio.'}
+                {'password': 'Informe a senha do novo usuário.'}
             )
         perfil = attrs.get('perfil', getattr(self.instance, 'perfil', None))
         perfil_nome = (getattr(perfil, 'nome', '') or '').strip().lower()
@@ -183,6 +183,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'pap_automacao_status',
             'autorizar_historico_pap',
             'pode_gestao_acessos',
+            'pode_importar_nio_terceiros',
             'brpronto_login',
             'brpronto_senha',
             'brpronto_senha_preenchida',
@@ -215,24 +216,24 @@ class UsuarioSerializer(serializers.ModelSerializer):
         """
         Transforma a resposta para o Frontend.
         Quando o front pede a lista, ele recebe o objeto Perfil inteiro (com nome),
-        nÃ£o apenas o ID.
+        não apenas o ID.
         """
         ret = super().to_representation(instance)
         
-        # Injeta os detalhes do perfil (com tratamento de erro caso perfil nÃ£o exista)
+        # Injeta os detalhes do perfil (com tratamento de erro caso perfil não exista)
         try:
             if instance.perfil_id and instance.perfil:
                 ret['perfil'] = PerfilSerializer(instance.perfil).data
         except Exception:
-            # Se o perfil nÃ£o existir (ID invÃ¡lido), nÃ£o inclui no retorno
+            # Se o perfil não existir (ID inválido), não inclui no retorno
             pass
         
-        # Injeta os detalhes do supervisor (LÃ­der)
+        # Injeta os detalhes do supervisor (Líder)
         try:
             if instance.supervisor_id and instance.supervisor:
                 ret['supervisor'] = UsuarioLiderSerializer(instance.supervisor).data
         except Exception:
-            # Se o supervisor nÃ£o existir, nÃ£o inclui no retorno
+            # Se o supervisor não existir, não inclui no retorno
             pass
             
         return ret
@@ -241,12 +242,12 @@ class UsuarioSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         groups = validated_data.pop('groups', [])
         
-        # Garantir que campos com default nÃ£o sejam None ou string vazia
+        # Garantir que campos com default não sejam None ou string vazia
         if 'meta_comissao' in validated_data:
             if validated_data['meta_comissao'] is None or validated_data['meta_comissao'] == '':
                 validated_data['meta_comissao'] = 0
             elif isinstance(validated_data['meta_comissao'], str):
-                # Converte string para int (aceita "0" como valor vÃ¡lido)
+                # Converte string para int (aceita "0" como valor válido)
                 try:
                     validated_data['meta_comissao'] = int(validated_data['meta_comissao'])
                 except (ValueError, TypeError):
@@ -257,7 +258,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             instance.set_password(password)
             instance.obriga_troca_senha = True
         
-        # Se perfil foi definido, sincroniza grupo baseado no perfil (perfil Ã© fonte de verdade)
+        # Se perfil foi definido, sincroniza grupo baseado no perfil (perfil é fonte de verdade)
         if 'perfil' in validated_data and validated_data.get('perfil'):
             try:
                 self._sincronizar_grupo_do_perfil(instance)
@@ -265,7 +266,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Erro ao sincronizar grupo do perfil: {e}")
-        # Se nÃ£o tem perfil mas tem groups, sincroniza perfil baseado no grupo
+        # Se não tem perfil mas tem groups, sincroniza perfil baseado no grupo
         elif groups:
             try:
                 first_group = groups[0]
@@ -288,12 +289,12 @@ class UsuarioSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         groups = validated_data.pop('groups', None)
         
-        # Garantir que campos com default nÃ£o sejam None ou string vazia
+        # Garantir que campos com default não sejam None ou string vazia
         if 'meta_comissao' in validated_data:
             if validated_data['meta_comissao'] is None or validated_data['meta_comissao'] == '':
                 validated_data['meta_comissao'] = 0
             elif isinstance(validated_data['meta_comissao'], str):
-                # Converte string para int (aceita "0" como valor vÃ¡lido)
+                # Converte string para int (aceita "0" como valor válido)
                 try:
                     validated_data['meta_comissao'] = int(validated_data['meta_comissao'])
                 except (ValueError, TypeError):
@@ -303,14 +304,14 @@ class UsuarioSerializer(serializers.ModelSerializer):
         perfil_anterior = instance.perfil
         perfil_alterado = 'perfil' in validated_data
         
-        # Atualiza campos normais (groups jÃ¡ foi removido do validated_data)
+        # Atualiza campos normais (groups já foi removido do validated_data)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
-        # Se o perfil foi alterado, sincroniza o grupo baseado no perfil (perfil Ã© fonte de verdade)
+        # Se o perfil foi alterado, sincroniza o grupo baseado no perfil (perfil é fonte de verdade)
         if perfil_alterado:
             self._sincronizar_grupo_do_perfil(instance)
-        # Se groups foi alterado (mas perfil nÃ£o), sincroniza perfil baseado no grupo
+        # Se groups foi alterado (mas perfil não), sincroniza perfil baseado no grupo
         elif groups is not None:
             instance.groups.set(groups)
             # Sincronizar campo perfil baseado no primeiro grupo
@@ -333,7 +334,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     
     def _sincronizar_grupo_do_perfil(self, usuario):
         """
-        Sincroniza os grupos baseado no perfil (perfil Ã© a fonte de verdade).
+        Sincroniza os grupos baseado no perfil (perfil é a fonte de verdade).
         Define apenas o grupo correspondente ao perfil, removendo outros.
         """
         from django.contrib.auth.models import Group
@@ -345,22 +346,22 @@ class UsuarioSerializer(serializers.ModelSerializer):
                 # Define apenas este grupo (remove outros e adiciona este)
                 usuario.groups.set([group])
             except Group.DoesNotExist:
-                # Se nÃ£o encontrar grupo correspondente, limpa os grupos
+                # Se não encontrar grupo correspondente, limpa os grupos
                 usuario.groups.clear()
         else:
-            # Se perfil estÃ¡ vazio, limpa os grupos
+            # Se perfil está vazio, limpa os grupos
             usuario.groups.clear()
     
     def _sincronizar_perfil_do_group(self, usuario, group_id):
         """
-        Sincroniza o campo perfil (ForeignKey) baseado no Group atribuÃ­do.
+        Sincroniza o campo perfil (ForeignKey) baseado no Group atribuído.
         Busca um Perfil com nome igual ao nome do Group.
         """
         from django.contrib.auth.models import Group
         from usuarios.models import Perfil
         
         if not group_id:
-            # Se nÃ£o hÃ¡ grupo, limpa o perfil
+            # Se não há grupo, limpa o perfil
             usuario.perfil = None
             return
         
@@ -371,24 +372,24 @@ class UsuarioSerializer(serializers.ModelSerializer):
                 perfil = Perfil.objects.get(nome__iexact=group.name)
                 usuario.perfil = perfil
             except Perfil.DoesNotExist:
-                # Se nÃ£o encontrar Perfil com esse nome, limpa o campo
+                # Se não encontrar Perfil com esse nome, limpa o campo
                 usuario.perfil = None
                 # Log para debug
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Perfil '{group.name}' nÃ£o encontrado para Group '{group.name}'. Campo perfil limpo.")
+                logger.warning(f"Perfil '{group.name}' não encontrado para Group '{group.name}'. Campo perfil limpo.")
             except Perfil.MultipleObjectsReturned:
-                # Se houver mÃºltiplos perfis com o mesmo nome, pega o primeiro
+                # Se houver múltiplos perfis com o mesmo nome, pega o primeiro
                 perfil = Perfil.objects.filter(nome__iexact=group.name).first()
                 usuario.perfil = perfil
         except Group.DoesNotExist:
-            # Se o Group nÃ£o existir, limpa o perfil
+            # Se o Group não existir, limpa o perfil
             usuario.perfil = None
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"Group com ID {group_id} nÃ£o encontrado. Campo perfil limpo.")
+            logger.warning(f"Group com ID {group_id} não encontrado. Campo perfil limpo.")
 
-# --- SERIALIZER DE PERFIL DO USUÃRIO (LEITURA) ---
+# --- SERIALIZER DE PERFIL DO USUÁRIO (LEITURA) ---
 
 class UserProfileSerializer(serializers.ModelSerializer):
     perfil_nome = serializers.CharField(source='perfil.nome', read_only=True)
@@ -408,6 +409,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'tel_whatsapp_3',
             'obriga_troca_senha',
             'pode_gestao_acessos',
+            'pode_importar_nio_terceiros',
             'vendedor_solo',
         ]
 
@@ -420,12 +422,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['user_name'] = user.get_full_name() if hasattr(user, 'get_full_name') else user.username
         
-        # Super usuÃ¡rios sempre recebem 'Admin' para acesso total
+        # Super usuários sempre recebem 'Admin' para acesso total
         if user.is_superuser:
             perfil_nome = 'Admin'
         else:
-            # Adiciona o perfil legado (com tratamento de erro caso perfil nÃ£o exista)
-            perfil_nome = 'Vendedor'  # PadrÃ£o
+            # Adiciona o perfil legado (com tratamento de erro caso perfil não exista)
+            perfil_nome = 'Vendedor'  # Padrão
             try:
                 # Prioridade 1: Campo perfil do modelo Usuario
                 if hasattr(user, 'perfil_id') and user.perfil_id:
@@ -435,7 +437,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             except Exception:
                 pass
             
-            # Prioridade 2: Se nÃ£o encontrou perfil, usa o primeiro Group como fallback
+            # Prioridade 2: Se não encontrou perfil, usa o primeiro Group como fallback
             if perfil_nome == 'Vendedor' and user.groups.exists():
                 perfil_nome = user.groups.first().name
         
@@ -446,10 +448,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Adiciona o primeiro grupo como perfil principal
         if user.groups.exists():
             token['grupo_principal'] = user.groups.first().name
-        # --- SEGURANÃ‡A: Adiciona flag no Token ---
+        # --- SEGURANÇA: Adiciona flag no Token ---
         token['obriga_troca_senha'] = user.obriga_troca_senha
         token['autorizar_venda_automatica'] = getattr(user, 'autorizar_venda_automatica', False)
         token['pode_gestao_acessos'] = getattr(user, 'pode_gestao_acessos', False)
+        token['pode_importar_nio_terceiros'] = getattr(user, 'pode_importar_nio_terceiros', False)
         token['vendedor_solo'] = getattr(user, 'vendedor_solo', False)
         return token
 
@@ -469,14 +472,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         except User.DoesNotExist:
             logger.warning(f"[LOGIN] User not found by username, trying email...")
             try:
-                # Se nÃ£o encontrar, tenta com email (case-insensitive)
+                # Se não encontrar, tenta com email (case-insensitive)
                 self.user = User.objects.get(email__iexact=username_input)
                 logger.warning(f"[LOGIN] Found user by email: {self.user.username}")
             except User.DoesNotExist:
                 logger.warning(f"[LOGIN] User not found by email either")
                 pass
         
-        # Se encontrou usuÃ¡rio, atualizar attrs para autenticaÃ§Ã£o do Django
+        # Se encontrou usuário, atualizar attrs para autenticação do Django
         if self.user:
             attrs['username'] = self.user.username
             logger.warning(f"[LOGIN] Updated attrs username to: {attrs['username']}")
@@ -490,15 +493,15 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise
 
         if self.user and not self.user.is_active:
-            raise serializers.ValidationError("Este usuÃ¡rio estÃ¡ inativo e nÃ£o pode fazer login.")
+            raise serializers.ValidationError("Este usuário está inativo e não pode fazer login.")
 
         data['token'] = data.pop('access')
 
         user_profile = None
         if self.user:
             try:
-                # Tenta acessar o perfil, mas nÃ£o falha se nÃ£o existir
-                if self.user.perfil_id:  # Verifica se hÃ¡ um ID antes de acessar
+                # Tenta acessar o perfil, mas não falha se não existir
+                if self.user.perfil_id:  # Verifica se há um ID antes de acessar
                     user_profile = self.user.perfil.nome
             except Exception as e:
                 logger.warning(f"[LOGIN] Erro ao acessar perfil: {e}")
@@ -519,6 +522,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             }
         
         return data
+
 class CredencialRoboPAPSerializer(serializers.ModelSerializer):
     class Meta:
         model = CredencialRoboPAP
