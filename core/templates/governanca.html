@@ -281,7 +281,7 @@
             <div class="nav-section-title">Automação</div>
             <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'automacao', this)"><i class="bi bi-whatsapp"></i> Automação WhatsApp</a>
             <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'robos-pap', this)"><i class="bi bi-robot"></i> Contas de Serviço (Robôs)</a>
-            <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'pap-logins', this)"><i class="bi bi-box-arrow-right"></i> Logins PAP</a>
+            
 
             <div class="nav-section-title">Financeiro</div>
             <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'relatorios', this)"><i class="bi bi-file-earmark-bar-graph"></i> Relatórios</a>
@@ -823,6 +823,34 @@
                 </div>
             </section>
 
+            <!-- ABA LOGINS PAP -->
+    <div id="robos-pap-section" class="content-section">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3>Contas de Serviço PAP (Robôs)</h3>
+            <button class="btn btn-primary" onclick="abrirModalPapLogin()">
+                <i class="bi bi-plus"></i> Novo Robô
+            </button>
+        </div>
+        
+        <div class="table-responsive bg-white rounded shadow-sm p-3">
+            <table class="table table-hover align-middle" id="tabela-pap-logins">
+                <thead class="table-light">
+                    <tr>
+                        <th>Função</th>
+                        <th>Matrícula PAP</th>
+                        <th>Ativo</th>
+                        <th>Em Uso</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-pap-logins">
+                    <!-- Preenchido via JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+
         </main>
     </div>
 
@@ -1236,33 +1264,6 @@
         </div>
     </div>
 
-
-    <!-- ABA LOGINS PAP -->
-    <div id="robos-pap-section" class="content-section">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3>Contas de Serviço PAP (Robôs)</h3>
-            <button class="btn btn-primary" onclick="abrirModalPapLogin()">
-                <i class="bi bi-plus"></i> Novo Robô
-            </button>
-        </div>
-        
-        <div class="table-responsive bg-white rounded shadow-sm p-3">
-            <table class="table table-hover align-middle" id="tabela-pap-logins">
-                <thead class="table-light">
-                    <tr>
-                        <th>Função</th>
-                        <th>Matrícula PAP</th>
-                        <th>Ativo</th>
-                        <th>Em Uso</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody id="tbody-pap-logins">
-                    <!-- Preenchido via JS -->
-                </tbody>
-            </table>
-        </div>
-    </div>
 
     <!-- MODAL PAP LOGIN -->
     <div class="modal fade" id="modalPapLogin" tabindex="-1">
