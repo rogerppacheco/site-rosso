@@ -11,6 +11,7 @@ from .views import (
     DefinirNovaSenhaView,
     GestaoAcessosUsuarioViewSet,
     GestaoAcessosGruposView,
+    CredencialRoboPAPViewSet,
 )
 
 router = DefaultRouter()
@@ -21,6 +22,7 @@ router.register(r'grupos', GrupoViewSet, basename='grupo')
 router.register(r'permissoes', PermissaoViewSet, basename='permissao')
 router.register(r'perfis', PerfilViewSet, basename='perfil')
 router.register(r'recursos', RecursoViewSet, basename='recurso')
+router.register(r'contas-servico-pap', CredencialRoboPAPViewSet, basename='conta-servico-pap')
 
 # Rota auxiliar para o Frontend carregar dados do usuário logado (GET /api/usuarios/me/)
 router.register(r'me', UserProfileView, basename='me')

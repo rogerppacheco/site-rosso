@@ -243,15 +243,6 @@ class Usuario(AbstractUser):
         help_text="Se marcado, o usuário verá o card 'Gestão de Acessos' na área interna e poderá gerenciar usuários (exceto perfis Admin e Diretoria)."
     )
 
-    pode_importar_nio_terceiros = models.BooleanField(
-        default=False,
-        verbose_name="Pode importar NIO Terceiros?",
-        help_text=(
-            "Se marcado, o usuário pode sincronizar e importar colaboradores "
-            "da Gestão de Terceiros NIO na tela Gestão de Usuários."
-        ),
-    )
-
     class Meta(AbstractUser.Meta):
         pass
 
@@ -285,3 +276,24 @@ class PermissaoPerfil(models.Model):
 
     def __str__(self):
         return f"Permissões do {self.perfil.nome} para {self.recurso}"
+
+class CredencialRoboPAP(models.Model):
+    FUNCOES_CHOICES = [
+        ('CONSULTA_ESTEIRA', 'Consulta PAP (Esteira)'),
+        ('WHATSAPP_BOT', 'Bot do WhatsApp (Crédito, OS, etc)'),
+        ('HISTORICO_VENDAS', 'Auditoria/Histórico (Excel PAP)'),
+        ('OUTROS', 'Outros'),
+    ]
+    funcao = models.CharField(max_length=50, choices=FUNCOES_CHOICES, verbose_name="Função")
+    matricula = models.CharField(max_length=50, verbose_name="Matrícula PAP")
+    senha = models.CharField(max_length=128, verbose_name="Senha PAP")
+    ativo = models.BooleanField(default=True, verbose_name="Ativo")
+    em_uso = models.BooleanField(default=False, verbose_name="Em Uso (Trancado)")
+    ultimo_uso = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Conta de Serviço PAP"
+        verbose_name_plural = "Contas de Serviço PAP"
+
+    def __str__(self):
+        return f"{self.get_funcao_display()} - {self.matricula}"

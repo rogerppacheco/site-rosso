@@ -68,14 +68,14 @@ def _intervalo_max() -> int:
 
 
 def _validar_credenciais_pap(usuario) -> Tuple[bool, str]:
-    matricula = (getattr(usuario, 'matricula_pap', None) or '').strip()
-    senha = (getattr(usuario, 'senha_pap', None) or '').strip()
-    if not matricula or not senha:
+    from usuarios.models import CredencialRoboPAP
+    robo = CredencialRoboPAP.objects.filter(funcao='CONSULTA_ESTEIRA', ativo=True).first()
+    if not robo or not robo.matricula or not robo.senha:
         return False, (
-            'Seu usuário não tem matrícula/senha PAP vinculadas. '
-            'Cadastre em Gestão de Acessos antes de consultar.'
+            'O sistema não possui um robô de Consulta configurado e ativo. '
+            'Vá em Gestão de Usuários > Contas de Serviço PAP para configurar.'
         )
-    return True, matricula
+    return True, robo.matricula
 
 
 def _aba_permitida(aba: str) -> bool:
@@ -533,12 +533,14 @@ class _SessaoPapUsuarioHolder:
     """Sessão PAP com credenciais do usuário logado (sem reciclar no meio do lote)."""
 
     def __init__(self, usuario) -> None:
+        from usuarios.models import CredencialRoboPAP
         self.usuario = usuario
-        self.matricula = (getattr(usuario, 'matricula_pap', None) or '').strip()
-        self.senha = (getattr(usuario, 'senha_pap', None) or '').strip()
+        robo = CredencialRoboPAP.objects.filter(funcao='CONSULTA_ESTEIRA', ativo=True).first()
+        self.matricula = robo.matricula if robo else ''
+        self.senha = robo.senha if robo else ''
         self.automacao = None
         self.consultas = 0
-        self.telefone_job = f'{TELEFONE_JOB_PREFIX}-{getattr(usuario, "id", 0)}'
+        self.telefone_job = f'{TELEFONE_JOB_PREFIX}-CONSULTA'
 
     def fechar(self) -> None:
         """Desloga (Sair) e fecha o browser."""
