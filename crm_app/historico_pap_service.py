@@ -2778,7 +2778,6 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
         headless=getattr(settings, "PAP_HEADLESS", True),
         capture_screenshots=False,
         optimize_for_credit=False,
-        url_pos_login=PAP_HISTORICO_URL,
     )
 
     def _rodar_com_sessao(*, forcar_login_fresco: bool) -> tuple[bool, str]:
