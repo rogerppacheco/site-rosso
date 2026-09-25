@@ -1710,6 +1710,34 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
     </div>
 </div>
 
+<!-- Modal Editar Vendedor -->
+<div class="modal fade" id="modal-editar-vendedor" tabindex="-1" aria-labelledby="modalEditarVendedorLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEditarVendedorLabel">Editar Vendedor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-vendedor-venda-id">
+                <div class="mb-3">
+                    <label class="form-label">Vendedor Atual:</label>
+                    <input type="text" class="form-control" id="edit-vendedor-atual" readonly>
+                </div>
+                <div class="mb-3">
+                    <label for="edit-vendedor-select" class="form-label">Novo Vendedor:</label>
+                    <select class="form-select" id="edit-vendedor-select">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarNovoVendedor()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -2860,6 +2888,9 @@ async function iniciarBuscaPapOnline() {
                         btnHtml = `<button class="btn btn-auditar" onclick="tentarAuditoria(${v.id})"><i class="bi bi-headset"></i> Auditar</button>`;
                     }
                     btnHtml += ` <button type="button" class="btn btn-icon btn-icon-sm btn-icon-danger ms-1" onclick="abrirPedidoAjudaGc(${v.id}, 'auditoria')" title="Pedido de ajuda ao GC (TI)" aria-label="Pedido de ajuda ao GC"><i class="bi bi-life-preserver" aria-hidden="true"></i></button>`;
+                    if (!perfilSomenteLeitura) {
+                        btnHtml += ` <button type="button" class="btn btn-icon btn-icon-sm btn-outline-secondary ms-1" onclick="abrirModalEditarVendedor(${v.id}, '${nomeVendedor.replace(/'/g, "\\'")}')" title="Editar vendedor"><i class="bi bi-person-gear" aria-hidden="true"></i></button>`;
+                    }
 
                     const bioHtml = renderBotaoBiometriaLista(v.id, v.biometria_aprovada, v.biometria_data_apta);
                     
@@ -4477,5 +4508,59 @@ async function iniciarBuscaPapOnline() {
         if (ref) enderecoCompleto += `, ${ref}`;
         navigator.clipboard.writeText(enderecoCompleto);
     }
+        let modalEditarVendedorObj = null;
+        function abrirModalEditarVendedor(vendaId, vendedorNome) {
+            if (!modalEditarVendedorObj) {
+                modalEditarVendedorObj = new bootstrap.Modal(document.getElementById('modal-editar-vendedor'));
+            }
+            document.getElementById('edit-vendedor-venda-id').value = vendaId;
+            document.getElementById('edit-vendedor-atual').value = vendedorNome;
+            
+            const sel = document.getElementById('edit-vendedor-select');
+            if (sel.options.length <= 1) {
+                sel.innerHTML = '<option value="">Carregando...</option>';
+                apiFetch(`${API_BASE}/usuarios/?page_size=1000`)
+                    .then(data => {
+                        const lista = data.results || data;
+                        sel.innerHTML = '<option value="">Selecione...</option>';
+                        lista.forEach(u => {
+                            if (u.is_active) {
+                                sel.innerHTML += `<option value="${u.id}">${u.username}</option>`;
+                            }
+                        });
+                    })
+                    .catch(e => {
+                        console.error(e);
+                        sel.innerHTML = '<option value="">Erro ao carregar</option>';
+                    });
+            }
+            modalEditarVendedorObj.show();
+        }
+
+        function salvarNovoVendedor() {
+            const vendaId = document.getElementById('edit-vendedor-venda-id').value;
+            const vendedorId = document.getElementById('edit-vendedor-select').value;
+            if (!vendedorId) {
+                alert('Selecione um vendedor.');
+                return;
+            }
+            $('#loadingOverlay').show();
+            apiFetch(`${API_BASE}/vendas/${vendaId}/`, {
+                method: 'PATCH',
+                body: JSON.stringify({ vendedor: parseInt(vendedorId) })
+            })
+            .then(() => {
+                alert('Vendedor atualizado com sucesso!');
+                modalEditarVendedorObj.hide();
+                carregarVendasPendentes(); // atualiza a lista
+            })
+            .catch(e => {
+                console.error(e);
+                alert('Erro ao atualizar vendedor: ' + mensagemErroAmigavel(e, 'Falha desconhecida'));
+            })
+            .finally(() => {
+                $('#loadingOverlay').hide();
+            });
+        }
     </script>
 {% endblock %}
