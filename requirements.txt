@@ -154,3 +154,7 @@ wikipedia==1.4.0
 wsproto==1.2.0
 xhtml2pdf==0.2.17
 xlsxwriter==3.2.5
+
+celery==5.3.6
+redis==5.0.1
+

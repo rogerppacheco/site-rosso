@@ -69,6 +69,15 @@ def enfileirar_job_pap(
         prioridade=prioridade,
     )
     logger.info("[PAP_FILA] Job %s enfileirado tipo=%s telefone=%s", job.id, tipo, telefone)
+    
+    # [PROFISSIONALIZAÇÃO] Despacha o Job para o Redis (Celery) imediatamente
+    try:
+        from crm_app.tasks_celery import processar_job_pap_celery
+        processar_job_pap_celery.delay(job.id)
+        logger.info("[CELERY] Job %s enviado para o Redis.", job.id)
+    except Exception as e:
+        logger.error("[CELERY] Erro ao despachar job %s para o Redis: %s", job.id, e)
+        
     return job
 
 
