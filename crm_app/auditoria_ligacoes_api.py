@@ -602,12 +602,14 @@ class AuditoriaLigacaoSincronizarLoteView(APIView):
         except (TypeError, ValueError):
             limite = 300
 
-        processar_fallback_auditoria_ligacoes_sonax(
+        metrics = processar_fallback_auditoria_ligacoes_sonax(
             limite=limite,
             grace_seconds=0,
             include_finalizadas_sem_gravacao=True,
-        )
-        return Response({"detail": "Sincronização em lote executada.", "limite": limite})
+        ) or {"verificadas": 0, "atualizadas": 0, "gravacoes": 0}
+        
+        detail = f"Verificadas: {metrics.get('verificadas', 0)} | Atualizadas: {metrics.get('atualizadas', 0)} | Gravações baixadas: {metrics.get('gravacoes', 0)}"
+        return Response({"detail": detail, "limite": limite, "metrics": metrics})
 
 
 class AuditoriaLigacaoHistoricoView(APIView):

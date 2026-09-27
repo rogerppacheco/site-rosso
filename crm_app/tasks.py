@@ -404,7 +404,7 @@ def processar_fallback_auditoria_ligacoes_sonax(
     limite: int = 15,
     grace_seconds: int = 90,
     include_finalizadas_sem_gravacao: bool = False,
-) -> None:
+) -> dict:
     """
     Fallback para quando a Sonax não dispara o webhook de desligamento.
     - Varre ligações Sonax INICIADA/PROCESSANDO com `provider_call_id` numérico.
@@ -420,7 +420,7 @@ def processar_fallback_auditoria_ligacoes_sonax(
         )
     except Exception:
         logger.exception("Falha ao importar dependências do fallback Sonax (auditoria).")
-        return
+        return {"verificadas": 0, "atualizadas": 0, "gravacoes": 0}
 
     now = timezone.now()
     cutoff = now - timedelta(seconds=max(10, int(grace_seconds)))
@@ -437,12 +437,14 @@ def processar_fallback_auditoria_ligacoes_sonax(
 
     rows = base_qs.filter(pending_q).order_by("criado_em")[: max(1, int(limite))]
     if not rows:
-        return
+        return {"verificadas": 0, "atualizadas": 0, "gravacoes": 0}
 
     svc = SonaxVoiceService()
     if not svc.is_recording_download_configured:
         logger.warning("Fallback Sonax auditoria: status/gravacao não configurados (SONAX_ID_CLIENTE/token).")
-        return
+        return {"verificadas": len(rows), "atualizadas": 0, "gravacoes": 0}
+
+    metrics = {"verificadas": len(rows), "atualizadas": 0, "gravacoes": 0}
 
     for ligacao in rows:
         cid = str(ligacao.provider_call_id or "").strip()
@@ -500,11 +502,13 @@ def processar_fallback_auditoria_ligacoes_sonax(
 
         if update_fields:
             ligacao.save(update_fields=list(dict.fromkeys(update_fields + ["atualizado_em"])))
+            metrics["atualizadas"] += 1
 
         if finalizada and not ligacao.link_gravacao_onedrive:
             try:
                 content, ext = svc.download_recording(cid)
                 _upload_bytes_to_r2(ligacao, content, ext)
+                metrics["gravacoes"] += 1
                 logger.info(
                     "Fallback Sonax auditoria: gravação arquivada. ligacao_id=%s call_id=%s",
                     ligacao.id,
@@ -517,3 +521,4 @@ def processar_fallback_auditoria_ligacoes_sonax(
                     cid,
                     exc,
                 )
+    return metrics
