@@ -188,7 +188,6 @@ def calcular_folha_mes_com_cache(
         mes,
         vendedor_id,
         use_effective_date_for_display=use_effective_date_for_display,
-        usuario_escopo=usuario_escopo,
     )
     salvar_folha_cache(
         ano,
