@@ -45,7 +45,7 @@
     <header class="premium-header">
         <div class="header-container">
             <a href="{% block brand_url %}/{% endblock %}" class="brand-link">
-                <img src="{% static 'logo.png' %}" alt="Logo" width="48" height="48">
+                {% if not SITE_TEXT_LOGO %}<img src="{% static 'logo.png' %}" alt="Logo" width="48" height="48">{% endif %}
                 <span class="brand-wordmark">
                     <span class="brand-line-1">{{ SITE_BRAND_LINE_1|default:"SYSR" }}</span>
                     {% if SITE_BRAND_LINE_2 %}<span class="brand-line-2">{{ SITE_BRAND_LINE_2 }}</span>{% endif %}
