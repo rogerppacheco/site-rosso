@@ -35,13 +35,13 @@ MSG_TODOS_ACESSOS_EM_USO = (
 
 def _limpar_locks_expirados():
     """Remove registros de BO em uso há mais de LOCK_TIMEOUT_MINUTOS."""
-    from crm_app.models import PapBoEmUso
+    from usuarios.models import CredencialRoboPAP
 
     limite = timezone.now() - timedelta(minutes=LOCK_TIMEOUT_MINUTOS)
-    deletados = PapBoEmUso.objects.filter(locked_at__lt=limite).delete()
-    if deletados[0] > 0:
-        logger.info(f"[POOL BO] Liberados {deletados[0]} lock(s) expirado(s)")
-    return deletados[0]
+    deletados = CredencialRoboPAP.objects.filter(em_uso=True, ultimo_uso__lt=limite).update(em_uso=False)
+    if deletados > 0:
+        logger.info(f"[POOL BO] Liberados {deletados} lock(s) expirado(s)")
+    return deletados
 
 
 def _normalizar_telefone(telefone: str) -> str:
@@ -97,8 +97,8 @@ def _registrar_historico_consulta_pap(
             solicitado_por=solicitante,
             telefone_solicitante=vendedor_telefone or "",
             tipo_automacao=tipo_automacao or "",
-            login_pap_utilizado=bo_usuario,
-            matricula_pap_utilizada=(bo_usuario.matricula_pap or ""),
+            login_pap_utilizado=None,
+            matricula_pap_utilizada=(getattr(bo_usuario, "matricula", "")),
             status_execucao=HistoricoConsultaAutomacaoPAP.STATUS_PENDENTE,
         )
     except Exception as exc:
@@ -128,7 +128,7 @@ def atualizar_historico_consulta_pap_resultado(
         qs = (
             HistoricoConsultaAutomacaoPAP.objects.filter(
                 telefone_solicitante=vendedor_telefone or "",
-                login_pap_utilizado=bo_usuario,
+                matricula_pap_utilizada=getattr(bo_usuario, "matricula", ""),
                 tipo_automacao=tipo_automacao or "",
                 status_execucao=HistoricoConsultaAutomacaoPAP.STATUS_PENDENTE,
             )
@@ -179,65 +179,25 @@ def obter_login_bo(
     sessao_whatsapp_id: Optional[int] = None,
     tipo_automacao: Optional[str] = None,
     contador_uso_por_bo: Optional[dict] = None,
-) -> Tuple[Optional["Usuario"], Optional[str]]:
+):
     """
-    Obtém um login BackOffice disponível para uso na automação PAP.
-
-    Usa seleção randômica entre os BOs livres para o tipo de automação.
-    Garante que o próximo vendedor não pegue o mesmo BO que outro em uso.
-
-    Args:
-        vendedor_telefone: Telefone do vendedor que está iniciando a ação
-        sessao_whatsapp_id: ID da SessaoWhatsapp (opcional, para rastreamento)
-        tipo_automacao: 'vender' | 'credito' | 'pedido' | 'status'. Se None, considera
-            qualquer BO com login_pap_disponivel_para_automacao (comportamento legado).
-        contador_uso_por_bo: opcional — dict {bo_id: n}; prioriza BOs com menor uso (sync noturno).
-
-    Returns:
-        (bo_usuario, None) em sucesso
-        (None, "mensagem_erro") quando todos os BOs estão ocupados ou nenhum liberado para essa automação
+    Obtém um login BackOffice (Robô) disponível para uso na automação PAP.
+    Usa seleção randômica entre os robôs livres.
     """
-    from usuarios.models import Usuario
-    from crm_app.models import PapBoEmUso
+    from usuarios.models import CredencialRoboPAP
 
     _limpar_locks_expirados()
 
-    # IDs dos BOs atualmente em uso
-    ids_em_uso = set(
-        PapBoEmUso.objects.values_list('bo_usuario_id', flat=True)
-    )
-
-    # Buscar usuários BackOffice com matrícula e senha configuradas e com login liberado para o bot
-    bo_queryset = Usuario.objects.filter(
-        Q(perfil__cod_perfil__iexact='backoffice')
-        | Q(groups__name__iexact='BackOffice'),
-        is_active=True,
-        matricula_pap__isnull=False,
-        login_pap_disponivel_para_automacao=True,
-    ).exclude(
-        matricula_pap='',
-    ).exclude(
-        senha_pap__isnull=True,
-    ).exclude(
-        senha_pap='',
-    ).distinct()
-
-    # Filtrar por automação: só BOs que têm o flag correspondente
-    if tipo_automacao:
-        if tipo_automacao == TIPO_AUTOMACAO_VENDER:
-            bo_queryset = bo_queryset.filter(pap_automacao_vender=True)
-        elif tipo_automacao == TIPO_AUTOMACAO_CREDITO:
-            bo_queryset = bo_queryset.filter(pap_automacao_credito=True)
-        elif tipo_automacao == TIPO_AUTOMACAO_PEDIDO:
-            bo_queryset = bo_queryset.filter(pap_automacao_pedido=True)
-        elif tipo_automacao == TIPO_AUTOMACAO_STATUS:
-            bo_queryset = bo_queryset.filter(pap_automacao_status=True)
+    # Buscar robôs com função WHATSAPP_BOT e ativos
+    bo_queryset = CredencialRoboPAP.objects.filter(
+        funcao='WHATSAPP_BOT',
+        ativo=True,
+    ).exclude(matricula='').exclude(senha='').distinct()
 
     existem_bos_elegiveis = bo_queryset.exists()
 
     # Excluir os que já estão em uso
-    if ids_em_uso:
-        bo_queryset = bo_queryset.exclude(id__in=ids_em_uso)
+    bo_queryset = bo_queryset.filter(em_uso=False)
 
     bo_list = list(bo_queryset)
     if not bo_list:
@@ -253,14 +213,14 @@ def obter_login_bo(
     for bo_usuario in bo_list:
         try:
             with transaction.atomic():
-                PapBoEmUso.objects.create(
-                    bo_usuario=bo_usuario,
-                    vendedor_telefone=vendedor_telefone,
-                    sessao_whatsapp_id=sessao_whatsapp_id,
-                    tipo_automacao=tipo_automacao or '',
-                )
+                robo = CredencialRoboPAP.objects.select_for_update().get(id=bo_usuario.id)
+                if robo.em_uso:
+                    continue
+                robo.em_uso = True
+                robo.ultimo_uso = timezone.now()
+                robo.save()
             logger.info(
-                f"[POOL BO] BO {bo_usuario.username} (matricula {bo_usuario.matricula_pap}) "
+                f"[POOL BO] Robo PAP {bo_usuario.matricula} "
                 f"alocado para {vendedor_telefone} (automação={tipo_automacao or 'qualquer'})"
             )
             _registrar_historico_consulta_pap(
@@ -270,7 +230,7 @@ def obter_login_bo(
             )
             return bo_usuario, None
         except Exception as e:
-            logger.debug(f"[POOL BO] BO {bo_usuario.id} indisponível: {e}")
+            logger.debug(f"[POOL BO] Robo {bo_usuario.id} indisponível: {e}")
             continue
 
     return (None, MSG_TODOS_ACESSOS_EM_USO)
@@ -392,19 +352,18 @@ def obter_mensagem_fila_ocupado(telefone: str, tipo_acao: str = "vender") -> str
 
 def liberar_todos_bos() -> Tuple[int, str]:
     """
-    Libera todos os logins PAP (remove todos os registros PapBoEmUso).
+    Libera todos os logins PAP.
     Útil quando os logins ficaram travados sem uso (ex.: sessão caiu e o lock não foi liberado).
     Retorna (quantidade_liberada, mensagem).
     """
-    from crm_app.models import PapBoEmUso
+    from usuarios.models import CredencialRoboPAP
 
     try:
-        total = PapBoEmUso.objects.count()
+        total = CredencialRoboPAP.objects.filter(em_uso=True).update(em_uso=False)
         if total == 0:
-            return 0, "Nenhum login estava em uso."
-        PapBoEmUso.objects.all().delete()
-        logger.info(f"[POOL BO] Liberados todos os {total} BO(s) (logoff manual).")
-        return total, f"Liberados {total} login(s) PAP. Eles voltam ao pool para o bot."
+            return 0, "Nenhum robô estava em uso."
+        logger.info(f"[POOL BO] Liberados todos os {total} Robôs (logoff manual).")
+        return total, f"Liberados {total} robôs PAP. Eles voltam ao pool para o bot."
     except Exception as e:
         logger.exception(f"[POOL BO] Erro ao liberar todos: {e}")
         return 0, f"Erro ao liberar: {e}"
@@ -415,29 +374,19 @@ def liberar_bo(
     vendedor_telefone: str,
 ) -> bool:
     """
-    Libera o login BackOffice após conclusão da venda (sucesso, erro ou cancelamento).
+    Libera o robô PAP após conclusão da venda (sucesso, erro ou cancelamento).
     Se houver fila de espera, notifica o primeiro da fila por WhatsApp.
-
-    Args:
-        bo_usuario_id: ID do usuário BackOffice
-        vendedor_telefone: Telefone do vendedor que estava usando
-
-    Returns:
-        True se liberou com sucesso, False caso contrário
     """
-    from crm_app.models import PapBoEmUso
+    from usuarios.models import CredencialRoboPAP
 
     try:
-        deletados = PapBoEmUso.objects.filter(
-            bo_usuario_id=bo_usuario_id,
-            vendedor_telefone=vendedor_telefone,
-        ).delete()
-        if deletados[0] > 0:
+        deletados = CredencialRoboPAP.objects.filter(id=bo_usuario_id, em_uso=True).update(em_uso=False)
+        if deletados > 0:
             logger.info(
-                f"[POOL BO] Liberado BO id={bo_usuario_id} usado por {vendedor_telefone}"
+                f"[POOL BO] Liberado Robo id={bo_usuario_id} usado por {vendedor_telefone}"
             )
             _notificar_proximo_da_fila()
-        return deletados[0] > 0
+        return deletados > 0
     except Exception as e:
-        logger.exception(f"[POOL BO] Erro ao liberar BO: {e}")
+        logger.exception(f"[POOL BO] Erro ao liberar Robo: {e}")
         return False

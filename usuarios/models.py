@@ -317,3 +317,11 @@ class CredencialRoboPAP(models.Model):
 
     def __str__(self):
         return f"{self.get_funcao_display()} - {self.matricula}"
+
+    @property
+    def matricula_pap(self):
+        return self.matricula
+
+    @property
+    def senha_pap(self):
+        return self.senha

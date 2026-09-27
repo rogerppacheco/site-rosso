@@ -894,7 +894,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
         'schedule': crontab(minute='30', hour='12'),
         'args': ('lista_agendamento_vendedor_tarde',)
-    }
+    },
+    'varrer_jobs_pendentes_pap': {
+        'task': 'crm_app.tasks_celery.varrer_jobs_pendentes_pap',
+        'schedule': 15.0,  # A cada 15 segundos
+    },
+}
 }
 
 

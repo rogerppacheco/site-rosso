@@ -281,7 +281,7 @@
             <div class="nav-section-title">Automação</div>
             <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'automacao', this)"><i class="bi bi-whatsapp"></i> Automação WhatsApp</a>
             <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'robos-pap', this)"><i class="bi bi-robot"></i> Contas de Serviço (Robôs)</a>
-            
+            <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'pap-logins', this)"><i class="bi bi-box-arrow-right"></i> Logins PAP</a>
 
             <div class="nav-section-title">Financeiro</div>
             <a href="#" class="admin-nav-link" onclick="mostrarSecao(event, 'relatorios', this)"><i class="bi bi-file-earmark-bar-graph"></i> Relatórios</a>
@@ -851,7 +851,51 @@
     </div>
 
 
+
         </main>
+
+    <!-- MODAL PAP LOGIN -->
+    <div class="modal fade" id="modalPapLogin" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalPapLoginTitle">Nova Conta de Serviço</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formPapLogin">
+                        <input type="hidden" id="pap_login_id">
+                        <div class="mb-3">
+                            <label class="form-label">Função</label>
+                            <select id="pap_login_funcao" class="form-select" required>
+                                <option value="CONSULTA_ESTEIRA">Consulta PAP (Esteira)</option>
+                                <option value="WHATSAPP_BOT">Bot do WhatsApp (Crédito, OS, etc)</option>
+                                <option value="HISTORICO_VENDAS">Auditoria/Histórico (Excel PAP)</option>
+                                <option value="OUTROS">Outros</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Matrícula PAP</label>
+                            <input type="text" id="pap_login_matricula" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Senha PAP</label>
+                            <input type="text" id="pap_login_senha" class="form-control" required>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" id="pap_login_ativo" class="form-check-input" checked>
+                            <label class="form-check-label">Ativo</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="salvarPapLogin()">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     </div>
 
 
@@ -1260,49 +1304,6 @@
                     </div>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="btnSalvarRegraFaixaModal"><i class="bi bi-check-lg"></i> Salvar</button></div>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- MODAL PAP LOGIN -->
-    <div class="modal fade" id="modalPapLogin" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalPapLoginTitle">Nova Conta de Serviço</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="formPapLogin">
-                        <input type="hidden" id="pap_login_id">
-                        <div class="mb-3">
-                            <label class="form-label">Função</label>
-                            <select id="pap_login_funcao" class="form-select" required>
-                                <option value="CONSULTA_ESTEIRA">Consulta PAP (Esteira)</option>
-                                <option value="WHATSAPP_BOT">Bot do WhatsApp (Crédito, OS, etc)</option>
-                                <option value="HISTORICO_VENDAS">Auditoria/Histórico (Excel PAP)</option>
-                                <option value="OUTROS">Outros</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Matrícula PAP</label>
-                            <input type="text" id="pap_login_matricula" class="form-control" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Senha PAP</label>
-                            <input type="text" id="pap_login_senha" class="form-control" required>
-                        </div>
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" id="pap_login_ativo" class="form-check-input" checked>
-                            <label class="form-check-label">Ativo</label>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="salvarPapLogin()">Salvar</button>
-                </div>
             </div>
         </div>
     </div>
@@ -4505,8 +4506,7 @@
             carregarDadosParaFormulario().catch(() => {});
         }, 1000);
     });
-    
-    // === PAP LOGINS ===
+        // === PAP LOGINS ===
     async function carregarPapLogins() {
         try {
             const res = await apiFetch('/api/contas-servico-pap/');
@@ -4590,6 +4590,7 @@
             });
         });
     });
+
 
 </script>
 {% endblock %}

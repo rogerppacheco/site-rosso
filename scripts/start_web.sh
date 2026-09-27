@@ -24,5 +24,6 @@ exec gunicorn gestao_equipes.wsgi \
   --timeout 1200 \
   --graceful-timeout 1200 \
   --keep-alive 5 \
+  --preload \
   --workers "${WORKERS}" \
   --threads "${THREADS}"
