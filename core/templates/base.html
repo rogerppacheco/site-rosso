@@ -2,26 +2,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    {# Anti-flicker: PRIMEIRO no head — aplica tema antes de CSS/paint #}
+    {# Theme Init #}
     <script>
         (function () {
             try {
-                var STORAGE_KEY = 'rosso-theme';
-                if (!localStorage.getItem(STORAGE_KEY)) {
-                    var legacy = localStorage.getItem('record-pap-theme');
-                    if (legacy === 'dark' || legacy === 'light') {
-                        localStorage.setItem(STORAGE_KEY, legacy);
-                    }
-                }
-                var stored = localStorage.getItem(STORAGE_KEY);
-                var theme = (stored === 'dark' || stored === 'light')
-                    ? stored
-                    : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                var root = document.documentElement;
-                root.setAttribute('data-theme', theme);
-                root.setAttribute('data-bs-theme', theme);
-                root.style.colorScheme = theme;
-                root.style.backgroundColor = theme === 'dark' ? '#0F172A' : '#F7F9FC';
+                var stored = localStorage.getItem('sysr-theme-v2');
+                var theme = (stored === 'dark' || stored === 'light') ? stored : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                document.documentElement.setAttribute('data-theme', theme);
             } catch (e) {
                 document.documentElement.setAttribute('data-theme', 'light');
             }
@@ -30,79 +17,100 @@
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light dark">
-    <title>{% block title %}{{ SITE_BRAND }}{% endblock %}</title>
+    <title>{% block title %}{{ SITE_BRAND_NAME|default:"SYSR" }}{% endblock %}</title>
 
-    <link rel="icon" href="{% static 'favicon.svg' %}?v=rosso-1" type="image/svg+xml">
-    <link rel="shortcut icon" href="{% static 'favicon.svg' %}?v=rosso-1" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="{% static 'favicon.svg' %}?v=rosso-1">
+    <link rel="shortcut icon" href="{% static 'logo.png' %}" type="image/x-icon">
 
+    <!-- Premium Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="{% static 'css/custom_styles.css' %}?v=17.2">
+    
+    <!-- Core Bootstrap for grid & utilities only -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Original CSS (fallback) + Premium CSS (override) -->
+    <link rel="stylesheet" href="{% static 'css/custom_styles.css' %}?v=22.0">
+    <link rel="stylesheet" href="{% static 'css/premium_theme.css' %}?v=2.0">
 
     {% block extra_head %}{% endblock %}
     {% block extra_css %}{% endblock %}
 </head>
 <body {% block body_attrs %}{% endblock %}>
-    <script>
-        (function () {
-            var theme = document.documentElement.getAttribute('data-theme') || 'light';
-            document.body.setAttribute('data-theme', theme);
-            document.body.setAttribute('data-bs-theme', theme);
-        })();
-    </script>
 
     {% block site_header %}
-    <header class="main-header">
+    <header class="premium-header">
         <div class="header-container">
-            <a href="{% block brand_url %}/{% endblock %}" class="brand-link" aria-label="{{ SITE_BRAND }} - Início">
-                {% include "partials/brand_mark.html" %}
+            <a href="{% block brand_url %}/{% endblock %}" class="brand-link">
+                <img src="{% static 'logo.png' %}" alt="Logo" width="48" height="48">
+                <span class="brand-wordmark">
+                    <span class="brand-line-1">{{ SITE_BRAND_LINE_1|default:"SYSR" }}</span>
+                    {% if SITE_BRAND_LINE_2 %}<span class="brand-line-2">{{ SITE_BRAND_LINE_2 }}</span>{% endif %}
+                </span>
             </a>
 
-            <nav class="main-nav" id="main-nav" aria-label="Navegação principal">
+            <nav class="premium-nav d-none d-md-block">
                 <ul>
                     {% block header_nav %}
-                    <li>
-                        <a href="/area-interna/" class="nav-button">Área Interna</a>
-                    </li>
+                    <li><a href="/area-interna/" class="nav-button">Área Interna</a></li>
                     {% endblock %}
                 </ul>
             </nav>
 
             <div class="header-actions">
-                <button type="button"
-                        id="theme-toggle"
-                        class="theme-toggle-btn"
-                        aria-label="Alternar tema claro/escuro"
-                        title="Alternar tema">
-                    <i class="bi bi-moon-stars-fill" aria-hidden="true"></i>
-                </button>
-
-                <button class="menu-toggle" id="menu-toggle" aria-label="Abrir menu" aria-expanded="false">
-                    <div class="bar"></div>
-                    <div class="bar"></div>
-                    <div class="bar"></div>
+                <button type="button" id="theme-toggle-v2" class="theme-toggle-btn">
+                    <i class="bi bi-moon-stars-fill"></i>
                 </button>
             </div>
         </div>
     </header>
     {% endblock %}
 
-    {% block breadcrumbs %}{% endblock %}
+    <main class="premium-main">
+        {% block breadcrumbs %}{% endblock %}
+        
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
 
-    {% block content %}{% endblock %}
+    {% block footer %}
+    <footer class="text-center py-4 text-muted" style="font-size: 0.875rem;">
+        &copy; 2026 {{ SITE_BRAND_NAME|default:"SYSR" }}.
+    </footer>
+    {% endblock %}
 
-    {% block footer %}{% endblock %}
-
-    <script src="{% static 'js/theme-toggle.js' %}?v=1.7"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{% static 'js/menu.js' %}?v=5.1"></script>
 
+    <script>
+        // Premium Theme Toggle Logic
+        var btn = document.getElementById('theme-toggle-v2');
+        if(btn){
+            btn.addEventListener('click', () => {
+                const root = document.documentElement;
+                const current = root.getAttribute('data-theme');
+                const next = current === 'dark' ? 'light' : 'dark';
+                root.setAttribute('data-theme', next);
+                localStorage.setItem('sysr-theme-v2', next);
+                
+                // Toggle icon
+                const icon = document.querySelector('#theme-toggle-v2 i');
+                icon.className = next === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+            });
+        }
+
+        // Set initial icon
+        window.addEventListener('DOMContentLoaded', () => {
+            const icon = document.querySelector('#theme-toggle-v2 i');
+            const current = document.documentElement.getAttribute('data-theme');
+            if(icon) {
+                icon.className = current === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+            }
+        });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

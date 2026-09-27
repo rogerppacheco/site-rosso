@@ -1,0 +1,270 @@
+/* ==========================================================================
+   SYSR PREMIUM DESIGN SYSTEM - V2
+   Core Styling for all projects
+   Uses: Glassmorphism, Dynamic Animations, Dark/Light Themes
+   ========================================================================== */
+
+:root {
+    /* Brand Variables - Can be overridden per project */
+    --brand-primary-h: 216;
+    --brand-primary-s: 100%;
+    --brand-primary-l: 50%;
+    
+    --color-primary: var(--accent-primary, #0066FF);
+    --color-primary-hover: hsl(var(--brand-primary-h), var(--brand-primary-s), calc(var(--brand-primary-l) - 10%));
+    --color-primary-glow: hsla(var(--brand-primary-h), var(--brand-primary-s), var(--brand-primary-l), 0.4);
+
+    /* Light Theme Tokens */
+    --bg-app: #F4F7FB;
+    --bg-surface: rgba(255, 255, 255, 0.7);
+    --bg-element: rgba(255, 255, 255, 0.9);
+    
+    --text-heading: #0B1220;
+    --text-body: #334155;
+    --text-muted: #64748B;
+    
+    --border-glass: rgba(255, 255, 255, 0.4);
+    --border-element: rgba(11, 18, 32, 0.06);
+    
+    --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.04);
+    --shadow-glow: 0 0 20px var(--color-primary-glow);
+    
+    --transition-snappy: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] {
+    /* Dark Theme Tokens */
+    --bg-app: #0B1220;
+    --bg-surface: rgba(15, 23, 42, 0.6);
+    --bg-element: rgba(30, 41, 59, 0.8);
+    
+    --text-heading: #FFFFFF;
+    --text-body: #94A3B8;
+    --text-muted: #64748B;
+    
+    --border-glass: rgba(255, 255, 255, 0.05);
+    --border-element: rgba(255, 255, 255, 0.1);
+    
+    --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ==========================================================================
+   RESET & BASE
+   ========================================================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-body);
+    line-height: 1.6;
+    transition: background-color var(--transition-smooth), color var(--transition-smooth);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Subtly animated background mesh (Premium feel) */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: radial-gradient(circle at 15% 50%, var(--color-primary-glow), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.15), transparent 25%);
+    z-index: -1;
+    pointer-events: none;
+    animation: bgFloat 15s ease-in-out infinite alternate;
+}
+
+@keyframes bgFloat {
+    0% { transform: scale(1) translate(0, 0); }
+    100% { transform: scale(1.1) translate(-2%, 3%); }
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text-heading);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+/* ==========================================================================
+   LAYOUT: HEADER (GLASSMORPHISM)
+   ========================================================================== */
+.premium-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-glass);
+    box-shadow: var(--shadow-soft);
+    padding: 1rem 2rem;
+    transition: all var(--transition-smooth);
+}
+
+.premium-header .header-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.brand-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+}
+
+.brand-link img {
+    transition: transform var(--transition-snappy);
+}
+.brand-link:hover img {
+    transform: scale(1.05) rotate(-3deg);
+}
+
+.brand-wordmark {
+    display: flex;
+    flex-direction: column;
+}
+
+.brand-line-1 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-heading);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+}
+
+.brand-line-2 {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* ==========================================================================
+   NAVIGATION
+   ========================================================================== */
+.premium-nav ul {
+    display: flex;
+    gap: 8px;
+    list-style: none;
+}
+
+.nav-button {
+    text-decoration: none;
+    color: var(--text-body);
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all var(--transition-snappy);
+    position: relative;
+    overflow: hidden;
+}
+
+.nav-button::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--color-primary);
+    opacity: 0;
+    transform: translateY(100%);
+    transition: all var(--transition-snappy);
+    z-index: -1;
+    border-radius: 8px;
+}
+
+.nav-button:hover {
+    color: #fff;
+    transform: translateY(-2px);
+}
+.nav-button:hover::before {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ==========================================================================
+   BUTTONS & ACTIONS
+   ========================================================================== */
+.btn-premium {
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    box-shadow: 0 4px 12px var(--color-primary-glow);
+    transition: all var(--transition-snappy);
+}
+
+.btn-premium:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px var(--color-primary-glow);
+    background: var(--color-primary-hover);
+}
+
+.btn-premium:active {
+    transform: translateY(0);
+}
+
+.theme-toggle-btn {
+    background: var(--bg-element);
+    border: 1px solid var(--border-element);
+    color: var(--text-heading);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-snappy);
+}
+.theme-toggle-btn:hover {
+    background: var(--bg-surface);
+    transform: rotate(15deg) scale(1.1);
+}
+
+/* ==========================================================================
+   CARDS (GLASSMORPHISM)
+   ========================================================================== */
+.premium-card {
+    background: var(--bg-element);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow-soft);
+    transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+}
+
+.premium-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-glow);
+    border-color: var(--color-primary-glow);
+}
+
+/* ==========================================================================
+   MAIN CONTENT AREA
+   ========================================================================== */
+.premium-main {
+    flex: 1;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem;
+}
