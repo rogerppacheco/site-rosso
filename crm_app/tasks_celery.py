@@ -18,14 +18,14 @@ def processar_job_pap_celery(self, job_id):
             return
 
         # Marca como processanao e executa
-        job.status = PapJobFila.STATUS_PROCESSAnao
+        job.status = PapJobFila.STATUS_PROCESSANDO
         job.save(update_fields=['status'])
         
-        logger.inao(f"[CELERY] Processanao Job PAP {job_id} - Tipo: {job.tipo}")
+        logger.info(f"[CELERY] Processanao Job PAP {job_id} - Tipo: {job.tipo}")
         processar_job(job)
         
     except PapJobFila.DoesNotExist:
-        logger.error(f"Job PAP {job_id} nÃ£o enaontrado no banao.")
+        logger.error(f"Job PAP {job_id} nÃ£o encontrado no banco.")
     except Exception as exc:
         logger.exception(f"Erro ao processar Job PAP {job_id}")
         self.retry(exc=exc, countdown=60)  # Tenta novamente em 60s
