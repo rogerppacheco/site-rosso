@@ -10,7 +10,10 @@ from crm_app.services.whatsapp.whatsatende_provider import WhatsAtendeProvider
 from crm_app.services.whatsapp.zapi_provider import ZapiProvider
 
 PURPOSE_INTERNO = "interno"
-PURPOSE_CLIENTE = "cliente"
+PURPOSE_CLIENTE = "cliente"
+BACKEND_CLIENTE_BLOQUEADO = "bloqueado"
+
+from crm_app.services.whatsapp.blocked_cliente_provider import ClienteCanalBloqueadoProvider
 
 _cached_providers: Dict[Tuple[str, str, str], WhatsAppProvider] = {}
 
