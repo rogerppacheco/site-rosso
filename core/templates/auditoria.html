@@ -849,7 +849,7 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
-                                <button type="button" class="dropdown-item" onclick="sincronizarHistoricoLigacoesLote()" title="Sincronizar status das ligações PAP em lote (Auditoria)">
+                                <button type="button" class="dropdown-item" id="btn-menu-sincronizar-lote-pap" onclick="sincronizarLotePapMenu()" title="Sincronizar status das ligações em lote (Auditoria)">
                                     <i class="bi bi-arrow-repeat"></i> Sincronizar Lote PAP
                                 </button>
                             </li>
@@ -1740,6 +1740,60 @@ function salvarConfigPap() {
     localStorage.setItem('pap_busca_periodo', periodo);
     bootstrap.Modal.getInstance(document.getElementById('modal-config-pap')).hide();
     alert('Configuração salva! A próxima busca usará este período.');
+}
+
+async function sincronizarLotePapMenu() {
+    const btn = document.getElementById('btn-menu-sincronizar-lote-pap');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sincronizando...';
+    }
+    const toastId = '__toast_sync_pap_' + Date.now();
+    const toastHtml = `<div id="${toastId}" class="toast align-items-center text-bg-secondary border-0 position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index:9999">
+        <div class="d-flex"><div class="toast-body"><span class="spinner-border spinner-border-sm me-2"></span>Sincronizando ligações em lote...</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
+    document.body.insertAdjacentHTML('beforeend', toastHtml);
+    const toastEl = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastEl, { autohide: false });
+    toast.show();
+    try {
+        const token = localStorage.getItem('accessToken');
+        const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
+        const resp = await fetch('/api/crm/auditoria/ligacoes/sincronizar-lote/', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ limite: 300 }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        toast.hide();
+        toastEl.remove();
+        const ok = resp.ok;
+        const msg = ok
+            ? `\u2705 Sincronização concluída! (${data.detail || 'OK'})`
+            : `\u274c Erro: ${data.detail || resp.statusText}`;
+        const toastOk = `<div class="toast align-items-center text-bg-${ok ? 'success' : 'danger'} border-0 position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index:9999">
+            <div class="d-flex"><div class="toast-body">${msg}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
+        document.body.insertAdjacentHTML('beforeend', toastOk);
+        const lastToast = document.body.lastElementChild;
+        new bootstrap.Toast(lastToast, { delay: 5000 }).show();
+        if (ok && typeof carregarHistoricoLigacoesPainel === 'function') {
+            await carregarHistoricoLigacoesPainel();
+        }
+        if (ok && typeof vendaEmAuditoria !== 'undefined' && vendaEmAuditoria && vendaEmAuditoria.id) {
+            if (typeof carregarLigacoesAuditoria === 'function') await carregarLigacoesAuditoria();
+        }
+    } catch (e) {
+        toast.hide();
+        toastEl.remove();
+        alert('Não foi possível sincronizar as ligações agora. Tente novamente.');
+        console.error('[SincronizarLotePAP]', e);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar Lote PAP';
+        }
+    }
 }
 
 async function baixarExcelPapOnline(buscaId) {
