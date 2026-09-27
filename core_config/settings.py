@@ -893,3 +893,6 @@ CELERY_BEAT_SCHEDULE = {
     }
 }
 
+
+CELERY_BROKER_TRANSPORT_OPTIONS = {'global_keyprefix': 'site-rosso'}
+
