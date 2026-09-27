@@ -1,4 +1,4 @@
-﻿REST_FRAMEWORK = {
+REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
@@ -17,14 +17,14 @@ def _running_django_tests() -> bool:
     Detecta `manage.py test` / pytest.
 
     O .env local costuma apontar DATABASE_URL para o Postgres da Railway (schema
-    exclusivo). Sem este desvio, o runner tenta criar um banco de teste lÃ¡ e
-    falha â€” alÃ©m de arriscar dados de produÃ§Ã£o. Testes unitÃ¡rios usam SQLite.
+    exclusivo). Sem este desvio, o runner tenta criar um banco de teste lá e
+    falha — além de arriscar dados de produção. Testes unitários usam SQLite.
     """
     if os.environ.get('DJANGO_TEST', '').lower() in ('1', 'true', 'yes'):
         return True
     if 'pytest' in sys.modules:
         return True
-    # manage.py test [label...]  â†’  argv[0]=manage.py, argv[1]=test
+    # manage.py test [label...]  →  argv[0]=manage.py, argv[1]=test
     return len(sys.argv) >= 2 and sys.argv[1] == 'test'
 
 
@@ -38,7 +38,7 @@ ALLOWED_HOSTS = [
     'localhost',
     'testserver',
     'healthcheck.railway.app',
-    # Permite qualquer subdomÃ­nio do Railway
+    # Permite qualquer subdomínio do Railway
     '.up.railway.app',
     # Teste local: ngrok (ex.: d021-177-137-82-21.ngrok-free.app)
     '.ngrok-free.app',
@@ -109,10 +109,10 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core_config.wsgi.application'
 
 # ==============================================================================
-# CONFIGURAÃ‡ÃƒO DE BANCO DE DADOS (PostgreSQL no Railway vs SQLite local)
+# CONFIGURAÇÃO DE BANCO DE DADOS (PostgreSQL no Railway vs SQLite local)
 # ==============================================================================
 
-# 1. PadrÃ£o: SQLite (Para uso local no seu computador)
+# 1. Padrão: SQLite (Para uso local no seu computador)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -120,7 +120,7 @@ DATABASES = {
     }
 }
 
-# 2. ProduÃ§Ã£o: PostgreSQL (Railway) â€” schema exclusivo nova_velox (NUNCA public)
+# 2. Produção: PostgreSQL (Railway) — schema exclusivo nova_velox (NUNCA public)
 from core_config.database import (
     django_database_options,
     get_postgres_schema,
@@ -135,7 +135,7 @@ _pgbouncer_active = bool(database_url and is_pgbouncer_enabled())
 POSTGRES_SCHEMA = get_postgres_schema() if database_url else None
 
 if database_url:
-    # Com PgBouncer: conn_max_age=0 evita segurar conexÃµes no app (multiplexaÃ§Ã£o no pooler).
+    # Com PgBouncer: conn_max_age=0 evita segurar conexões no app (multiplexação no pooler).
     _default_conn_max_age = 0 if _pgbouncer_active else config('DB_CONN_MAX_AGE', default=0, cast=int)
     if _pgbouncer_active and config('DB_CONN_MAX_AGE', default=0, cast=int) > 0:
         print(
@@ -152,14 +152,14 @@ if database_url:
         pooled=_pgbouncer_active,
         schema=POSTGRES_SCHEMA,
     )
-    # Detecta conexÃ£o morta (PgBouncer/idle/SSL) antes de reutilizar â€” crÃ­tico para workers PAP.
+    # Detecta conexão morta (PgBouncer/idle/SSL) antes de reutilizar — crítico para workers PAP.
     DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 
-    # Modo transaction do PgBouncer nÃ£o suporta server-side cursors nem locks de sessÃ£o.
+    # Modo transaction do PgBouncer não suporta server-side cursors nem locks de sessão.
     if _pgbouncer_active:
         DISABLE_SERVER_SIDE_CURSORS = True
 
-    # ConexÃ£o direta ao Postgres para advisory locks (somente com PgBouncer no runtime).
+    # Conexão direta ao Postgres para advisory locks (somente com PgBouncer no runtime).
     if _pgbouncer_active and database_unpooled_url:
         DATABASES['unpooled'] = dj_database_url.parse(
             database_unpooled_url,
@@ -182,10 +182,10 @@ if database_url:
     )
 
 else:
-    print("[WARNING] Nenhuma variÃ¡vel de ambiente de banco encontrada. Usando SQLite.")
+    print("[WARNING] Nenhuma variável de ambiente de banco encontrada. Usando SQLite.")
 
 # Testes locais: PostgreSQL local quando TEST_DATABASE_URL estiver configurada;
-# caso contrÃ¡rio, SQLite em memÃ³ria. Nunca aceita host remoto nesta variÃ¡vel.
+# caso contrário, SQLite em memória. Nunca aceita host remoto nesta variável.
 if TESTING:
     if test_database_url:
         test_database = dj_database_url.parse(
@@ -200,8 +200,8 @@ if TESTING:
                 '(localhost, 127.0.0.1 ou ::1).'
             )
         test_database['ENGINE'] = 'django.db.backends.postgresql'
-        # O banco inteiro Ã© temporÃ¡rio e isolado; public evita depender da
-        # criaÃ§Ã£o prÃ©via do schema nova_velox antes das migrations.
+        # O banco inteiro é temporário e isolado; public evita depender da
+        # criação prévia do schema nova_velox antes das migrations.
         test_database['OPTIONS'] = {'options': '-c search_path=public'}
         DATABASES = {'default': test_database}
         POSTGRES_SCHEMA = 'public'
@@ -217,7 +217,7 @@ if TESTING:
             }
         }
         POSTGRES_SCHEMA = None
-        print("[TEST] Banco de testes: SQLite em memÃ³ria (fallback local).")
+        print("[TEST] Banco de testes: SQLite em memória (fallback local).")
     DISABLE_SERVER_SIDE_CURSORS = False
 
 # ==============================================================================
@@ -240,19 +240,19 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
     os.path.join(BASE_DIR, 'frontend', 'public'),
 ]
-# Garante que o Whitenoise sirva arquivos estÃ¡ticos corretamente em produÃ§Ã£o
+# Garante que o Whitenoise sirva arquivos estáticos corretamente em produção
 
-# Serve arquivos estÃ¡ticos corretamente em todos ambientes
+# Serve arquivos estáticos corretamente em todos ambientes
 if not DEBUG:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 else:
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-    # Em desenvolvimento, o WhiteNoise reindexa os arquivos a cada requisiÃ§Ã£o,
-    # evitando precisar rodar collectstatic e reiniciar o servidor a cada ediÃ§Ã£o.
+    # Em desenvolvimento, o WhiteNoise reindexa os arquivos a cada requisição,
+    # evitando precisar rodar collectstatic e reiniciar o servidor a cada edição.
     WHITENOISE_AUTOREFRESH = True
     WHITENOISE_USE_FINDERS = True
 
-# InstruÃ§Ã£o: ApÃ³s cada deploy, execute no Railway:
+# Instrução: Após cada deploy, execute no Railway:
 # python manage.py collectstatic --noinput
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -265,11 +265,11 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.AllowAny',
     ),
-    # âœ… PAGINAÃ‡ÃƒO PARA PERFORMANCE
+    # ✅ PAGINAÇÃO PARA PERFORMANCE
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,  # 20 registros por pÃ¡gina
-    'MAX_PAGE_SIZE': 1000,  # Permite atÃ© 1000 registros por pÃ¡gina na API
-    # âœ… FILTRAGEM
+    'PAGE_SIZE': 20,  # 20 registros por página
+    'MAX_PAGE_SIZE': 1000,  # Permite até 1000 registros por página na API
+    # ✅ FILTRAGEM
     'DEFAULT_FILTER_BACKENDS': [
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
@@ -309,8 +309,8 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
-# --- CONFIGURAÃ‡Ã•ES DE E-MAIL (UOL Host â€” bo@recordpap.com.br) ---
-# SMTP: smtps.uhserver.com:465 SSL. Credenciais vÃªm do .env (nÃ£o versionar senha).
+# --- CONFIGURAÇÕES DE E-MAIL (UOL Host — bo@recordpap.com.br) ---
+# SMTP: smtps.uhserver.com:465 SSL. Credenciais vêm do .env (não versionar senha).
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='smtps.uhserver.com')
 EMAIL_PORT = config('EMAIL_PORT', default=465, cast=int)
@@ -326,7 +326,7 @@ CLOUDFLARE_R2_ACCESS_KEY_ID = config('CLOUDFLARE_R2_ACCESS_KEY_ID', default='')
 CLOUDFLARE_R2_SECRET_ACCESS_KEY = config('CLOUDFLARE_R2_SECRET_ACCESS_KEY', default='')
 CLOUDFLARE_R2_BUCKET_NAME = config('CLOUDFLARE_R2_BUCKET_NAME', default='nova-velox-midia')
 CLOUDFLARE_R2_PUBLIC_URL = config('CLOUDFLARE_R2_PUBLIC_URL', default='')
-# Prefixo raiz no bucket; cada funcionalidade usa subpasta prÃ³pria (Record_Apoia, CDOI, etc.)
+# Prefixo raiz no bucket; cada funcionalidade usa subpasta própria (Record_Apoia, CDOI, etc.)
 R2_FOLDER_ROOT = config('R2_FOLDER_ROOT', default='NovaVelox_CDOI')
 
 # --- WHATSAPP: Z-API (legado) ou Evolution API ---
@@ -340,7 +340,7 @@ EVOLUTION_API_URL = config(
 )
 EVOLUTION_API_KEY = config('EVOLUTION_API_KEY', default='')
 EVOLUTION_INSTANCE_NAME = config('EVOLUTION_INSTANCE_NAME', default='nova_velox_zap')
-# Outbound hÃ­brido (OpÃ§Ã£o B): texto/mÃ­dia URL via n8n â†’ Evolution
+# Outbound híbrido (Opção B): texto/mídia URL via n8n → Evolution
 N8N_OUTBOUND_WEBHOOK_URL = config('N8N_OUTBOUND_WEBHOOK_URL', default='')
 N8N_WEBHOOK_URL = config('N8N_WEBHOOK_URL', default='')
 OUTBOUND_WEBHOOK_URL = config('OUTBOUND_WEBHOOK_URL', default='')
@@ -349,21 +349,21 @@ N8N_OUTBOUND_DIRECT_FALLBACK = config(
     default=True,
     cast=lambda v: str(v).lower() in ('true', '1', 'yes'),
 )
-# Teams: Django â†’ n8n â†’ Incoming Webhook do canal Teams
+# Teams: Django → n8n → Incoming Webhook do canal Teams
 N8N_TEAMS_WEBHOOK_URL = config('N8N_TEAMS_WEBHOOK_URL', default='')
 SITE_URL = config('SITE_URL', default='https://nova-velox.up.railway.app')
-# Contatos pÃºblicos (landing) â€” altere no .env sem mexer no HTML
+# Contatos públicos (landing) — altere no .env sem mexer no HTML
 SITE_BRAND_NAME = config('SITE_BRAND_NAME', default='Futura Telecom')
 SITE_PHONE_DISPLAY = config('SITE_PHONE_DISPLAY', default='(31) 9XXXX-XXXX')
 SITE_WHATSAPP_DIGITS = config('SITE_WHATSAPP_DIGITS', default='319XXXXXXXX')
 SITE_CONTACT_EMAIL = config('SITE_CONTACT_EMAIL', default='contato@futuratelecom.com.br')
-# Cidade padrÃ£o da landing (preÃ§os GDP). Vazio = preÃ§o nacional "a partir de".
+# Cidade padrão da landing (preços GDP). Vazio = preço nacional "a partir de".
 SITE_LANDING_CIDADE = config('SITE_LANDING_CIDADE', default='')
 SITE_LANDING_UF = config('SITE_LANDING_UF', default='')
 # Descarta webhooks Z-API irrelevantes (grupo, fromMe, etc.) antes do handler pesado
 WHATSAPP_WEBHOOK_FASTPATH = config('WHATSAPP_WEBHOOK_FASTPATH', default=True, cast=bool)
 
-# --- DFV Power BI (comando WhatsApp DFV â€” ao vivo; independente da base local FACHADA) ---
+# --- DFV Power BI (comando WhatsApp DFV — ao vivo; independente da base local FACHADA) ---
 DFV_POWERBI_ENABLED = config(
     'DFV_POWERBI_ENABLED',
     default=True,
@@ -382,7 +382,7 @@ DFV_POWERBI_CLUSTER = config(
     default='https://wabi-brazil-south-b-primary-api.analysis.windows.net',
 )
 DFV_POWERBI_MODEL_ID = config('DFV_POWERBI_MODEL_ID', default=6061538, cast=int)
-# DFV SP / Sul (mesmo cluster; resource keys dos links pÃºblicos Nio)
+# DFV SP / Sul (mesmo cluster; resource keys dos links públicos Nio)
 DFV_POWERBI_SP_RESOURCE_KEY = config(
     'DFV_POWERBI_SP_RESOURCE_KEY',
     default='81e95c1a-e770-44e3-9646-19df8443756c',
@@ -407,11 +407,11 @@ DFV_POWERBI_TIMEOUT_SECONDS = config('DFV_POWERBI_TIMEOUT_SECONDS', default=18, 
 DFV_POWERBI_CACHE_TTL_SECONDS = config('DFV_POWERBI_CACHE_TTL_SECONDS', default=600, cast=int)
 DFV_POWERBI_WINDOW_COUNT = config('DFV_POWERBI_WINDOW_COUNT', default=5000, cast=int)
 DFV_POWERBI_MAX_PAGES = config('DFV_POWERBI_MAX_PAGES', default=20, cast=int)
-# Telefones adicionais ignorados pelo webhook (vÃ­rgula). 12981750292 jÃ¡ estÃ¡ bloqueado no cÃ³digo.
+# Telefones adicionais ignorados pelo webhook (vírgula). 12981750292 já está bloqueado no código.
 WHATSAPP_TELEFONES_BLOQUEADOS = [
     t.strip() for t in config('WHATSAPP_TELEFONES_BLOQUEADOS', default='').split(',') if t.strip()
 ]
-# --- CONFIGURAÃ‡Ã•ES ZENVIA VOICE (AUDITORIA DE LIGAÃ‡Ã•ES) ---
+# --- CONFIGURAÇÕES ZENVIA VOICE (AUDITORIA DE LIGAÇÕES) ---
 ZENVIA_VOICE_API_URL = config('ZENVIA_VOICE_API_URL', default='https://voice-api.zenvia.com')
 ZENVIA_VOICE_ACCESS_TOKEN = config('ZENVIA_VOICE_ACCESS_TOKEN', default='')
 ZENVIA_VOICE_CALLS_ENDPOINT = config('ZENVIA_VOICE_CALLS_ENDPOINT', default='/chamada')
@@ -427,8 +427,8 @@ AUDITORIA_R2_FOLDER = config(
     default=config('AUDITORIA_ONEDRIVE_FOLDER', default='Auditoria_Ligacoes'),
 )
 
-# --- Sonax (auditoria: click2call + gravaÃ§Ã£o pega_gravacao / webhook) ---
-# Provedor SIP da auditoria. PadrÃ£o: sonax. Use AUDITORIA_VOICE_PROVIDER=zenvia sÃ³ se for fallback explÃ­cito.
+# --- Sonax (auditoria: click2call + gravação pega_gravacao / webhook) ---
+# Provedor SIP da auditoria. Padrão: sonax. Use AUDITORIA_VOICE_PROVIDER=zenvia só se for fallback explícito.
 AUDITORIA_VOICE_PROVIDER = config('AUDITORIA_VOICE_PROVIDER', default='sonax').strip().lower()
 SONAX_CLICK2CALL_URL = config(
     'SONAX_CLICK2CALL_URL',
@@ -446,44 +446,44 @@ SONAX_RAMAIS = config('SONAX_RAMAIS', default='101,102,103')
 SONAX_TIMEOUT_SECONDS = config('SONAX_TIMEOUT_SECONDS', default=30, cast=int)
 SONAX_WEBHOOK_SECRET = config('SONAX_WEBHOOK_SECRET', default='')
 
-# --- Fallback Sonax (quando webhook de desligamento nÃ£o chegar) ---
-# Intervalo (minutos) para varrer chamadas pendentes e consultar status/baixar gravaÃ§Ã£o.
+# --- Fallback Sonax (quando webhook de desligamento não chegar) ---
+# Intervalo (minutos) para varrer chamadas pendentes e consultar status/baixar gravação.
 SONAX_AUDITORIA_FALLBACK_INTERVAL_MINUTES = config('SONAX_AUDITORIA_FALLBACK_INTERVAL_MINUTES', default=2, cast=int)
-# Quantidade mÃ¡xima de ligaÃ§Ãµes por execuÃ§Ã£o (ordem antiga â†’ nova).
+# Quantidade máxima de ligações por execução (ordem antiga → nova).
 SONAX_AUDITORIA_FALLBACK_LIMIT = config('SONAX_AUDITORIA_FALLBACK_LIMIT', default=15, cast=int)
-# "Janela de graÃ§a" apÃ³s iniciar a chamada antes de comeÃ§ar o polling (segundos).
+# "Janela de graça" após iniciar a chamada antes de começar o polling (segundos).
 SONAX_AUDITORIA_FALLBACK_GRACE_SECONDS = config('SONAX_AUDITORIA_FALLBACK_GRACE_SECONDS', default=90, cast=int)
 
-# --- CONFIGURAÃ‡Ã•ES DE CAPTCHA (reCAPTCHA SOLVER) ---
-# Use CapSolver, 2Captcha ou API customizada para resolver reCAPTCHA v2 na pÃ¡gina Nio (PDF fatura)
+# --- CONFIGURAÇÕES DE CAPTCHA (reCAPTCHA SOLVER) ---
+# Use CapSolver, 2Captcha ou API customizada para resolver reCAPTCHA v2 na página Nio (PDF fatura)
 CAPTCHA_API_KEY = config('CAPTCHA_API_KEY', default='CAP-4A266E1BA9DC47B87D28FBDE12A129014DB5B7EABC69D961115B3E184D497F85')
-CAPTCHA_PROVIDER = config('CAPTCHA_PROVIDER', default='capsolver')  # OpÃ§Ãµes: 'capsolver', '2captcha' ou 'custom'
+CAPTCHA_PROVIDER = config('CAPTCHA_PROVIDER', default='capsolver')  # Opções: 'capsolver', '2captcha' ou 'custom'
 # Para provedor 'custom': URL da sua API que recebe POST JSON { siteKey, pageUrl } e retorna { token } ou { gRecaptchaResponse }
 RECAPTCHA_SOLVER_API_URL = config('RECAPTCHA_SOLVER_API_URL', default='')
 
 # Caminho para armazenar/reusar cookies da Nio (storage state do Playwright)
 NIO_STORAGE_STATE = os.path.join(BASE_DIR, '.playwright_state.json')
 
-# SessÃ£o Google Forms (InclusÃ£o/Viabilidade). Gere com:
+# Sessão Google Forms (Inclusão/Viabilidade). Gere com:
 #   .venv\Scripts\python.exe scripts\salvar_sessao_google_form.py
-# Em produÃ§Ã£o, aponte para volume persistente (ex.: /data/google_form_state.json).
-# SessÃ£o Google Forms (InclusÃ£o/Viabilidade). Gere com:
+# Em produção, aponte para volume persistente (ex.: /data/google_form_state.json).
+# Sessão Google Forms (Inclusão/Viabilidade). Gere com:
 #   .venv\Scripts\python.exe scripts\salvar_sessao_google_form.py
-# Login da sessÃ£o = GOOGLE_FORM_LOGIN_EMAIL (ex. roggerio@gmail.com).
+# Login da sessão = GOOGLE_FORM_LOGIN_EMAIL (ex. roggerio@gmail.com).
 # Campo e-mail do form = GOOGLE_FORM_EMAIL (ex. comunicacao@recordpap.com.br).
-# Em produÃ§Ã£o, aponte para volume persistente (ex.: /data/google_form_state.json)
+# Em produção, aponte para volume persistente (ex.: /data/google_form_state.json)
 # ou use GOOGLE_FORM_STORAGE_STATE_B64.
 GOOGLE_FORM_STORAGE_STATE = config(
     'GOOGLE_FORM_STORAGE_STATE',
     default=os.path.join(BASE_DIR, '.playwright_google_form_state.json'),
 )
-# Alternativa para produÃ§Ã£o sem volume: JSON do storage state em base64
+# Alternativa para produção sem volume: JSON do storage state em base64
 # (gerar localmente com scripts/salvar_sessao_google_form.py e colar no Railway).
 GOOGLE_FORM_STORAGE_STATE_B64 = config('GOOGLE_FORM_STORAGE_STATE_B64', default='')
 GOOGLE_FORM_LOGIN_EMAIL = config('GOOGLE_FORM_LOGIN_EMAIL', default='roggerio@gmail.com')
 GOOGLE_FORM_EMAIL = config('GOOGLE_FORM_EMAIL', default='comunicacao@recordpap.com.br')
 
-# --- CONFIGURAÃ‡Ã•ES DE ARQUIVOS ESTÃTICOS E MÃDIA ---
+# --- CONFIGURAÇÕES DE ARQUIVOS ESTÁTICOS E MÍDIA ---
 # Para upload de PDFs das faturas M-10
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
@@ -494,21 +494,21 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200MB
 
 # ==============================================================================
-# AUTOMAÃ‡ÃƒO PAP (VENDER NO WHATSAPP)
+# AUTOMAÇÃO PAP (VENDER NO WHATSAPP)
 # ==============================================================================
-# PAP_HEADLESS: Se True (padrÃ£o), o navegador roda em segundo plano (produÃ§Ã£o).
-# Se False, o navegador abre na tela para vocÃª ver cada etapa (sÃ³ use em teste local).
-# VariÃ¡vel de ambiente: PAP_HEADLESS=false para ver o navegador.
+# PAP_HEADLESS: Se True (padrão), o navegador roda em segundo plano (produção).
+# Se False, o navegador abre na tela para você ver cada etapa (só use em teste local).
+# Variável de ambiente: PAP_HEADLESS=false para ver o navegador.
 PAP_HEADLESS = config('PAP_HEADLESS', default=True, cast=lambda v: str(v).lower() not in ('false', '0', 'no'))
 
-# Br Pronto (ged360): headless=False para acompanhar a navegaÃ§Ã£o no desktop
+# Br Pronto (ged360): headless=False para acompanhar a navegação no desktop
 BRPRONTO_HEADLESS = config(
     'BRPRONTO_HEADLESS',
     default=True,
     cast=lambda v: str(v).lower() not in ('false', '0', 'no'),
 )
 
-# DiretÃ³rio das sessÃµes PAP (storage state Playwright). Em produÃ§Ã£o use volume Railway:
+# Diretório das sessões PAP (storage state Playwright). Em produção use volume Railway:
 # PAP_SESSIONS_DIR=/data/pap_sessions (ver railway.pap.toml e pap_sessions/README.md).
 PAP_SESSIONS_DIR = config(
     'PAP_SESSIONS_DIR',
@@ -516,8 +516,8 @@ PAP_SESSIONS_DIR = config(
 )
 
 
-# GestÃ£o de Terceiros NIO (gestaodeterceiros.nashai.ai) â†’ importaÃ§Ã£o em GestÃ£o de UsuÃ¡rios.
-# Login automÃ¡tico usa matrÃ­cula/senha PAP de um usuÃ¡rio com perfil Diretoria.
+# Gestão de Terceiros NIO (gestaodeterceiros.nashai.ai) → importação em Gestão de Usuários.
+# Login automático usa matrícula/senha PAP de um usuário com perfil Diretoria.
 NIO_TERCEIROS_BASE_URL = config(
     'NIO_TERCEIROS_BASE_URL',
     default='https://gestaodeterceiros.nashai.ai',
@@ -538,19 +538,19 @@ NIO_TERCEIROS_HEADLESS = config(
     cast=lambda v: str(v).lower() not in ('false', '0', 'no'),
 )
 
-# FORCE_FATURA_PDF_PLAYWRIGHT: Se True, o PDF da fatura Ã© SEMPRE buscado abrindo o navegador (Playwright),
-# em vez de tentar primeiro a API. Use sÃ³ para debug: ver os cliques (Consultar â†’ Pagar conta â†’ Gerar boleto â†’ Baixar PDF).
-# VariÃ¡vel de ambiente: FORCE_FATURA_PDF_PLAYWRIGHT=true
+# FORCE_FATURA_PDF_PLAYWRIGHT: Se True, o PDF da fatura é SEMPRE buscado abrindo o navegador (Playwright),
+# em vez de tentar primeiro a API. Use só para debug: ver os cliques (Consultar → Pagar conta → Gerar boleto → Baixar PDF).
+# Variável de ambiente: FORCE_FATURA_PDF_PLAYWRIGHT=true
 FORCE_FATURA_PDF_PLAYWRIGHT = config('FORCE_FATURA_PDF_PLAYWRIGHT', default=False, cast=lambda v: str(v).lower() in ('true', '1', 'yes'))
 
-# PAP_CAPTURE_SCREENSHOTS: Se True, salva screenshot em cada etapa da venda PAP (em produÃ§Ã£o).
+# PAP_CAPTURE_SCREENSHOTS: Se True, salva screenshot em cada etapa da venda PAP (em produção).
 # Os arquivos ficam em downloads/pap_venda_*.png e podem ser vistos em /api/crm/debug/screenshots/
-# VariÃ¡vel de ambiente: PAP_CAPTURE_SCREENSHOTS=true
+# Variável de ambiente: PAP_CAPTURE_SCREENSHOTS=true
 PAP_CAPTURE_SCREENSHOTS = config('PAP_CAPTURE_SCREENSHOTS', default=False, cast=lambda v: str(v).lower() in ('true', '1', 'yes'))
 
-# PAP_SCREENSHOTS_R2: Se True, alÃ©m de salvar em downloads/, envia cada screenshot para o R2.
-# TambÃ©m habilita captura em FALHAS da Etapa 1 mesmo com PAP_CAPTURE_SCREENSHOTS=false.
-# VariÃ¡vel de ambiente: PAP_SCREENSHOTS_R2=true (aceita legado PAP_SCREENSHOTS_ONEDRIVE)
+# PAP_SCREENSHOTS_R2: Se True, além de salvar em downloads/, envia cada screenshot para o R2.
+# Também habilita captura em FALHAS da Etapa 1 mesmo com PAP_CAPTURE_SCREENSHOTS=false.
+# Variável de ambiente: PAP_SCREENSHOTS_R2=true (aceita legado PAP_SCREENSHOTS_ONEDRIVE)
 PAP_SCREENSHOTS_R2 = config(
     'PAP_SCREENSHOTS_R2',
     default=config('PAP_SCREENSHOTS_ONEDRIVE', default=False),
@@ -559,33 +559,33 @@ PAP_SCREENSHOTS_R2 = config(
 # Pasta no R2 (dentro de R2_FOLDER_ROOT). Ex: PAP_Screenshots
 PAP_R2_FOLDER = config('PAP_R2_FOLDER', default=config('PAP_ONEDRIVE_FOLDER', default='PAP_Screenshots'))
 
-# HomologaÃ§Ã£o: vendedor pode digitar FORCAR_SIM na etapa de aguardar SIM do cliente (sem resposta real do cliente).
-# VariÃ¡vel: PAP_WHATSAPP_PERMITIR_FORCAR_SIM_CLIENTE=true (nÃ£o use em produÃ§Ã£o com clientes reais).
+# Homologação: vendedor pode digitar FORCAR_SIM na etapa de aguardar SIM do cliente (sem resposta real do cliente).
+# Variável: PAP_WHATSAPP_PERMITIR_FORCAR_SIM_CLIENTE=true (não use em produção com clientes reais).
 PAP_WHATSAPP_PERMITIR_FORCAR_SIM_CLIENTE = config(
     'PAP_WHATSAPP_PERMITIR_FORCAR_SIM_CLIENTE',
     default=False,
     cast=lambda v: str(v).lower() in ('true', '1', 'yes'),
 )
 
-# Desenvolvimento local: com DEBUG=True, apÃ³s enviar o resumo ao cliente marca o SIM automaticamente
-# (nÃ£o precisa do webhook nem de FORCAR_SIM). Nunca use em produÃ§Ã£o (DEBUG=False ignora mesmo com true).
+# Desenvolvimento local: com DEBUG=True, após enviar o resumo ao cliente marca o SIM automaticamente
+# (não precisa do webhook nem de FORCAR_SIM). Nunca use em produção (DEBUG=False ignora mesmo com true).
 PAP_WHATSAPP_AUTO_SIM_CLIENTE_LOCAL = config(
     'PAP_WHATSAPP_AUTO_SIM_CLIENTE_LOCAL',
     default=False,
     cast=lambda v: str(v).lower() in ('true', '1', 'yes'),
 )
 
-# ApÃ³s "Abrir OS", tempo mÃ¡ximo (ms) aguardando a UI de agendamento (portal pode demorar nas validaÃ§Ãµes).
+# Após "Abrir OS", tempo máximo (ms) aguardando a UI de agendamento (portal pode demorar nas validações).
 PAP_ETAPA7_AGENDAMENTO_TIMEOUT_MS = config('PAP_ETAPA7_AGENDAMENTO_TIMEOUT_MS', default=120000, cast=int)
 
-# Reduz esperas fixas no Playwright (login, consulta crÃ©dito, STATUS online). PAP_STATUS_FAST_MODE=false restaura waits longos.
+# Reduz esperas fixas no Playwright (login, consulta crédito, STATUS online). PAP_STATUS_FAST_MODE=false restaura waits longos.
 PAP_CREDITO_FAST_MODE = config('PAP_CREDITO_FAST_MODE', default=True, cast=lambda v: str(v).lower() not in ('false', '0', 'no'))
-# MÃ¡ximo de consultas de crÃ©dito por TT/dia (distribui carga; evita bloqueio na Nio)
+# Máximo de consultas de crédito por TT/dia (distribui carga; evita bloqueio na Nio)
 PAP_CREDITO_MAX_CONSULTAS_POR_TT_DIA = config('PAP_CREDITO_MAX_CONSULTAS_POR_TT_DIA', default=6, cast=int)
 PAP_STATUS_FAST_MODE = config('PAP_STATUS_FAST_MODE', default=True, cast=lambda v: str(v).lower() not in ('false', '0', 'no'))
 
-# Assertiva Localize: dados reais do cliente no fluxo CRÃ‰DITO.
-# A finalidade LGPD enviada pelo serviÃ§o Ã© 2 (ciclo de crÃ©dito).
+# Assertiva Localize: dados reais do cliente no fluxo CRÉDITO.
+# A finalidade LGPD enviada pelo serviço é 2 (ciclo de crédito).
 ASSERTIVA_CLIENT_ID = config('ASSERTIVA_CLIENT_ID', default='')
 ASSERTIVA_CLIENT_SECRET = config('ASSERTIVA_CLIENT_SECRET', default='')
 ASSERTIVA_CREDITO_ENABLED = config(
@@ -618,14 +618,14 @@ SYNC_ESTEIRA_INTERVALO_LONGO_MAX_SEG = config('SYNC_ESTEIRA_INTERVALO_LONGO_MAX_
 # Quantas consultas STATUS reutilizam o mesmo browser antes de reciclar (evita N logins V.tal).
 SYNC_ESTEIRA_MAX_CONSULTAS_POR_SESSAO = config('SYNC_ESTEIRA_MAX_CONSULTAS_POR_SESSAO', default=20, cast=int)
 
-# Consulta STATUS PAP da aba (login do usuÃ¡rio na Esteira) â€” ~5â€“6 O.S./min
+# Consulta STATUS PAP da aba (login do usuário na Esteira) — ~5–6 O.S./min
 CONSULTA_ESTEIRA_INTERVALO_MIN_SEG = config('CONSULTA_ESTEIRA_INTERVALO_MIN_SEG', default=8, cast=int)
 CONSULTA_ESTEIRA_INTERVALO_MAX_SEG = config('CONSULTA_ESTEIRA_INTERVALO_MAX_SEG', default=15, cast=int)
 CONSULTA_ESTEIRA_TELEFONE_ALERTA_STATUS = config(
     'CONSULTA_ESTEIRA_TELEFONE_ALERTA_STATUS', default='21979630377'
 )
 
-# Lembretes WhatsApp para supervisores concluÃ­rem presenÃ§a (10h, 11h) e falta automÃ¡tica Ã s 12h
+# Lembretes WhatsApp para supervisores concluírem presença (10h, 11h) e falta automática às 12h
 PRESENCA_LEMBRETES_ATIVOS = config(
     'PRESENCA_LEMBRETES_ATIVOS', default=True, cast=lambda v: str(v).lower() in ('true', '1', 'yes')
 )
@@ -637,27 +637,27 @@ PRESENCA_IMAGEM_ALERTA_SUPERVISOR = config(
     'PRESENCA_IMAGEM_ALERTA_SUPERVISOR', default='presenca/assets/alerta_supervisor.png'
 )
 PRESENCA_MOTIVO_FALTA_AUTOMATICA = config(
-    'PRESENCA_MOTIVO_FALTA_AUTOMATICA', default='Falta automÃ¡tica (supervisor)'
+    'PRESENCA_MOTIVO_FALTA_AUTOMATICA', default='Falta automática (supervisor)'
 )
 
-# Pasta no R2 para solicitaÃ§Ãµes de inclusÃ£o/viabilidade (subpasta por solicitaÃ§Ã£o)
+# Pasta no R2 para solicitações de inclusão/viabilidade (subpasta por solicitação)
 INCLUSAO_R2_FOLDER = config(
     'INCLUSAO_R2_FOLDER',
     default=config('INCLUSAO_ONEDRIVE_FOLDER', default='Inclusao_Viabilidade'),
 )
 
-# --- AnÃ¡lise de crÃ©dito via WhatsApp: e-mails para o PAP/Nio ---
+# --- Análise de crédito via WhatsApp: e-mails para o PAP/Nio ---
 # O Nio valida o e-mail (envia teste). Use um dos dois:
-# CREDITO_EMAILS: lista de e-mails reais separados por vÃ­rgula; o sistema escolhe um aleatÃ³rio a cada anÃ¡lise.
+# CREDITO_EMAILS: lista de e-mails reais separados por vírgula; o sistema escolhe um aleatório a cada análise.
 #   Ex: comunicacao@novavelox.com.br,suporte@novavelox.com.br,vendas@novavelox.com.br
-# CREDITO_EMAIL_MAILINATOR: se true, gera endereÃ§os @mailinator.com (aceitam envio; Nio pode bloquear o domÃ­nio).
+# CREDITO_EMAIL_MAILINATOR: se true, gera endereços @mailinator.com (aceitam envio; Nio pode bloquear o domínio).
 CREDITO_EMAILS = config('CREDITO_EMAILS', default='')
 CREDITO_EMAIL_MAILINATOR = config('CREDITO_EMAIL_MAILINATOR', default=True, cast=lambda v: str(v).lower() in ('true', '1', 'yes'))
 
-# Google Street View Static API - foto automÃ¡tica na automaÃ§Ã£o InclusÃ£o/Viabilidade
+# Google Street View Static API - foto automática na automação Inclusão/Viabilidade
 GOOGLE_STREETVIEW_API_KEY = config('GOOGLE_STREETVIEW_API_KEY', default='')
 
-# Funil de vendas (WhatsApp VENDER): grava tentativas e eventos no banco. ProduÃ§Ã£o: FUNIL_VENDAS_REGISTRAR=true
+# Funil de vendas (WhatsApp VENDER): grava tentativas e eventos no banco. Produção: FUNIL_VENDAS_REGISTRAR=true
 FUNIL_VENDAS_REGISTRAR = config(
     'FUNIL_VENDAS_REGISTRAR',
     default=False,
@@ -678,10 +678,10 @@ WHATSAPP_WEBHOOK_ASYNC = config(
     default=True,
     cast=lambda v: str(v).lower() in ('true', '1', 'yes'),
 )
-# "Enviar resumo": espera DeliveryCallback (entrega real) apÃ³s messageId da API
+# "Enviar resumo": espera DeliveryCallback (entrega real) após messageId da API
 WHATSAPP_DELIVERY_WAIT_SECONDS = config('WHATSAPP_DELIVERY_WAIT_SECONDS', default=25, cast=float)
 WHATSAPP_DELIVERY_CACHE_TTL = config('WHATSAPP_DELIVERY_CACHE_TTL', default=180, cast=int)
-# Webhook dedicado: web enfileira; serviÃ§o webhook consome (fila PostgreSQL, sem Redis)
+# Webhook dedicado: web enfileira; serviço webhook consome (fila PostgreSQL, sem Redis)
 WHATSAPP_USE_DEDICATED_WORKER = config(
     'WHATSAPP_USE_DEDICATED_WORKER',
     default=False,
@@ -694,7 +694,7 @@ WHATSAPP_WORKER_MODE = config(
 )
 WHATSAPP_WORKER_POLL_SECONDS = config('WHATSAPP_WORKER_POLL_SECONDS', default=1, cast=float)
 
-# Gunicorn (scripts/start_web.sh): workers/threads configurÃ¡veis no Railway
+# Gunicorn (scripts/start_web.sh): workers/threads configuráveis no Railway
 GUNICORN_WORKERS = config('GUNICORN_WORKERS', default=2, cast=int)
 GUNICORN_THREADS = config('GUNICORN_THREADS', default=2, cast=int)
 
@@ -703,12 +703,12 @@ if DEBUG:
     # Evita cache agressivo de JS/CSS quebrado durante desenvolvimento local
     STATIC_CACHE_MAX_AGE = 0
 
-# Rate limit folha de comissionamento (por usuÃ¡rio)
+# Rate limit folha de comissionamento (por usuário)
 FOLHA_COMISSAO_RATE_LIMIT = config('FOLHA_COMISSAO_RATE_LIMIT', default=6, cast=int)
 FOLHA_COMISSAO_RATE_PERIOD = config('FOLHA_COMISSAO_RATE_PERIOD', default=60, cast=int)
 FOLHA_COMISSAO_TIMEOUT_SECONDS = config('FOLHA_COMISSAO_TIMEOUT_SECONDS', default=180, cast=int)
 
-# PAP dedicado: web enfileira jobs; serviÃ§o pap consome (fila PostgreSQL, sem Redis)
+# PAP dedicado: web enfileira jobs; serviço pap consome (fila PostgreSQL, sem Redis)
 PAP_USE_DEDICATED_WORKER = config(
     'PAP_USE_DEDICATED_WORKER',
     default=False,
@@ -720,13 +720,13 @@ PAP_WORKER_MODE = config(
     cast=lambda v: str(v).lower() in ('true', '1', 'yes'),
 )
 PAP_WORKER_POLL_SECONDS = config('PAP_WORKER_POLL_SECONDS', default=2, cast=float)
-# Watchdog da fila: processando sem heartbeat / pendente Ã³rfÃ£o (minutos).
+# Watchdog da fila: processando sem heartbeat / pendente órfão (minutos).
 PAP_JOB_STALE_PROCESSANDO_MINUTES = config('PAP_JOB_STALE_PROCESSANDO_MINUTES', default=12, cast=int)
 PAP_JOB_STALE_PENDENTE_MINUTES = config('PAP_JOB_STALE_PENDENTE_MINUTES', default=10, cast=int)
 # 0 = usa timeout por tipo (status=240s, credito=360s).
 PAP_JOB_TIMEOUT_SECONDS = config('PAP_JOB_TIMEOUT_SECONDS', default=0, cast=int)
 
-# Sentry (tier gratuito â€” definir SENTRY_DSN no Railway)
+# Sentry (tier gratuito — definir SENTRY_DSN no Railway)
 SENTRY_DSN = config('SENTRY_DSN', default='')
 SENTRY_TRACES_SAMPLE_RATE = config('SENTRY_TRACES_SAMPLE_RATE', default=0.1, cast=float)
 
@@ -745,14 +745,12 @@ if SENTRY_DSN:
 # Cache: Redis (mesmo Redis das filas Celery - zero custo extra).
 # KEY_PREFIX isola chaves do projeto 'site-rosso' no Redis compartilhado.
 # DB 1 separado das filas Celery (que usam DB 0).
-_REDIS_CACHE_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': _REDIS_CACHE_URL,
-        'KEY_PREFIX': 'site-rosso',
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache_table',
         'TIMEOUT': FOLHA_COMISSAO_CACHE_TTL,
-    },
+    }
 }
 
 LOGGING = {
