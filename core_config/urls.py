@@ -79,6 +79,7 @@ router = DefaultRouter()
 router.register(r'regras-automacao', RegraAutomacaoViewSet, basename='regras-automacao')
 
 urlpatterns = [
+    path('silk/', include('silk.urls', namespace='silk')),
     path('health/', HealthView.as_view(), name='health'),
     path('ready/', ReadyView.as_view(), name='ready'),
     path('metrics/', MetricsView.as_view(), name='metrics'),

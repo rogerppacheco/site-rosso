@@ -702,9 +702,14 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import PageNumberPagination, CursorPagination
 from openpyxl.utils import get_column_letter
 
+
+
+class KanbanCursorPagination(CursorPagination):
+    page_size = 30
+    ordering = '-data_ultima_alteracao'
 
 class VendaPagination(PageNumberPagination):
     """Paginação que aceita page_size na query (até 1000), para esteira e listagens grandes."""
@@ -1952,7 +1957,17 @@ class VendaViewSet(viewsets.ModelViewSet):
     permission_classes = [VendaPermission]
     resource_name = 'venda'
     queryset = Venda.objects.filter(ativo=True).order_by('-data_criacao')
-    pagination_class = VendaPagination
+    @property
+    def pagination_class(self):
+        # A API tenta usar query_params em certos escopos onde não existe request.
+        if not hasattr(self, 'request') or not self.request:
+            return VendaPagination
+            
+        flow = getattr(self.request, 'query_params', {}).get('flow')
+        if flow == 'esteira':
+            return KanbanCursorPagination
+        return VendaPagination
+
 
     def get_serializer_context(self):
         context = super(VendaViewSet, self).get_serializer_context()

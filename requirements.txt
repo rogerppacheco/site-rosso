@@ -160,3 +160,5 @@ redis==5.0.1
 
 
 gevent==26.9.0
+
+django-silk==5.1.0

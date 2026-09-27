@@ -63,10 +63,12 @@ INSTALLED_APPS = [
     'relatorios',
     'osab',
     'crm_app',
+    'silk',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'silk.middleware.SilkyMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'core_config.middleware_static_cache.StaticCacheMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
