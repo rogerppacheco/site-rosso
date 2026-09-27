@@ -42,12 +42,12 @@ class ConsultaStatusEsteiraIniciarView(APIView):
         }
         filtros = {
             'aba': (data.get('aba') or '').strip(),
-            'busca': (data.get('busca') or '').strip(),
-            'periodo_agendamento': (data.get('periodo_agendamento') or '').strip(),
-            'status_agendamento': (data.get('status_agendamento') or '').strip(),
-            'tipo_pendencia': (data.get('tipo_pendencia') or '').strip(),
-            'motivo_pendencia': (data.get('motivo_pendencia') or '').strip(),
-            'colunas': colunas,
+            'busca': '',
+            'periodo_agendamento': '',
+            'status_agendamento': '',
+            'tipo_pendencia': '',
+            'motivo_pendencia': '',
+            'colunas': {},
         }
 
         from crm_app.esteira_consulta_status_pap_service import criar_e_iniciar_consulta_aba
