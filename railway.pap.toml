@@ -4,7 +4,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.pap"
 
 [deploy]
-startCommand = "celery -A core_config worker --loglevel=info --concurrency=4"
+startCommand = "celery -A core_config worker --beat --loglevel=info --concurrency=4"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
