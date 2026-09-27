@@ -745,12 +745,14 @@ if SENTRY_DSN:
 # Cache: Redis (mesmo Redis das filas Celery - zero custo extra).
 # KEY_PREFIX isola chaves do projeto 'site-rosso' no Redis compartilhado.
 # DB 1 separado das filas Celery (que usam DB 0).
+_REDIS_CACHE_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-        'LOCATION': 'django_cache_table',
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': _REDIS_CACHE_URL,
+        'KEY_PREFIX': 'site-rosso',
         'TIMEOUT': FOLHA_COMISSAO_CACHE_TTL,
-    }
+    },
 }
 
 LOGGING = {
