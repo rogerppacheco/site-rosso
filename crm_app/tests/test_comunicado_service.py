@@ -82,3 +82,18 @@ class ComunicadoServiceTestCase(TestCase):
         args, kwargs = mock_service.enviar_mensagem_texto.call_args
         self.assertEqual(args[1], 'Primeira linha\nSegunda linha')
         self.assertFalse(kwargs.get('variar', True))
+
+    @patch('crm_app.services.comunicado_service.WhatsAppService')
+    def test_todos_sem_grupos_faz_fallback_individual(
+        self, mock_service_cls: MagicMock
+    ) -> None:
+        mock_service = mock_service_cls.return_value
+        mock_service.enviar_mensagem_texto.return_value = (True, {'ok': True})
+
+        ok = processar_envio_comunicado(self.comunicado_base)
+        self.assertTrue(ok)
+        self.comunicado_base.refresh_from_db()
+        self.assertEqual(self.comunicado_base.status, 'ENVIADO')
+        mock_service.enviar_mensagem_texto.assert_called_once()
+        args, _kwargs = mock_service.enviar_mensagem_texto.call_args
+        self.assertEqual(args[0], '21999990001')

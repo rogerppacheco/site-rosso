@@ -32,8 +32,13 @@ class PendenciaIndevidaRegistrarView(APIView):
         venda_id = request.data.get('venda_id')
         if not venda_id:
             return Response({'detail': 'venda_id é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         try:
-            venda = Venda.objects.select_related('cliente', 'vendedor').get(pk=int(venda_id))
+            venda = filtrar_vendas_por_operadora(
+                Venda.objects.select_related('cliente', 'vendedor'),
+                request.user,
+            ).get(pk=int(venda_id))
         except (Venda.DoesNotExist, TypeError, ValueError):
             return Response({'detail': 'Venda não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 

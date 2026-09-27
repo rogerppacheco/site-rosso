@@ -76,12 +76,92 @@ def build_prisma_urls(pooled_base: str, unpooled_base: str, schema: str) -> dict
 def django_database_options(*, pooled: bool) -> dict[str, Any]:
     """OPTIONS do Django para Postgres com ou sem PgBouncer.
 
-    Esta cópia (site-rosso) usa o schema rosso por padrão e nunca cai
-    no public da Record, a menos que POSTGRES_SCHEMA seja definido.
+    Esta cópia (site-bn) usa o schema bn por padrão e nunca cai
+    no schema public compartilhado, a menos que POSTGRES_SCHEMA seja definido.
     """
     _ = pooled
     opts: dict[str, Any] = {"connect_timeout": 10}
-    schema = (os.environ.get("POSTGRES_SCHEMA") or "rosso").strip() or "rosso"
+    schema = (os.environ.get("POSTGRES_SCHEMA") or "bn").strip() or "bn"
+    if schema:
+        if not _SCHEMA_NAME_RE.match(schema):
+            raise ValueError(
+                f"POSTGRES_SCHEMA inválido: {schema!r}. Use apenas letras, números e underscore."
+            )
+        opts["options"] = f"-c search_path={schema}"
+    return opts
+
+
+# Injetado de site-clickup
+def is_pgbouncer_enabled() -> bool:
+    """
+    Pooler ativo somente quando runtime usa URL diferente da direta.
+
+    DATABASE_UNPOOLED_URL sozinha (ex.: rollback Django) nao ativa modo pooler.
+    """
+    flag = os.environ.get("PGBOUNCER_ENABLED", "").lower()
+    if flag in ("0", "false", "no"):
+        return False
+    if flag in ("1", "true", "yes"):
+        return True
+    pooled = os.environ.get("DATABASE_URL", "")
+    unpooled = os.environ.get("DATABASE_UNPOOLED_URL", "")
+    if pooled and unpooled and pooled != unpooled:
+        return True
+    return False
+
+# Injetado de site-clickup
+def append_query_param(url: str, key: str, value: str) -> str:
+    """Adiciona ou substitui um parâmetro de query na URL PostgreSQL."""
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    query[key] = [value]
+    new_query = urlencode(query, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
+
+# Injetado de site-clickup
+def normalize_postgres_url(url: str) -> str:
+    """Normaliza postgres:// para postgresql:// (Django/psycopg2)."""
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+# Injetado de site-clickup
+def build_django_pooled_url(url: str) -> str:
+    """URL pooled para Django — conecta direto ao PgBouncer, sem ?pgbouncer=true."""
+    return normalize_postgres_url(url)
+
+# Injetado de site-clickup
+def build_prisma_pooled_url(url: str) -> str:
+    """URL pooled para Prisma — exige ?pgbouncer=true no query string."""
+    url = normalize_postgres_url(url)
+    if "pgbouncer=true" not in url:
+        url = append_query_param(url, "pgbouncer", "true")
+    return url
+
+# Injetado de site-clickup
+def build_pooled_url(url: str) -> str:
+    """Alias Prisma (retrocompat)."""
+    return build_prisma_pooled_url(url)
+
+# Injetado de site-clickup
+def build_prisma_urls(pooled_base: str, unpooled_base: str, schema: str) -> dict[str, str]:
+    """Monta DATABASE_URL + DIRECT_URL para Prisma com schema dedicado."""
+    pooled = append_query_param(normalize_postgres_url(pooled_base), "schema", schema)
+    pooled = build_prisma_pooled_url(pooled)
+    direct = append_query_param(normalize_postgres_url(unpooled_base), "schema", schema)
+    return {"DATABASE_URL": pooled, "DATABASE_DIRECT_URL": direct}
+
+# Injetado de site-clickup
+def django_database_options(*, pooled: bool) -> dict[str, Any]:
+    """OPTIONS do Django para Postgres com ou sem PgBouncer.
+
+    Se POSTGRES_SCHEMA estiver definido (ex.: rosso), força search_path
+    exclusivo nesse schema. Sem a variável, o comportamento permanece o
+    da Record (search_path padrão / public).
+    """
+    _ = pooled
+    opts: dict[str, Any] = {"connect_timeout": 10}
+    schema = (os.environ.get("POSTGRES_SCHEMA") or "").strip()
     if schema:
         if not _SCHEMA_NAME_RE.match(schema):
             raise ValueError(

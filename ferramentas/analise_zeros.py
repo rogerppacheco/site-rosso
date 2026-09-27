@@ -57,9 +57,9 @@ print("BACKUPS DO BANCO DE DADOS")
 print("="*80 + "\n")
 
 backup_files = [
-    "c:\\site-record\\backup_recordpap.sql",
-    "c:\\site-record\\backup_final.sql",
-    "c:\\site-record\\meu_backup_producao.sql",
+    "c:\\site-bn\\backup_recordpap.sql",
+    "c:\\site-bn\\backup_final.sql",
+    "c:\\site-bn\\meu_backup_producao.sql",
 ]
 
 for bf in backup_files:
@@ -68,3 +68,4 @@ for bf in backup_files:
         print(f"✅ {bf} ({size:,} bytes)")
     else:
         print(f"❌ {bf} (não encontrado)")
+

@@ -450,12 +450,30 @@ class UsuarioPagination(PageNumberPagination):
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    queryset = Usuario.objects.all().select_related('supervisor', 'perfil').prefetch_related('groups').order_by('first_name')
+    queryset = (
+        Usuario.objects.all()
+        .select_related('supervisor', 'perfil')
+        .prefetch_related('groups', 'operadoras_permitidas')
+        .order_by('first_name')
+    )
     serializer_class = UsuarioSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = UsuarioPagination
     ordering_fields = ['username', 'first_name', 'last_name', 'email', 'canal', 'cluster']
     ordering = ['first_name']  # padrão para listagem da gestão
+
+    @action(detail=False, methods=['get'], url_path='operadoras-disponiveis')
+    def operadoras_disponiveis(self, request):
+        """Opções que o gestor pode delegar sem ampliar o próprio escopo."""
+        from crm_app.models import Operadora
+        from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
+
+        operadoras = filtrar_planos_por_operadora(
+            Operadora.objects.filter(ativo=True).order_by('nome'),
+            request.user,
+            campo_operadora='id',
+        ).values('id', 'nome')
+        return Response(list(operadoras))
 
     def get_queryset(self):
         """
@@ -666,6 +684,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             "Lider",
             "Canal",
             "Cluster",
+            "Operadoras permitidas",
             "WhatsApp 1",
             "WhatsApp 2",
             "WhatsApp 3",
@@ -705,6 +724,9 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             lider_nome = '-'
             if u.supervisor:
                 lider_nome = (f"{u.supervisor.first_name or ''} {u.supervisor.last_name or ''}".strip() or u.supervisor.username or '-')
+            operadoras_txt = ', '.join(
+                o.nome for o in u.operadoras_permitidas.all()
+            ) or 'Todas'
 
             ws.append([
                 u.id,
@@ -721,6 +743,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 lider_nome,
                 u.canal or '',
                 u.cluster or '',
+                operadoras_txt,
                 u.tel_whatsapp or '',
                 u.tel_whatsapp_2 or '',
                 u.tel_whatsapp_3 or '',
@@ -908,10 +931,10 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         if len(telefone_limpo) == 10 and telefone_limpo[2:3] != "9":
             telefone_limpo = telefone_limpo[:2] + "9" + telefone_limpo[2:]
 
-        # 3. Validação na API do WhatsApp (Z-API)
+        # 3. Validação na API do WhatsApp (provedor ativo: Z-API ou Evolution)
         try:
             service = WhatsAppService()
-            if not service.token or not service.instance_id:
+            if not service.is_configured():
                 return Response({
                     "valido": True,
                     "aviso": "API WhatsApp não configurada no servidor. Validação ignorada."
@@ -925,10 +948,13 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             existe = service.verificar_numero_existe(telefone_api)
 
             if existe is None:
-                # API retornou erro (timeout, etc.) – não bloquear cadastro
+                # API retornou erro (timeout, Connection Closed, etc.) – não bloquear
                 return Response({
                     "valido": True,
-                    "aviso": "Não foi possível validar. Pode salvar."
+                    "aviso": (
+                        "Não foi possível validar agora "
+                        "(WhatsApp desconectado ou API indisponível). Pode salvar."
+                    ),
                 }, status=200)
             if existe:
                 return Response({

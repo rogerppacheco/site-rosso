@@ -1,6 +1,6 @@
 """
-Normaliza webhooks Z-API, Evolution e WhatsAtende para formato canonico
-consumido pelo handler.
+Normaliza webhooks Z-API, Evolution, WhatsAtende e Cloud API Meta para formato
+canonico consumido pelo handler.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 _PROVEDOR_ZAPI = "zapi"
 _PROVEDOR_EVOLUTION = "evolution"
 _PROVEDOR_WHATSATENDE = "whatsatende"
+_PROVEDOR_META = "meta"
 
 _WHATSATENDE_EVENTS_INBOUND = frozenset(
     {
@@ -317,8 +318,130 @@ def normalizar_webhook(payload: Any) -> Dict[str, Any]:
     provedor = detectar_provedor(payload)
     if provedor == _PROVEDOR_EVOLUTION:
         return _normalizar_evolution(payload)
+    if provedor == _PROVEDOR_META:
+        return _normalizar_meta_cloud(payload)
     if provedor == _PROVEDOR_WHATSATENDE:
         return _normalizar_whatsatende(payload)
+    return payload
+
+
+def _iter_meta_values(payload: Dict[str, Any]):
+    for entry in payload.get("entry") or []:
+        if not isinstance(entry, dict):
+            continue
+        for change in entry.get("changes") or []:
+            if not isinstance(change, dict):
+                continue
+            value = change.get("value")
+            if isinstance(value, dict):
+                yield value
+
+
+def payload_tem_mensagens_inbound_meta(payload: Any) -> bool:
+    """True se o POST Cloud API traz messages[] (além ou em vez de statuses)."""
+    if not isinstance(payload, dict) or not _eh_webhook_cloud_api_meta(payload):
+        return False
+    for value in _iter_meta_values(payload):
+        msgs = value.get("messages")
+        if isinstance(msgs, list) and any(isinstance(m, dict) for m in msgs):
+            return True
+    return False
+
+
+def _normalizar_meta_cloud(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Converte inbound Cloud API (messages[]) para o formato canônico do handler."""
+    for value in _iter_meta_values(payload):
+        messages = value.get("messages")
+        if not isinstance(messages, list):
+            continue
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            tipo = str(msg.get("type") or "text").lower()
+            if tipo in ("smb_message_echoes", "system"):
+                continue
+            phone = _digitos_telefone(msg.get("from"))
+            mid = msg.get("id")
+            texto = ""
+            btn: Optional[Dict[str, Any]] = None
+
+            if tipo == "text":
+                text_obj = msg.get("text") if isinstance(msg.get("text"), dict) else {}
+                texto = str(text_obj.get("body") or "").strip()
+            elif tipo == "interactive":
+                inter = msg.get("interactive") if isinstance(msg.get("interactive"), dict) else {}
+                itype = str(inter.get("type") or "").lower()
+                if itype == "button_reply":
+                    br = inter.get("button_reply") if isinstance(inter.get("button_reply"), dict) else {}
+                    bid = str(br.get("id") or "")
+                    btxt = str(br.get("title") or "")
+                    btn = {
+                        "buttonId": bid,
+                        "selectedButtonId": bid,
+                        "message": btxt,
+                        "selectedButtonText": btxt,
+                    }
+                    texto = btxt
+                elif itype == "list_reply":
+                    lr = inter.get("list_reply") if isinstance(inter.get("list_reply"), dict) else {}
+                    bid = str(lr.get("id") or "")
+                    btxt = str(lr.get("title") or "")
+                    btn = {
+                        "buttonId": bid,
+                        "selectedButtonId": bid,
+                        "message": btxt,
+                        "selectedButtonText": btxt,
+                    }
+                    texto = btxt
+            elif tipo == "button":
+                b = msg.get("button") if isinstance(msg.get("button"), dict) else {}
+                btxt = str(b.get("text") or "").strip()
+                payload_btn = str(b.get("payload") or btxt)
+                btn = {
+                    "buttonId": payload_btn,
+                    "selectedButtonId": payload_btn,
+                    "message": btxt,
+                    "selectedButtonText": btxt,
+                }
+                texto = btxt
+            elif tipo == "image":
+                img = msg.get("image") if isinstance(msg.get("image"), dict) else {}
+                texto = str(img.get("caption") or "").strip()
+            elif tipo == "document":
+                doc = msg.get("document") if isinstance(msg.get("document"), dict) else {}
+                texto = str(doc.get("caption") or doc.get("filename") or "").strip()
+            elif tipo == "audio":
+                texto = ""
+            elif tipo == "video":
+                vid = msg.get("video") if isinstance(msg.get("video"), dict) else {}
+                texto = str(vid.get("caption") or "").strip()
+            else:
+                texto = str(
+                    (msg.get("text") or {}).get("body")
+                    if isinstance(msg.get("text"), dict)
+                    else ""
+                ).strip()
+
+            canonico: Dict[str, Any] = {
+                "phone": phone,
+                "from": phone,
+                "fromMe": False,
+                "isFromMe": False,
+                "isGroup": False,
+                "messageId": mid,
+                "type": "ReceivedCallback",
+                "message": {"text": texto, "body": texto},
+                "text": {"message": texto, "text": texto},
+                "whatsatendeMessageType": tipo,
+                "_meta_raw": payload,
+            }
+            if btn:
+                canonico["buttonsResponseMessage"] = btn
+                if not texto and btn.get("message"):
+                    t = str(btn["message"])
+                    canonico["message"] = {"text": t, "body": t}
+                    canonico["text"] = {"message": t, "text": t}
+            return canonico
     return payload
 
 

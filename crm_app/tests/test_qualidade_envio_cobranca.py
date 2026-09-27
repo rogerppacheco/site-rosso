@@ -32,19 +32,81 @@ from crm_app.services.whatsapp.nio_templates import (
 
 class TestValidarFaturaCobranca(SimpleTestCase):
     def test_bloqueia_valor_zero(self) -> None:
-        fatura = SimpleNamespace(valor=0, data_vencimento=date(2026, 6, 30))
+        fatura = SimpleNamespace(
+            valor=0,
+            data_vencimento=date(2026, 6, 30),
+            codigo_pix='pix',
+        )
         ok, msg = validar_fatura_para_envio_cobranca(fatura)
         self.assertFalse(ok)
         self.assertIn("valor", msg.lower())
 
     def test_bloqueia_sem_vencimento(self) -> None:
-        fatura = SimpleNamespace(valor=99.9, data_vencimento=None)
+        fatura = SimpleNamespace(
+            valor=99.9,
+            data_vencimento=None,
+            codigo_pix='pix',
+        )
         ok, msg = validar_fatura_para_envio_cobranca(fatura)
         self.assertFalse(ok)
         self.assertIn("vencimento", msg.lower())
 
-    def test_permite_valor_e_vencimento(self) -> None:
-        fatura = SimpleNamespace(valor="120.50", data_vencimento=date(2026, 6, 30))
+    def test_bloqueia_placeholder_sem_emissao(self) -> None:
+        fatura = SimpleNamespace(
+            valor="120.50",
+            data_vencimento=date(2026, 6, 30),
+            codigo_pix=None,
+            codigo_barras='',
+            pdf_url=None,
+            numero_fatura_operadora='',
+            data_importacao_fpd=None,
+            status_busca='PENDENTE',
+        )
+        ok, msg = validar_fatura_para_envio_cobranca(fatura)
+        self.assertFalse(ok)
+        self.assertIn("emiss", msg.lower())
+
+    def test_permite_com_pix(self) -> None:
+        fatura = SimpleNamespace(
+            valor="120.50",
+            data_vencimento=date(2026, 6, 30),
+            codigo_pix='00020126...',
+            codigo_barras=None,
+            pdf_url=None,
+            numero_fatura_operadora=None,
+            data_importacao_fpd=None,
+            status_busca='PENDENTE',
+        )
+        ok, msg = validar_fatura_para_envio_cobranca(fatura)
+        self.assertTrue(ok)
+        self.assertEqual(msg, "")
+
+    def test_permite_com_importacao_fpd(self) -> None:
+        fatura = SimpleNamespace(
+            valor="99.00",
+            data_vencimento=date(2026, 6, 30),
+            codigo_pix='',
+            codigo_barras='',
+            pdf_url='',
+            numero_fatura_operadora='',
+            data_importacao_fpd=date(2026, 6, 1),
+            status_busca='PENDENTE',
+        )
+        ok, msg = validar_fatura_para_envio_cobranca(fatura)
+        self.assertTrue(ok)
+        self.assertEqual(msg, "")
+
+    def test_permite_busca_nio_sucesso(self) -> None:
+        fatura = SimpleNamespace(
+            valor="99.00",
+            data_vencimento=date(2026, 6, 30),
+            codigo_pix='',
+            codigo_barras='',
+            pdf_url='',
+            numero_fatura_operadora='',
+            data_importacao_fpd=None,
+            status_busca='SUCESSO',
+        )
         ok, msg = validar_fatura_para_envio_cobranca(fatura)
         self.assertTrue(ok)
         self.assertEqual(msg, "")
@@ -188,6 +250,16 @@ class TestMotivoBloqueioCobranca(SimpleTestCase):
                 True, 'Fatura sem valor válido (R$ 0,00 ou vazio).'
             ),
             'Valor zerado ou vazio',
+        )
+
+    def test_sem_fatura_emitida(self) -> None:
+        self.assertEqual(
+            classificar_motivo_bloqueio_cobranca(
+                True,
+                'Fatura sem evidência de emissão (PIX, código de barras, PDF, '
+                'número na operadora, importação FPD ou busca Nio com sucesso).',
+            ),
+            'Sem fatura emitida (Nio/FPD)',
         )
 
     def test_job_agora_as_nove(self) -> None:

@@ -9,7 +9,7 @@ USD_BRL = 5.1413
 PROJECTS = {
     "1e9d99e5-abd8-4cbc-b91a-0a52887508cf": "sistema-vendas-tpl",
     "5c602881-2ffa-48a4-be87-228bd35893f4": "plano-ideal",
-    "7171eee1-2c6e-446a-b7a9-880d3786c51a": "site-record",
+    "7171eee1-2c6e-446a-b7a9-880d3786c51a": "site-bn",
     "8db60e30-1dde-43f9-afaa-bfc19682fe0b": "banco-de-dados",
     "c5f30c08-b32b-462e-9679-129064a82247": "viabilidade-forms-nio",
     "df858945-8b79-46f2-aad8-980bc4bfc925": "syncwa-platform",
@@ -75,3 +75,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

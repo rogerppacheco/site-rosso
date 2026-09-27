@@ -11,6 +11,7 @@ from crm_app.services.dfv_powerbi_service import (
     DfvPowerBiError,
     DfvPowerBiTimeout,
     _montar_complemento,
+    codigo_regiao_por_cep,
     consultar_fachadas_por_cdo,
     consultar_fachadas_por_cep,
     formatar_numeros_rua_cdoe,
@@ -34,6 +35,16 @@ class LimparCepTest(SimpleTestCase):
 
     def test_zero_esquerda(self):
         self.assertEqual(limpar_cep("130000"), "00130000")
+
+    def test_codigo_regiao_por_cep(self):
+        self.assertEqual(codigo_regiao_por_cep("01310-100"), "SP")
+        self.assertEqual(codigo_regiao_por_cep("30130000"), "SUDESTE")
+        self.assertEqual(codigo_regiao_por_cep("31930470"), "SUDESTE")
+        self.assertEqual(codigo_regiao_por_cep("80010000"), "SUL")
+        self.assertEqual(codigo_regiao_por_cep("70040902"), "CO")
+        self.assertEqual(codigo_regiao_por_cep("40020000"), "NN")
+        self.assertIsNone(codigo_regiao_por_cep(""))
+        self.assertIsNone(codigo_regiao_por_cep("abc"))
 
 
 class LimparCodigoCdoTest(SimpleTestCase):
@@ -450,11 +461,11 @@ class ConsultarPowerBiTest(SimpleTestCase):
         self.assertEqual(regs[0]["NO_FACHADA"], 10)
         self.assertEqual(regs[0]["LOGRADOURO"], "RUA X")
         self.assertEqual(regs[0]["_fonte_regiao"], "SUDESTE")
-        self.assertGreaterEqual(mock_post.call_count, 3)
+        self.assertEqual(mock_post.call_count, 1)
 
     @patch("crm_app.services.dfv_powerbi_service.requests.post")
     def test_consulta_cep_achada_na_regiao_sp(self, mock_post):
-        """DFV consulta as 3 regiões; devolve o hit de SP e ignora as vazias."""
+        """DFV roteia CEP de SP e consulta só essa regional."""
         import json
 
         vazia = self._payload_vazio()
@@ -480,7 +491,34 @@ class ConsultarPowerBiTest(SimpleTestCase):
         self.assertEqual(len(regs), 1)
         self.assertEqual(regs[0]["UF"], "SP")
         self.assertEqual(regs[0]["_fonte_regiao"], "SP")
-        self.assertGreaterEqual(mock_post.call_count, 3)
+        self.assertEqual(mock_post.call_count, 1)
+
+    @patch("crm_app.services.dfv_powerbi_service.requests.post")
+    def test_consulta_cep_fallback_se_regiao_mapeada_vazia(self, mock_post):
+        import json
+
+        vazia = self._payload_vazio()
+        sp_dado = self._payload_uma_fachada(
+            cep="30130000",
+            logradouro="AVENIDA PAULISTA",
+            municipio="SAO PAULO",
+            uf="SP",
+        )
+
+        def _side_effect(*args, **kwargs):
+            body = json.loads(kwargs.get("data") or "{}")
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = (
+                sp_dado if body.get("modelId") == 2 else vazia
+            )
+            return mock_resp
+
+        mock_post.side_effect = _side_effect
+        regs = consultar_fachadas_por_cep("30130000")
+        self.assertEqual(len(regs), 1)
+        self.assertEqual(regs[0]["_fonte_regiao"], "SP")
+        self.assertGreater(mock_post.call_count, 1)
 
     @patch("crm_app.services.dfv_powerbi_service.requests.post")
     def test_consulta_por_cdo_tenta_variante_cdoe(self, mock_post):

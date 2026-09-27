@@ -17,7 +17,7 @@ import time
 # DDD fixo 31 (região de BH/Contagem)
 DDD_CREDITO = "31"
 
-# Sem e-mail próprio da Rosso: não usar o da Record. Mailinator entra como fallback.
+# Sem e-mail próprio da BN: não usar o da Record. Mailinator entra como fallback.
 CREDITO_EMAIL_BASE = ""
 
 # Domínios de email conhecidos para gerar endereços (uso alternativo)
@@ -93,3 +93,4 @@ def gerar_email_random() -> str:
     prefixo = f"credito{int(time.time() * 1000)}{random.randint(100, 999)}"
     dominio = random.choice(DOMINIOS_EMAIL)
     return f"{prefixo}@{dominio}"
+

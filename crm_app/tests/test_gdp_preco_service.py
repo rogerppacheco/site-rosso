@@ -157,3 +157,54 @@ class GdpPrecoLookupTest(TestCase):
         )
         self.assertEqual(payload['origem'], 'legado')
         self.assertEqual(payload['valor'], 100.0)
+
+    def test_plano_preco_fixo_ignora_gdp(self) -> None:
+        """Plano CNPJ (ou fora da tabela) usa o cadastro, não a chave GDP colidente."""
+        plano_cnpj = Plano.objects.create(
+            nome='NIO FIBRA TOTAL 1GB',
+            valor=Decimal('210.00'),
+            operadora=self.operadora,
+            gdp_velocidade_mbps=1000,
+            gdp_indice_oferta=1,
+            ignorar_preco_gdp=True,
+        )
+        # Mesma chave GDP do ULTRA residencial — sem a flag, viria o preço do município.
+        GdpPrecoMunicipio.objects.create(
+            log_importacao=self.log,
+            uf='MG',
+            municipio='CONTAGEM',
+            municipio_normalizado='CONTAGEM',
+            meio_pagamento='BOLETO',
+            velocidade_mbps=1000,
+            indice_oferta=1,
+            valor=Decimal('160.00'),
+        )
+        forma_boleto = FormaPagamento.objects.create(nome='BOLETO')
+        payload = resolver_valor_plano_params(
+            plano_id=plano_cnpj.id,
+            forma_pagamento_id=forma_boleto.id,
+            cidade='CONTAGEM',
+            uf='MG',
+        )
+        self.assertEqual(payload['origem'], 'preco_fixo')
+        self.assertEqual(payload['valor'], 210.0)
+
+    def test_listar_planos_landing_por_municipio(self) -> None:
+        from crm_app.services.gdp_preco_service import listar_planos_landing
+
+        payload = listar_planos_landing(cidade='Rio Branco', uf='AC')
+        self.assertTrue(payload['gdp_disponivel'])
+        self.assertEqual(payload['escopo'], 'municipio')
+        planos = payload['planos']
+        self.assertTrue(planos)
+        plano_500 = next(p for p in planos if p['velocidade_mbps'] == 500)
+        self.assertEqual(plano_500['valor'], Decimal('90.00'))
+        self.assertEqual(plano_500['prefixo_preco'], '')
+
+    def test_listar_planos_landing_nacional_fallback(self) -> None:
+        from crm_app.services.gdp_preco_service import listar_planos_landing
+
+        payload = listar_planos_landing(cidade='', uf='')
+        self.assertEqual(payload['escopo'], 'nacional')
+        self.assertTrue(payload['planos'])
+        self.assertTrue(all(p['prefixo_preco'].startswith('a partir') for p in payload['planos']))

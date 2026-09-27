@@ -2,7 +2,7 @@
 Upload de arquivos para Cloudflare R2 (API S3-compatível).
 
 Estrutura de chaves: {R2_FOLDER_ROOT}/{pasta_funcional}/{subpastas}/{arquivo}
-Ex.: CDOI_Record_Vertical/Record_Apoia/material.pdf
+Ex.: CDOI_BN_Vertical/BN_Apoia/material.pdf
 """
 from __future__ import annotations
 
@@ -132,3 +132,4 @@ def sanitize_r2_folder_name(value: str, max_length: int = 80) -> str:
     cleaned = re.sub(r"[^\w\s\-_.]", "", str(value or "")).strip()
     cleaned = re.sub(r"\s+", "_", cleaned)
     return (cleaned or "pasta")[:max_length]
+

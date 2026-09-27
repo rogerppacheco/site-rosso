@@ -7,7 +7,7 @@ keys = [
     "WHATSATENDE_WHATSAPP_ID",
     "WHATSATENDE_API_URL",
 ]
-for svc in ["site-record", "site-record-webhook"]:
+for svc in ["site-bn", "site-bn-webhook"]:
     print(f"=== {svc} ===")
     p = subprocess.run(
         ["railway", "variables", "-s", svc, "--json"],
@@ -23,3 +23,4 @@ for svc in ["site-record", "site-record-webhook"]:
             print(f"  {k}: OK (len={len(str(v))})")
         else:
             print(f"  {k}: AUSENTE")
+

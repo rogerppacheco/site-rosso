@@ -2,7 +2,7 @@
 Worker dedicado para automações Playwright/PAP (fila PostgreSQL).
 
 Uso: python manage.py run_pap_worker
-Railway: serviço site-record-pap com PAP_WORKER_MODE=true
+Railway: serviço nova-velox-pap com PAP_WORKER_MODE=true
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from crm_app.services.pap_job_processor import (
     _notificar_falha_definitiva,
     processar_job,
 )
+from crm_app.services.whatsapp.preflight import checar_config_outbound
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,12 @@ class Command(BaseCommand):
             f"PAP_WORKER_MODE={getattr(settings, 'PAP_WORKER_MODE', False)} "
             f"recuperacao={stats}"
         ))
+
+        faltando = checar_config_outbound("PAP_WORKER")
+        if faltando:
+            self.stderr.write(self.style.ERROR(
+                f"[PAP_WORKER] Sem credenciais de envio: {', '.join(faltando)}"
+            ))
 
         while self._running:
             try:

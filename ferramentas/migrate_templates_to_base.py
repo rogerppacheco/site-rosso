@@ -39,7 +39,7 @@ def should_skip_script(tag: str) -> bool:
 
 def extract_title(content: str) -> str:
     match = re.search(r"<title>(.*?)</title>", content, re.DOTALL | re.IGNORECASE)
-    return match.group(1).strip() if match else "Record PAP"
+    return match.group(1).strip() if match else "Futura Telecom"
 
 
 def extract_head_extras(content: str) -> tuple[str, str, str]:
@@ -296,3 +296,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

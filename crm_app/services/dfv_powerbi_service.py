@@ -6,7 +6,7 @@ Regiões: DFV_SUDESTE (MG/ES/RJ), DFV_SP, DFV_SUL (PR/SC/RS),
 DFV_CO (Centro-Oeste) e DFV_NN (Norte/Nordeste).
 
 Comandos WhatsApp:
-- DFV: filtro por CEP (consulta todas as bases em paralelo)
+- DFV: filtro por CEP (roteia pela faixa dos Correios → região; fallback nas demais)
 - CDOE: filtro por CODIGO_CDO (roteia pela UF → região)
 
 Independente da base local `crm_app.models.DFV` (legado; comando Fachada desativado).
@@ -281,6 +281,39 @@ def regiao_por_uf(uf: str) -> Optional[DfvRegionConfig]:
         return None
     for regiao in listar_regioes_dfv():
         if uf_limpo in regiao.ufs:
+            return regiao
+    return None
+
+
+def codigo_regiao_por_cep(cep: str) -> Optional[str]:
+    """
+    Região DFV pela faixa de CEP dos Correios (5 primeiros dígitos).
+
+    SP 00000–19999, Sudeste 20000–39999 (RJ/ES/MG), Norte/Nordeste 40000–69899,
+    Centro-Oeste 69900–79999 (inclui AC), Sul 80000–99999.
+    """
+    cep_limpo = limpar_cep(cep)
+    if len(cep_limpo) != 8:
+        return None
+    faixa = int(cep_limpo[:5])
+    if faixa <= 19999:
+        return "SP"
+    if faixa <= 39999:
+        return "SUDESTE"
+    if faixa <= 69899:
+        return "NN"
+    if faixa <= 79999:
+        return "CO"
+    return "SUL"
+
+
+def regiao_por_cep(cep: str) -> Optional[DfvRegionConfig]:
+    """Região DFV habilitada correspondente ao CEP, se existir."""
+    codigo = codigo_regiao_por_cep(cep)
+    if not codigo:
+        return None
+    for regiao in listar_regioes_dfv():
+        if regiao.code == codigo:
             return regiao
     return None
 
@@ -699,24 +732,57 @@ def _consultar_em_regioes(
 
 def consultar_fachadas_por_cep(cep: str) -> list[dict[str, Any]]:
     """
-    Consulta fachadas do CEP nas bases DFV (todas as regionais) em paralelo.
+    Consulta fachadas do CEP no Power BI.
+
+    Roteia pela faixa de CEP para uma região. Se essa base não tiver
+    registros, consulta as demais em paralelo.
 
     Returns:
         Lista de dicts com as colunas de SELECT_COLS (+ metadados de região).
 
     Raises:
         DfvPowerBiDisabled: feature flag desligada
-        DfvPowerBiTimeout: timeout HTTP em todas as regiões
+        DfvPowerBiTimeout: timeout HTTP na região (ou em todas, no fallback)
         DfvPowerBiError: demais falhas (sem fallback para base local)
     """
     cep_limpo = limpar_cep(cep)
     if len(cep_limpo) != 8:
         raise DfvPowerBiError("CEP inválido.")
 
+    filters = [("CEP", cep_limpo)]
+    cache_key_base = f"{CACHE_KEY_PREFIX}{cep_limpo}"
+    log_label = f"CEP={cep_limpo}"
+    alvo = regiao_por_cep(cep_limpo)
+    if alvo:
+        try:
+            registros = _consultar_em_regioes(
+                filters=filters,
+                cache_key_base=cache_key_base,
+                log_label=log_label,
+                regions=[alvo],
+            )
+        except (DfvPowerBiTimeout, DfvPowerBiDisabled):
+            raise
+        except DfvPowerBiError as exc:
+            logger.warning(
+                "[DFV-PBI] %s região %s falhou (%s); consultando demais regionais",
+                log_label,
+                alvo.code,
+                exc,
+            )
+            registros = []
+        if registros:
+            return registros
+        logger.info(
+            "[DFV-PBI] %s região %s vazia; consultando demais regionais",
+            log_label,
+            alvo.code,
+        )
+
     return _consultar_em_regioes(
-        filters=[("CEP", cep_limpo)],
-        cache_key_base=f"{CACHE_KEY_PREFIX}{cep_limpo}",
-        log_label=f"CEP={cep_limpo}",
+        filters=filters,
+        cache_key_base=cache_key_base,
+        log_label=log_label,
     )
 
 

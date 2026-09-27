@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 15
 REQUEST_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; Rosso-ConhecimentoIA/1.0)",
+    "User-Agent": "Mozilla/5.0 (compatible; BN-ConhecimentoIA/1.0)",
     "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
 }
@@ -133,3 +133,4 @@ def fetch_url_and_crawl(url: str, max_pages: int = MAX_PAGES_CRAWL) -> tuple[str
     except Exception as e:
         logger.warning("[Conhecimento IA] Erro no crawl de %s: %s", url, e)
         return "", ""
+

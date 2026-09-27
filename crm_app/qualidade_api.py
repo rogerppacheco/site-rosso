@@ -43,7 +43,8 @@ class QualidadePeriodosView(APIView):
             return bloqueio
         lente = request.GET.get('lente', qs.LENTE_VENCIMENTO)
         try:
-            return Response(qs.payload_periodos_qualidade(lente))
+            data = qs.listar_periodos(lente)
+            return Response({'lente': lente, 'periodos': data})
         except Exception as e:
             logger.exception('Erro ao listar períodos Qualidade')
             return Response({'error': str(e)}, status=500)

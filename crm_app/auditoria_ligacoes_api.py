@@ -220,13 +220,21 @@ def _periodo_historico_padrao() -> tuple[date, date]:
     return hoje.replace(day=1), hoje
 
 
-def _pedidos_por_cliente_ids(cliente_ids: List[int]) -> Dict[int, List[Dict[str, Any]]]:
+def _pedidos_por_cliente_ids(
+    cliente_ids: List[int],
+    usuario: object,
+) -> Dict[int, List[Dict[str, Any]]]:
     ids = [i for i in {int(x) for x in cliente_ids if x}]
     if not ids:
         return {}
     out: Dict[int, List[Dict[str, Any]]] = {i: [] for i in ids}
+    from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
     vendas = (
-        Venda.objects.filter(cliente_id__in=ids)
+        filtrar_vendas_por_operadora(
+            Venda.objects.filter(cliente_id__in=ids),
+            usuario,
+        )
         .order_by("-data_criacao")
         .values("id", "cliente_id", "ordem_servico", "data_criacao")
     )
@@ -244,7 +252,10 @@ def _pedidos_por_cliente_ids(cliente_ids: List[int]) -> Dict[int, List[Dict[str,
     return out
 
 
-def _pedidos_por_cpf_digitos(cpfs_digitos: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+def _pedidos_por_cpf_digitos(
+    cpfs_digitos: List[str],
+    usuario: object,
+) -> Dict[str, List[Dict[str, Any]]]:
     chaves = [c for c in {c for c in cpfs_digitos if c and len(c) >= 11}]
     if not chaves:
         return {}
@@ -252,8 +263,10 @@ def _pedidos_por_cpf_digitos(cpfs_digitos: List[str]) -> Dict[str, List[Dict[str
     for d in chaves:
         q |= Q(cliente__cpf_cnpj__icontains=d)
     out: Dict[str, List[Dict[str, Any]]] = {c: [] for c in chaves}
+    from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
     vendas = (
-        Venda.objects.filter(q)
+        filtrar_vendas_por_operadora(Venda.objects.filter(q), usuario)
         .select_related("cliente")
         .order_by("-data_criacao")
         .values("id", "ordem_servico", "data_criacao", "cliente__cpf_cnpj")
@@ -295,7 +308,12 @@ class AuditoriaLigacaoStartView(APIView):
         if not _is_member(request.user, _auditoria_grupos()):
             return Response({"detail": "Permissão negada."}, status=status.HTTP_403_FORBIDDEN)
 
-        venda = Venda.objects.filter(id=venda_id, ativo=True).first()
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+        venda = filtrar_vendas_por_operadora(
+            Venda.objects.filter(id=venda_id, ativo=True),
+            request.user,
+        ).first()
         if not venda:
             return Response({"detail": "Venda não encontrada."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -663,8 +681,8 @@ class AuditoriaLigacaoHistoricoView(APIView):
                 if dig:
                     cpfs_sem_cliente.append(dig)
 
-        pedidos_cliente = _pedidos_por_cliente_ids(cliente_ids)
-        pedidos_cpf = _pedidos_por_cpf_digitos(cpfs_sem_cliente)
+        pedidos_cliente = _pedidos_por_cliente_ids(cliente_ids, request.user)
+        pedidos_cpf = _pedidos_por_cpf_digitos(cpfs_sem_cliente, request.user)
 
         data = []
         for r in page_obj.object_list:

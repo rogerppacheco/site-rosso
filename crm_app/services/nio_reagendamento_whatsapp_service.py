@@ -336,7 +336,16 @@ def _preparar_item_nio(item_id: int, execucao_id: int) -> dict:
     item.save(update_fields=['status', 'iniciado_em'])
     cpf = re.sub(r'\D', '', venda.cliente.cpf_cnpj or '')
     nome = (venda.cliente.nome_razao_social or '')[:80]
-    return {'acao': 'reagendar', 'cpf': cpf, 'nome': nome, 'venda_id': venda.id}
+    from crm_app.services.whatsapp.nio_bot_web import sufixo_cep_pedido
+
+    cep_sufixo = sufixo_cep_pedido(venda.cep)
+    return {
+        'acao': 'reagendar',
+        'cpf': cpf,
+        'nome': nome,
+        'venda_id': venda.id,
+        'cep_sufixo': cep_sufixo,
+    }
 
 
 def _salvar_resultado_item_nio(
@@ -416,7 +425,9 @@ def executar_job(execucao_id: int) -> bool:
                         continue
 
                     resultado = sessao.reagendar(
-                        cpf=estado['cpf'], nome_esperado=estado['nome']
+                        cpf=estado['cpf'],
+                        nome_esperado=estado['nome'],
+                        cep_sufixo_esperado=estado.get('cep_sufixo') or '',
                     )
                     _run_django_sync(
                         lambda iid=item_id, res=resultado: _salvar_resultado_item_nio(

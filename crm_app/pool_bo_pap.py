@@ -16,6 +16,7 @@ from datetime import timedelta
 from typing import Optional, Tuple
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -208,7 +209,8 @@ def obter_login_bo(
 
     # Buscar usuários BackOffice com matrícula e senha configuradas e com login liberado para o bot
     bo_queryset = Usuario.objects.filter(
-        perfil__cod_perfil__iexact='backoffice',
+        Q(perfil__cod_perfil__iexact='backoffice')
+        | Q(groups__name__iexact='BackOffice'),
         is_active=True,
         matricula_pap__isnull=False,
         login_pap_disponivel_para_automacao=True,
@@ -218,7 +220,7 @@ def obter_login_bo(
         senha_pap__isnull=True,
     ).exclude(
         senha_pap='',
-    )
+    ).distinct()
 
     # Filtrar por automação: só BOs que têm o flag correspondente
     if tipo_automacao:
@@ -231,13 +233,15 @@ def obter_login_bo(
         elif tipo_automacao == TIPO_AUTOMACAO_STATUS:
             bo_queryset = bo_queryset.filter(pap_automacao_status=True)
 
+    existem_bos_elegiveis = bo_queryset.exists()
+
     # Excluir os que já estão em uso
     if ids_em_uso:
         bo_queryset = bo_queryset.exclude(id__in=ids_em_uso)
 
     bo_list = list(bo_queryset)
     if not bo_list:
-        if tipo_automacao:
+        if tipo_automacao and not existem_bos_elegiveis:
             return (None, _msg_nenhum_bo_para_automacao(tipo_automacao))
         return (None, MSG_TODOS_ACESSOS_EM_USO)
 

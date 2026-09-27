@@ -11,13 +11,13 @@ from django.db.models import Q
 logger = logging.getLogger(__name__)
 
 MSG_NENHUM_LOGIN = (
-    "Nenhum usuário Diretoria está liberado para buscar o histórico PAP. "
+    "Nenhum usuário Diretoria/BackOffice está liberado para buscar o histórico PAP. "
     "Marque “Autorizar busca do histórico PAP” na Governança e cadastre matrícula/senha PAP."
 )
 
 MSG_TODOS_EM_USO = (
-    "Todos os logins Diretoria autorizados para o histórico PAP estão em uso no momento. "
-    "Aguarde a busca atual terminar ou libere outro Diretoria com a mesma permissão."
+    "Todos os logins autorizados para o histórico PAP estão em uso no momento. "
+    "Aguarde a busca atual terminar ou libere outro login com a mesma permissão."
 )
 
 
@@ -28,7 +28,7 @@ def _tem_credencial(usuario) -> bool:
 
 
 def candidatos_historico_pap():
-    """Usuários Diretoria ativos com flag + matrícula/senha PAP."""
+    """Usuários Diretoria ou BackOffice ativos com flag + matrícula/senha PAP."""
     from usuarios.models import Usuario
 
     return (
@@ -37,6 +37,9 @@ def candidatos_historico_pap():
             Q(perfil__nome__iexact="Diretoria")
             | Q(perfil__cod_perfil__iexact="diretoria")
             | Q(groups__name__iexact="Diretoria")
+            | Q(perfil__nome__iexact="BackOffice")
+            | Q(perfil__cod_perfil__iexact="backoffice")
+            | Q(groups__name__iexact="BackOffice")
         )
         .exclude(Q(matricula_pap__isnull=True) | Q(matricula_pap__exact=""))
         .exclude(Q(senha_pap__isnull=True) | Q(senha_pap__exact=""))

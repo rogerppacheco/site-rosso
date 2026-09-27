@@ -90,6 +90,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     supervisor_detalhe = UsuarioLiderSerializer(source='supervisor', read_only=True)
     groups_detalhe = GroupSerializer(source='groups', many=True, read_only=True)
     supervisor_nome = serializers.SerializerMethodField()
+    operadoras_permitidas_detalhe = serializers.SerializerMethodField()
     brpronto_senha_preenchida = serializers.SerializerMethodField()
 
     # MÉTODO PARA OBTER O NOME DO LÍDER
@@ -99,17 +100,15 @@ class UsuarioSerializer(serializers.ModelSerializer):
             return nome if nome else obj.supervisor.username
         return "-"
 
+    def get_operadoras_permitidas_detalhe(self, obj: Usuario) -> list[dict]:
+        """Retorna dados mínimos sem importar serializers do crm_app."""
+        return [
+            {'id': operadora.id, 'nome': operadora.nome}
+            for operadora in obj.operadoras_permitidas.all()
+        ]
+
     def get_brpronto_senha_preenchida(self, obj) -> bool:
         return bool(getattr(obj, "brpronto_senha", None))
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        campo = self.fields.get('username')
-        if campo is not None:
-            campo.validators = [
-                v for v in campo.validators
-                if v.__class__.__name__ not in ('ASCIIUsernameValidator', 'UnicodeUsernameValidator')
-            ]
 
     def validate_meta_comissao(self, value):
         """Valida e normaliza meta_comissao - aceita 0 como valor válido"""
@@ -124,29 +123,41 @@ class UsuarioSerializer(serializers.ModelSerializer):
         # Aceita 0 como valor válido (0 é um número válido)
         return value if value is not None else 0
 
-    def validate_username(self, value):
-        value = (value or '').strip()
-        if not value:
-            raise serializers.ValidationError('Informe o login (username).')
-        if any(ch.isspace() for ch in value):
-            raise serializers.ValidationError(
-                'O login não pode ter espaços. Use por exemplo MARCELO.LARANJO ou MARCELOLARANJO.'
-            )
-        if not re.fullmatch(r'[\w.@+-]+', value):
-            raise serializers.ValidationError(
-                'O login deve conter apenas letras, números e os caracteres @ . + - _ (sem espaços).'
-            )
-        return value
-
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        for campo in CAMPOS_NUMERICOS_ZERO:
-            if campo in attrs and attrs[campo] in (None, ''):
-                attrs[campo] = 0
-        if self.instance is None and not attrs.get('password'):
-            raise serializers.ValidationError(
-                {'password': 'Informe a senha do novo usuário.'}
-            )
+        from crm_app.services.escopo_operadora import operadora_ids_permitidas
+
+        request = self.context.get('request')
+        permitidas_gestor = (
+            operadora_ids_permitidas(request.user)
+            if request and getattr(request.user, 'is_authenticated', False)
+            else None
+        )
+        if permitidas_gestor is not None:
+            if 'operadoras_permitidas' in attrs:
+                solicitadas = {
+                    operadora.id for operadora in attrs['operadoras_permitidas']
+                }
+                if not solicitadas:
+                    raise serializers.ValidationError({
+                        'operadoras_permitidas': (
+                            'Seu próprio acesso é restrito; você não pode deixar '
+                            'este campo vazio, pois vazio libera todas as operadoras.'
+                        )
+                    })
+                if not solicitadas.issubset(permitidas_gestor):
+                    raise serializers.ValidationError({
+                        'operadoras_permitidas': (
+                            'Você só pode conceder operadoras às quais possui acesso.'
+                        )
+                    })
+            elif self.instance is None:
+                from crm_app.models import Operadora
+
+                attrs['operadoras_permitidas'] = Operadora.objects.filter(
+                    id__in=permitidas_gestor
+                )
+
         perfil = attrs.get('perfil', getattr(self.instance, 'perfil', None))
         perfil_nome = (getattr(perfil, 'nome', '') or '').strip().lower()
         if perfil_nome != 'vendedor':
@@ -161,6 +172,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'perfil', 'perfil_detalhe',
             'groups', 'groups_detalhe',
             'supervisor', 'supervisor_detalhe', 'supervisor_nome',
+            'operadoras_permitidas', 'operadoras_permitidas_detalhe',
             'valor_almoco', 'valor_passagem', 'valor_ajuda_custo_mensal', 'chave_pix', 'nome_da_conta',
             'meta_comissao', 'desconto_boleto', 'desconto_inclusao_viabilidade',
             'desconto_instalacao_antecipada', 
@@ -202,14 +214,6 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'perfil': {'required': False, 'allow_null': True},
             'supervisor': {'required': False, 'allow_null': True},
             'meta_comissao': {'required': False, 'allow_null': True},
-            'valor_almoco': {'required': False, 'allow_null': True},
-            'valor_passagem': {'required': False, 'allow_null': True},
-            'valor_ajuda_custo_mensal': {'required': False, 'allow_null': True},
-            'desconto_boleto': {'required': False, 'allow_null': True},
-            'desconto_inclusao_viabilidade': {'required': False, 'allow_null': True},
-            'desconto_instalacao_antecipada': {'required': False, 'allow_null': True},
-            'adiantamento_cnpj': {'required': False, 'allow_null': True},
-            'desconto_inss_fixo': {'required': False, 'allow_null': True},
         }
 
     def to_representation(self, instance):
@@ -241,6 +245,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         groups = validated_data.pop('groups', [])
+        operadoras_permitidas = validated_data.pop('operadoras_permitidas', [])
         
         # Garantir que campos com default não sejam None ou string vazia
         if 'meta_comissao' in validated_data:
@@ -283,11 +288,13 @@ class UsuarioSerializer(serializers.ModelSerializer):
             instance.save(update_fields=['vendedor_solo'])
         if groups:
             instance.groups.set(groups)
+        instance.operadoras_permitidas.set(operadoras_permitidas)
         return instance
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
         groups = validated_data.pop('groups', None)
+        operadoras_permitidas = validated_data.pop('operadoras_permitidas', None)
         
         # Garantir que campos com default não sejam None ou string vazia
         if 'meta_comissao' in validated_data:
@@ -330,6 +337,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
         if (getattr(instance.perfil, 'nome', '') or '').strip().lower() != 'vendedor' and instance.vendedor_solo:
             instance.vendedor_solo = False
             instance.save(update_fields=['vendedor_solo'])
+        if operadoras_permitidas is not None:
+            instance.operadoras_permitidas.set(operadoras_permitidas)
         return instance
     
     def _sincronizar_grupo_do_perfil(self, usuario):
@@ -396,6 +405,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     supervisor_nome = serializers.CharField(source='supervisor.get_full_name', read_only=True, default=None)
     nome_completo = serializers.CharField(source='get_full_name', read_only=True)
     groups = GroupSerializer(many=True, read_only=True)
+    operadoras_permitidas = serializers.PrimaryKeyRelatedField(
+        many=True,
+        read_only=True,
+    )
 
     class Meta:
         model = Usuario
@@ -403,6 +416,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id', 'username', 'first_name', 'last_name', 'nome_completo', 'email', 'cpf',
             'perfil', 'perfil_nome', 'groups',
             'supervisor', 'supervisor_nome',
+            'operadoras_permitidas',
             'is_active', 'is_staff',
             'tel_whatsapp',
             'tel_whatsapp_2',

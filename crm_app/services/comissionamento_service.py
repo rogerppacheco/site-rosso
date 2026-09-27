@@ -94,7 +94,11 @@ def _tipo_lancamento_display(tipo: str) -> str:
     return "Outro"
 
 
-def gerar_relatorio_comissionamento(ano: int, mes: int) -> dict[str, Any]:
+def gerar_relatorio_comissionamento(
+    ano: int,
+    mes: int,
+    usuario_escopo: Any = None,
+) -> dict[str, Any]:
     """
     Gera o relatório completo de comissionamento para um mês/ano.
 
@@ -124,11 +128,25 @@ def gerar_relatorio_comissionamento(ano: int, mes: int) -> dict[str, Any]:
     """
     User = get_user_model()
     data_inicio, data_fim = _obter_intervalo_mes(ano, mes)
+    from crm_app.services.escopo_operadora import (
+        filtrar_campanhas_por_operadora,
+        filtrar_planos_por_operadora,
+        filtrar_vendas_por_operadora,
+    )
 
     consultores = User.objects.filter(is_active=True).order_by("username")
-    todas_regras = list(
-        RegraComissao.objects.select_related("plano", "consultor").all()
+    regras_qs = RegraComissao.objects.select_related(
+        "plano",
+        "plano__operadora",
+        "consultor",
     )
+    if usuario_escopo is not None:
+        regras_qs = filtrar_planos_por_operadora(
+            regras_qs,
+            usuario_escopo,
+            campo_operadora="plano__operadora_id",
+        )
+    todas_regras = list(regras_qs)
 
     lancamentos_mes = LancamentoFinanceiro.objects.filter(
         data__gte=data_inicio,
@@ -143,6 +161,11 @@ def gerar_relatorio_comissionamento(ano: int, mes: int) -> dict[str, Any]:
         data_fim__year=ano,
         data_fim__month=mes,
     ).prefetch_related("planos_elegiveis", "formas_pagamento_elegiveis")
+    if usuario_escopo is not None:
+        campanhas_mes = filtrar_campanhas_por_operadora(
+            campanhas_mes,
+            usuario_escopo,
+        )
 
     relatorio: list[dict[str, Any]] = []
 
@@ -159,6 +182,8 @@ def gerar_relatorio_comissionamento(ano: int, mes: int) -> dict[str, Any]:
             .filter(_filtro_data_efetiva_instalacao_intervalo_venda(di, df))
             .select_related("plano", "forma_pagamento", "cliente")
         )
+        if usuario_escopo is not None:
+            vendas = filtrar_vendas_por_operadora(vendas, usuario_escopo)
 
         qtd_instaladas = vendas.count()
         meta = consultor.meta_comissao or 0
@@ -261,7 +286,13 @@ def gerar_relatorio_comissionamento(ano: int, mes: int) -> dict[str, Any]:
             pgto_ids = [fp.id for fp in camp.formas_pagamento_elegiveis.all()]
             if pgto_ids:
                 q_camp &= Q(forma_pagamento_id__in=pgto_ids)
-            total_atingido = Venda.objects.filter(q_camp).count()
+            vendas_campanha = Venda.objects.filter(q_camp)
+            if usuario_escopo is not None:
+                vendas_campanha = filtrar_vendas_por_operadora(
+                    vendas_campanha,
+                    usuario_escopo,
+                )
+            total_atingido = vendas_campanha.count()
             if total_atingido >= camp.meta_vendas:
                 stats_bonus[f"Prêmio: {camp.nome}"] += float(camp.valor_premio)
 

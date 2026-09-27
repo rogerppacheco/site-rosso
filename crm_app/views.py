@@ -70,8 +70,8 @@ def api_verificar_whatsapp(request, telefone=None):
         
         service = WhatsAppService()
         
-        # Verifica se a API está configurada
-        if not service.instance_id or not service.token:
+        # Verifica se a API do provedor ativo está configurada (Evolution, Z-API, etc.)
+        if not service.pode_verificar_numero():
             return Response({
                 "exists": True,  # Retorna True para não bloquear o cadastro
                 "whatsapp_valido": True,
@@ -140,12 +140,25 @@ from rest_framework import status
 # WhatsAtende (com segredo): .../api/crm/webhook-whatsapp/<WHATSATENDE_WEBHOOK_TOKEN>/
 class WebhookWhatsAppView(APIView):
     permission_classes = [AllowAny]  # Permite acesso sem autenticação para webhooks
+    authentication_classes = []  # Meta/Z-API/WhatsAtende não enviam sessão JWT
+
+    def get(self, request, *args, **kwargs):
+        """Handshake Cloud API: hub.mode=subscribe + hub.verify_token + hub.challenge."""
+        from crm_app.services.whatsapp.meta_webhook import (
+            responder_verificacao_webhook_meta,
+        )
+
+        resp = responder_verificacao_webhook_meta(request)
+        if resp is not None:
+            return resp
+        return Response({"status": "ok", "mensagem": "Webhook WhatsApp"}, status=200)
 
     def post(self, request, *args, **kwargs):
         """
         Endpoint para receber eventos do WhatsApp e processar fluxos.
         Sempre retorna uma resposta HTTP para evitar 502 (ngrok/Z-API/Evolution).
         Token opcional no path/query/header para WhatsAtende (sem HMAC nativo).
+        Cloud API Meta: HMAC X-Hub-Signature-256 quando META_APP_SECRET está setado.
         """
         import logging
         from django.conf import settings
@@ -153,8 +166,10 @@ class WebhookWhatsAppView(APIView):
         logger_webhook = logging.getLogger(__name__)
 
         from crm_app.services.whatsapp.webhook_token import (
+            extrair_token_webhook,
             validar_token_webhook_whatsatende,
         )
+        from crm_app.services.whatsapp.meta_webhook import validar_assinatura_meta
 
         path_token = kwargs.get("webhook_token")
         ok_token, erro_token = validar_token_webhook_whatsatende(
@@ -180,15 +195,32 @@ class WebhookWhatsAppView(APIView):
             logger_webhook.exception(f"[WebhookWhatsAppView] Erro ao ler request.data: {e}")
             return Response({'status': 'ok', 'mensagem': 'Payload inválido'}, status=200)
 
+        received, _origem = extrair_token_webhook(request, path_token=path_token)
+        ok_hmac, erro_hmac = validar_assinatura_meta(
+            request,
+            data if isinstance(data, dict) else {},
+            path_token_validado=bool(ok_token and received),
+        )
+        if not ok_hmac:
+            return Response(
+                {"status": "erro", "mensagem": erro_hmac or "Não autorizado"},
+                status=403,
+            )
+
         from crm_app.services.whatsapp.status_entrega_service import (
             processar_webhook_status,
         )
+        from crm_app.whatsapp_webhook_normalizer import (
+            normalizar_webhook,
+            payload_tem_mensagens_inbound_meta,
+        )
 
         status_resp = processar_webhook_status(data if isinstance(data, dict) else {})
-        if status_resp is not None:
+        if status_resp is not None and not payload_tem_mensagens_inbound_meta(
+            data if isinstance(data, dict) else {}
+        ):
             return Response(status_resp, status=200)
 
-        from crm_app.whatsapp_webhook_normalizer import normalizar_webhook
         data = normalizar_webhook(data)
 
         # Fallback: normalizador converteu status que o extrator do raw não viu.
@@ -452,8 +484,13 @@ def consultar_biometria_brpronto_view(request):
     venda = None
 
     if venda_id is not None:
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         try:
-            venda = Venda.objects.select_related("cliente").get(pk=venda_id)
+            venda = filtrar_vendas_por_operadora(
+                Venda.objects.select_related("cliente"),
+                user,
+            ).get(pk=venda_id)
         except Venda.DoesNotExist:
             return Response({"ok": False, "error": "Venda não encontrada."}, status=404)
         cliente_cpf_cnpj = (venda.cliente.cpf_cnpj or "").replace(".", "").replace("-", "").replace("/", "").strip()
@@ -766,11 +803,29 @@ class OperadoraListCreateView(generics.ListCreateAPIView):
     permission_classes = [CheckAPIPermission]
     resource_name = 'operadora'
 
+    def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
+
+        return filtrar_planos_por_operadora(
+            Operadora.objects.filter(ativo=True),
+            self.request.user,
+            campo_operadora='id',
+        )
+
 class OperadoraDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Operadora.objects.all()
     serializer_class = OperadoraSerializer
     permission_classes = [CheckAPIPermission]
     resource_name = 'operadora'
+
+    def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
+
+        return filtrar_planos_por_operadora(
+            Operadora.objects.all(),
+            self.request.user,
+            campo_operadora='id',
+        )
 
 class PlanoListCreateView(generics.ListCreateAPIView):
     serializer_class = PlanoSerializer
@@ -778,9 +833,12 @@ class PlanoListCreateView(generics.ListCreateAPIView):
     pagination_class = None
 
     def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
+
         queryset = Plano.objects.filter(ativo=True).select_related(
             'operadora', 'valores_comissao', 'comissao_operadora',
         )
+        queryset = filtrar_planos_por_operadora(queryset, self.request.user)
         operadora_id = self.request.query_params.get('operadora')
         if operadora_id:
             queryset = queryset.filter(operadora_id=operadora_id)
@@ -790,6 +848,16 @@ class PlanoDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Plano.objects.select_related('operadora', 'valores_comissao', 'comissao_operadora')
     serializer_class = PlanoSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
+
+        queryset = Plano.objects.select_related(
+            'operadora',
+            'valores_comissao',
+            'comissao_operadora',
+        )
+        return filtrar_planos_por_operadora(queryset, self.request.user)
 
     def perform_destroy(self, instance: Plano) -> None:
         """Inativa o plano em vez de excluir (preserva histórico de vendas)."""
@@ -811,15 +879,40 @@ class CampanhaListCreateView(generics.ListCreateAPIView):
     serializer_class = CampanhaSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_campanhas_por_operadora
+
+        return filtrar_campanhas_por_operadora(
+            Campanha.objects.filter(ativo=True),
+            self.request.user,
+        )
+
 class CampanhaDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Campanha.objects.all()
     serializer_class = CampanhaSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_campanhas_por_operadora
+
+        return filtrar_campanhas_por_operadora(
+            Campanha.objects.all(),
+            self.request.user,
+        )
+
 class ComissaoOperadoraViewSet(viewsets.ModelViewSet):
     queryset = ComissaoOperadora.objects.select_related('plano').all()
     serializer_class = ComissaoOperadoraSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
+
+        return filtrar_planos_por_operadora(
+            ComissaoOperadora.objects.select_related('plano', 'plano__operadora'),
+            self.request.user,
+            campo_operadora='plano__operadora_id',
+        )
 
 class StatusCRMListCreateView(generics.ListCreateAPIView):
     serializer_class = StatusCRMSerializer
@@ -4344,6 +4437,11 @@ class DashboardResumoView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        from crm_app.services.escopo_operadora import (
+            filtrar_planos_por_operadora,
+            filtrar_vendas_por_operadora,
+        )
+
         User = get_user_model()
         user = request.user
         
@@ -4424,9 +4522,9 @@ class DashboardResumoView(APIView):
 
         consultor_filtro_id = request.query_params.get('consultor_id')
         if consultor_filtro_id:
-            usuarios_para_calcular = User.objects.filter(id=consultor_filtro_id)
+            usuarios_para_calcular = User.objects.filter(id=consultor_filtro_id).select_related('perfil')
         elif is_member(user, ['Diretoria', 'Admin', 'BackOffice']):
-            base_dash = User.objects.exclude(username__in=['OSAB_IMPORT', 'admin', 'root'])
+            base_dash = User.objects.exclude(username__in=['OSAB_IMPORT', 'admin', 'root']).select_related('perfil')
             usuarios_para_calcular = _aplicar_filtro_vendedor_ativo_perf(
                 base_dash, user, request.query_params.get('vendedor_ativo')
             )
@@ -4442,7 +4540,11 @@ class DashboardResumoView(APIView):
         is_diretoria = is_member(user, ['Diretoria'])
         mapa_comissao_operadora = {}
         if is_diretoria:
-            configs = ComissaoOperadora.objects.all()
+            configs = filtrar_planos_por_operadora(
+                ComissaoOperadora.objects.all(),
+                user,
+                campo_operadora='plano__operadora_id',
+            )
             for c in configs:
                 mapa_comissao_operadora[c.plano_id] = {
                     'base': float(c.valor_base),
@@ -4461,18 +4563,15 @@ class DashboardResumoView(APIView):
         mix_velocidade = defaultdict(int)
         mix_pagamento = defaultdict(int)
 
-        ctx_faixas_comissao = None
-        matriz_cache_comissao = None
+        ctx_comissao = None
         if exibir_comissao:
-            from crm_app.comissao_folha_service import estimar_comissao_instaladas_vendedor
-            from crm_app.performance_helpers import carregar_contexto_faixas_comissao
-            from crm_app.services.comissao_matriz_service import MatrizComissaoCache
-
-            ctx_faixas_comissao = carregar_contexto_faixas_comissao(
-                data_inicio.year, data_inicio.month
+            from crm_app.comissao_folha_service import (
+                carregar_contexto_estimativa_comissao,
+                estimar_comissao_instaladas,
             )
-            matriz_cache_comissao = MatrizComissaoCache.carregar(
-                config_ids=[c.id for c in ctx_faixas_comissao['configs'].values()]
+
+            ctx_comissao = carregar_contexto_estimativa_comissao(
+                data_inicio.year, data_inicio.month
             )
 
         for vendedor in usuarios_para_calcular:
@@ -4483,6 +4582,10 @@ class DashboardResumoView(APIView):
                 vendedor=vendedor, ativo=True,
                 data_criacao__gte=data_inicio, data_criacao__lt=data_fim_ajustada
             ).select_related('cliente', 'status_esteira')
+            vendas_registro = filtrar_vendas_por_operadora(
+                vendas_registro,
+                user,
+            )
             
             qtd_registradas = vendas_registro.count()
 
@@ -4508,12 +4611,17 @@ class DashboardResumoView(APIView):
                     data_inicio.date(),
                     data_fim_date
                 )
-            ).select_related('plano', 'cliente', 'forma_pagamento')
+            ).select_related('plano', 'plano__valores_comissao', 'cliente', 'forma_pagamento')
+            vendas_instaladas = filtrar_vendas_por_operadora(
+                vendas_instaladas,
+                user,
+            )
+            vendas_instaladas_list = list(vendas_instaladas)
 
-            qtd_instaladas = vendas_instaladas.count()
+            qtd_instaladas = len(vendas_instaladas_list)
             status_counts_geral['INSTALADA'] += qtd_instaladas
 
-            for vi in vendas_instaladas:
+            for vi in vendas_instaladas_list:
                 obj_inst = {
                     'id': vi.id, 'cliente': vi.cliente.nome_razao_social if vi.cliente else 'S/C',
                     'status': 'INSTALADA',
@@ -4540,14 +4648,10 @@ class DashboardResumoView(APIView):
                                 valor_venda += cfg['bonus']
                         faturamento_operadora_real += valor_venda
 
-            if exibir_comissao:
-                comissao_vendedor = estimar_comissao_instaladas_vendedor(
-                    vendedor,
-                    vendas_instaladas,
-                    ctx_faixas=ctx_faixas_comissao,
-                    matriz_cache=matriz_cache_comissao,
+            if exibir_comissao and ctx_comissao is not None:
+                comissao_total_geral += estimar_comissao_instaladas(
+                    vendedor, vendas_instaladas_list, ctx_comissao
                 )
-                comissao_total_geral += comissao_vendedor
 
             total_registradas_geral += qtd_registradas
             total_instaladas_geral += qtd_instaladas
@@ -4615,9 +4719,22 @@ class ClienteViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(dados)
 
     def get_queryset(self):
+        from crm_app.services.escopo_operadora import (
+            filtrar_clientes_por_operadora,
+            q_vendas_por_operadora,
+        )
+
+        q_escopo = q_vendas_por_operadora(
+            self.request.user,
+            campo_plano='vendas__plano',
+        )
         queryset = Cliente.objects.annotate(
-            vendas_count=Count('vendas', filter=Q(vendas__ativo=True))
+            vendas_count=Count(
+                'vendas',
+                filter=Q(vendas__ativo=True) & q_escopo,
+            )
         ).order_by('nome_razao_social')
+        queryset = filtrar_clientes_por_operadora(queryset, self.request.user)
         
         search = self.request.query_params.get('search')
         if search:
@@ -4696,12 +4813,19 @@ class FolhaComissionamentoView(APIView):
                 mes,
                 vendedor_id,
                 use_effective_date_for_display=use_effective_date,
+                usuario_escopo=request.user,
             )
             try:
                 dados = future.result(timeout=timeout_s)
             except FuturesTimeoutError:
                 # Cálculo pode ter terminado no worker e gravado o cache no limite do timeout.
-                cached = obter_folha_cacheada(ano, mes, vendedor_id, use_effective_date)
+                cached = obter_folha_cacheada(
+                    ano,
+                    mes,
+                    vendedor_id,
+                    use_effective_date,
+                    request.user,
+                )
                 if cached is not None:
                     return Response(cached)
                 return Response(
@@ -4749,7 +4873,11 @@ class ComissionamentoView(APIView):
 
         from crm_app.services.comissionamento_service import gerar_relatorio_comissionamento
 
-        dados = gerar_relatorio_comissionamento(ano, mes)
+        dados = gerar_relatorio_comissionamento(
+            ano,
+            mes,
+            usuario_escopo=request.user,
+        )
         return Response(dados)
 
 
@@ -4921,6 +5049,8 @@ class GerarRelatorioPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         ano = int(request.data.get('ano'))
         mes = int(request.data.get('mes'))
         consultores_ids = request.data.get('consultores', [])
@@ -4935,6 +5065,7 @@ class GerarRelatorioPDFView(APIView):
             data_instalacao__gte=data_inicio,
             data_instalacao__lt=data_fim
         ).select_related('vendedor', 'cliente', 'plano', 'forma_pagamento', 'status_esteira')
+        vendas = filtrar_vendas_por_operadora(vendas, request.user)
 
         if consultores_ids:
             vendas = vendas.filter(vendedor_id__in=consultores_ids)
@@ -5053,6 +5184,8 @@ class EnviarExtratoEmailView(APIView):
 
     def post(self, request):
         try:
+            from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
             # 1. Receber dados
             ano = int(request.data.get('ano'))
             mes = int(request.data.get('mes'))
@@ -5099,6 +5232,7 @@ class EnviarExtratoEmailView(APIView):
                         data_instalacao__gte=data_inicio,
                         data_instalacao__lt=data_fim
                     ).select_related('plano', 'forma_pagamento', 'cliente')
+                    vendas = filtrar_vendas_por_operadora(vendas, request.user)
 
                     if not vendas.exists():
                         erros.append(f"{consultor.username}: Sem vendas instaladas no período.")
@@ -5307,33 +5441,45 @@ class ImportacaoOsabView(APIView):
 
     def _sincronizar_seq_historico(self):
         """Garante que a sequence do histórico não esteja atrasada (evita PK duplicada)."""
-        try:
-            from django.db import connection
-            from django.db.models import Max
-
-            max_id = HistoricoAlteracaoVenda.objects.aggregate(max_id=Max('id')).get('max_id') or 0
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT setval(pg_get_serial_sequence(%s, 'id'), %s, true);",
-                    ['crm_historico_alteracao_venda', max_id]
-                )
-        except Exception as e:
-            print(f"Aviso: não foi possível sincronizar sequence do histórico: {e}")
+        self._sincronizar_sequence_pg(
+            HistoricoAlteracaoVenda,
+            'crm_historico_alteracao_venda',
+            'histórico',
+        )
 
     def _sincronizar_seq_osab(self):
         """Garante que a sequence da importação OSAB não esteja atrasada (evita PK duplicada)."""
+        self._sincronizar_sequence_pg(
+            ImportacaoOsab,
+            'crm_importacao_osab',
+            'OSAB',
+        )
+
+    def _sincronizar_sequence_pg(self, model, table_name: str, label: str) -> None:
+        """Ajusta sequence Postgres sem abortar a transaction.atomic() pai.
+
+        setval(0) é inválido (mínimo 1). Em tabela vazia usamos setval(1, false)
+        para o próximo nextval retornar 1. Falhas ficam em savepoint isolado.
+        """
         try:
-            from django.db import connection
+            from django.db import connection, transaction
             from django.db.models import Max
 
-            max_id = ImportacaoOsab.objects.aggregate(max_id=Max('id')).get('max_id') or 0
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT setval(pg_get_serial_sequence(%s, 'id'), %s, true);",
-                    ['crm_importacao_osab', max_id]
-                )
+            max_id = model.objects.aggregate(max_id=Max('id')).get('max_id') or 0
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    if max_id <= 0:
+                        cursor.execute(
+                            "SELECT setval(pg_get_serial_sequence(%s, 'id'), 1, false);",
+                            [table_name],
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT setval(pg_get_serial_sequence(%s, 'id'), %s, true);",
+                            [table_name, max_id],
+                        )
         except Exception as e:
-            print(f"Aviso: não foi possível sincronizar sequence da OSAB: {e}")
+            print(f"Aviso: não foi possível sincronizar sequence da {label}: {e}")
 
     def _salvar_snapshots_reversao_osab(self, log_id, snapshots_list):
         """Persiste snapshots (um por venda) para permitir reversão da importação."""
@@ -5787,8 +5933,15 @@ class ImportacaoOsabView(APIView):
                 import datetime as dt_sys 
                 import pandas as pd # Garantir pandas aqui também
 
-                # Se for nulo ou vazio
-                if val is None or pd.isna(val) or val == '':
+                # Se for nulo ou vazio (nunca Series/DataFrame — evita "ambiguous")
+                if val is None or val == '':
+                    return None
+                if isinstance(val, (pd.Series, pd.DataFrame)):
+                    return None
+                try:
+                    if pd.isna(val):
+                        return None
+                except (ValueError, TypeError):
                     return None
                 
                 # Caso A: O Pandas/Engine já leu como objeto de data (datetime)
@@ -5840,10 +5993,20 @@ class ImportacaoOsabView(APIView):
             # Colunas só-data; DATA_ABERTURA preserva data+hora (datetime)
             cols_data = ['DT_REF', 'DATA_FECHAMENTO', 'DATA_AGENDAMENTO']
             for col in cols_data:
-                if col in df.columns:
-                    df[col] = df[col].apply(smart_date_parser)
+                if col not in df.columns:
+                    continue
+                alvo = df[col]
+                if isinstance(alvo, pd.DataFrame):
+                    # Coluna duplicada — mantém a primeira e descarta as demais
+                    df = df.loc[:, ~df.columns.duplicated()].copy()
+                    alvo = df[col]
+                df[col] = alvo.apply(smart_date_parser)
             if 'DATA_ABERTURA' in df.columns:
-                df['DATA_ABERTURA'] = df['DATA_ABERTURA'].apply(parse_osab_datetime)
+                alvo_ab = df['DATA_ABERTURA']
+                if isinstance(alvo_ab, pd.DataFrame):
+                    df = df.loc[:, ~df.columns.duplicated()].copy()
+                    alvo_ab = df['DATA_ABERTURA']
+                df['DATA_ABERTURA'] = alvo_ab.apply(parse_osab_datetime)
             
             df = df.replace({np.nan: None, pd.NaT: None})
 
@@ -6746,6 +6909,8 @@ class PerformanceVendasView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         User = get_user_model()
         hoje = timezone.now().date()
         start_of_week = hoje - timedelta(days=hoje.weekday())
@@ -6757,7 +6922,7 @@ class PerformanceVendasView(APIView):
         # Filtra apenas usuários ativos e remove robôs/admins que não vendem
         base_users = User.objects.filter(is_active=True).exclude(username__in=['OSAB_IMPORT', 'admin', 'root'])
 
-        if is_member(current_user, GRUPOS_VISUALIZACAO_GESTAO):
+        if is_member(current_user, ['Diretoria', 'BackOffice', 'Admin', 'Auditoria', 'Qualidade']):
             users_to_process = base_users.select_related('supervisor')
         elif is_member(current_user, ['Supervisor']):
             # Supervisor vê a si mesmo e seus liderados
@@ -6780,7 +6945,11 @@ class PerformanceVendasView(APIView):
             & Q(ordem_servico__isnull=False)
             & _filtro_data_efetiva_instalacao_intervalo_venda(start_of_month, hoje)
         )
-        vendas = Venda.objects.filter(base_filters).values('vendedor_id').annotate(
+        vendas_qs = filtrar_vendas_por_operadora(
+            Venda.objects.filter(base_filters),
+            current_user,
+        )
+        vendas = vendas_qs.values('vendedor_id').annotate(
             total_dia=Count('id', filter=Q(data_pedido__date=hoje)),
             total_mes=Count('id', filter=Q(data_pedido__date__gte=start_of_month)),
             total_mes_instalado=Count('id', filter=filtro_instalado_mes),
@@ -7411,6 +7580,7 @@ def enviar_comissao_whatsapp(request):
             ano=ano,
             mes=mes,
             consultores_ids=[int(cid) for cid in consultores_ids],
+            usuario_escopo=request.user,
         )
         return Response(
             {
@@ -7436,7 +7606,13 @@ def _obter_folha_exportacao(request, ano: int, mes: int, ids_envio: list[int] | 
     grupos_gestao = ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']
     use_effective = not is_member(request.user, grupos_gestao)
 
-    cached_all = obter_folha_cacheada(ano, mes, None, use_effective)
+    cached_all = obter_folha_cacheada(
+        ano,
+        mes,
+        None,
+        use_effective,
+        request.user,
+    )
     if cached_all is not None:
         return cached_all
 
@@ -7447,12 +7623,14 @@ def _obter_folha_exportacao(request, ano: int, mes: int, ids_envio: list[int] | 
             mes,
             ids[0],
             use_effective_date_for_display=use_effective,
+            usuario_escopo=request.user,
         )
     return calcular_folha_mes_com_cache(
         ano,
         mes,
         None,
         use_effective_date_for_display=use_effective,
+        usuario_escopo=request.user,
     )
 
 
@@ -8095,7 +8273,7 @@ def enviar_resultado_campanha_whatsapp(request):
 
 
 def _perf_grupos_gestao():
-    return list(GRUPOS_VISUALIZACAO_GESTAO)
+    return ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']
 
 
 def _aplicar_filtro_vendedor_ativo_perf(users_qs, user, vendedor_ativo_raw):
@@ -8210,7 +8388,10 @@ def _filtro_data_efetiva_instalacao_intervalo_venda(d_ini, d_fim):
 
 def _filtro_vendas_crm_periodo_listagem(dt_ini, dt_fim):
     """Vendas criadas no período (venda bruta) OU instaladas (data efetiva) no período."""
-    vendas_mes = Q(data_criacao__date__gte=dt_ini, data_criacao__date__lte=dt_fim)
+    q_abertura = Q(data_abertura__isnull=False, data_abertura__date__gte=dt_ini, data_abertura__date__lte=dt_fim)
+    q_pedido = Q(data_abertura__isnull=True, data_pedido__isnull=False, data_pedido__date__gte=dt_ini, data_pedido__date__lte=dt_fim)
+    q_criacao = Q(data_abertura__isnull=True, data_pedido__isnull=True, data_criacao__date__gte=dt_ini, data_criacao__date__lte=dt_fim)
+    vendas_mes = q_abertura | q_pedido | q_criacao
     instaladas_mes = (
         Q(status_esteira__nome__iexact='INSTALADA')
         & _filtro_data_efetiva_instalacao_intervalo_venda(dt_ini, dt_fim)
@@ -8315,6 +8496,7 @@ def _perf_semana_bucket_dia_mes(dia_mes):
 def _perf_montar_payload_gestao(users, inicio_mes_ref, request, hoje_ref=None, agora_local=None):
     from core.services.calendario_fiscal_service import carregar_mapa_fiscal, somar_pesos_periodo
     from crm_app.performance_helpers import calcular_dvu, limite_peso_mes, tipo_peso_gestao
+    from crm_app.services.escopo_operadora import q_vendas_por_operadora
 
     if hoje_ref is None:
         hoje_ref = timezone.localtime(timezone.now()).date()
@@ -8362,6 +8544,7 @@ def _perf_montar_payload_gestao(users, inicio_mes_ref, request, hoje_ref=None, a
         & ~Q(vendas__ordem_servico='')
         & Q(vendas__ordem_servico__isnull=False)
         & Q(vendas__status_tratamento__nome__iexact='CADASTRADA')
+        & q_vendas_por_operadora(request.user, campo_plano='vendas__plano')
     )
     filtro_cc = (
         Q(vendas__forma_pagamento__nome__icontains='CREDIT')
@@ -8588,6 +8771,8 @@ class PainelPerformanceView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import q_vendas_por_operadora
+
         User = get_user_model()
         user = request.user
         agora_local = timezone.localtime(timezone.now())
@@ -8636,12 +8821,14 @@ class PainelPerformanceView(APIView):
             & Q(vendas__ordem_servico__isnull=False)
             & Q(vendas__status_tratamento__nome__iexact='CADASTRADA')
             & Q(vendas__reemissao=False)
+            & q_vendas_por_operadora(user, campo_plano='vendas__plano')
         )
         filtro_os_com_reemissao = (
             Q(vendas__ativo=True)
             & ~Q(vendas__ordem_servico='')
             & Q(vendas__ordem_servico__isnull=False)
             & Q(vendas__status_tratamento__nome__iexact='CADASTRADA')
+            & q_vendas_por_operadora(user, campo_plano='vendas__plano')
         )
         filtro_cc = (
             Q(vendas__forma_pagamento__nome__icontains='CREDIT')
@@ -8907,6 +9094,8 @@ class ExportarPerformanceExcelView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         User = get_user_model()
         user = request.user
         if not is_member(user, _perf_grupos_export_excel()):
@@ -8943,12 +9132,12 @@ class ExportarPerformanceExcelView(APIView):
 
         users_export = _aplicar_filtro_vendedor_ativo_perf(users_export, user, request.query_params.get('vendedor_ativo'))
 
-        vendas = (
-            Venda.objects.filter(vendedor_id__in=users_export.values_list('id', flat=True))
-            .select_related(
-                'vendedor', 'cliente', 'plano', 'forma_pagamento',
-                'status_esteira', 'status_tratamento',
-            )
+        vendas = filtrar_vendas_por_operadora(
+            Venda.objects.filter(vendedor_id__in=users_export.values_list('id', flat=True)),
+            user,
+        ).select_related(
+            'vendedor', 'cliente', 'plano', 'forma_pagamento',
+            'status_esteira', 'status_tratamento',
         )
 
         # Período selecionado no botão (define nome do arquivo e prioridade das abas)
@@ -9462,7 +9651,7 @@ class NominatimProxyView(APIView):
             url = f"https://nominatim.openstreetmap.org/search?{urllib.parse.urlencode(params)}"
             req = urllib.request.Request(
                 url,
-                headers={'User-Agent': 'RossoCRM/1.0'}
+                headers={'User-Agent': 'ClickUpCRM/1.0'}
             )
             with urllib.request.urlopen(req, timeout=8) as response:
                 data = json.loads(response.read().decode('utf-8'))
@@ -9475,7 +9664,15 @@ class NominatimProxyView(APIView):
 @permission_classes([IsAuthenticated])
 def relatorio_resultado_campanha(request, campanha_id):
     try:
-        campanha = Campanha.objects.get(id=campanha_id)
+        from crm_app.services.escopo_operadora import (
+            filtrar_campanhas_por_operadora,
+            filtrar_vendas_por_operadora,
+        )
+
+        campanha = filtrar_campanhas_por_operadora(
+            Campanha.objects.all(),
+            request.user,
+        ).get(id=campanha_id)
         # Ordena faixas da MAIOR para a MENOR para achar a atingida mais fácil
         faixas_premiacao = campanha.regras_meta.all().order_by('-meta') 
         
@@ -9507,7 +9704,10 @@ def relatorio_resultado_campanha(request, campanha_id):
         pgtos_validos = campanha.formas_pagamento_elegiveis.all()
         if pgtos_validos.exists(): filtros &= Q(forma_pagamento__in=pgtos_validos)
 
-        vendas = Venda.objects.filter(filtros).values(
+        vendas = filtrar_vendas_por_operadora(
+            Venda.objects.filter(filtros),
+            request.user,
+        ).values(
             'vendedor__id', 'vendedor__first_name', 'vendedor__last_name', 'vendedor__username'
         ).annotate(total_vendas=Count('id')).order_by('-total_vendas')
 
@@ -9627,6 +9827,7 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
         A coluna 'Comissão est.' usa a primeira faixa COMISSAO em REGRAS_FAIXAS quando existir."""
         from datetime import datetime
         import re
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
         vendedor_id = request.query_params.get('vendedor_id')
         ano = request.query_params.get('ano')
         mes = request.query_params.get('mes')
@@ -9651,6 +9852,7 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             data_instalacao__gte=data_inicio,
             data_instalacao__lt=data_fim,
         ).select_related('plano', 'cliente').order_by('data_instalacao', 'id')
+        vendas = filtrar_vendas_por_operadora(vendas, request.user)
         # Primeira faixa COMISSAO define o valor fixo da "Comissão est." (500MB/700/1GB).
         faixa_adiantamento = RegraComissaoFaixa.objects.filter(
             finalidade='COMISSAO'
@@ -9788,10 +9990,13 @@ class PendenciasDescontoView(APIView):
 
     def get(self, request):
         from datetime import datetime
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         vendas = Venda.objects.filter(
             ativo=True,
             status_esteira__nome__iexact='INSTALADA'
         ).select_related('vendedor', 'forma_pagamento', 'cliente')
+        vendas = filtrar_vendas_por_operadora(vendas, request.user)
 
         ano = request.query_params.get('ano')
         mes = request.query_params.get('mes')
@@ -9852,6 +10057,7 @@ class PendenciasDescontoView(APIView):
         ).exclude(adiantamento_sabado_valor__isnull=True).exclude(
             adiantamento_sabado_valor=0
         ).select_related('vendedor', 'forma_pagamento', 'cliente', 'status_esteira')
+        vendas_sab = filtrar_vendas_por_operadora(vendas_sab, request.user)
 
         ano_q = request.query_params.get('ano')
         mes_q = request.query_params.get('mes')
@@ -10401,9 +10607,14 @@ class ImportacaoLegadoView(APIView):
             log.save()
             
             # --- CACHES PARA PERFORMANCE ---
-            users_map = {u.username.upper(): u for u in get_user_model().objects.all()}
-            for u in get_user_model().objects.all():
-                if u.email: users_map[u.email.upper()] = u
+            UserModel = get_user_model()
+            users_map = {u.username.upper(): u for u in UserModel.objects.all()}
+            for u in UserModel.objects.all():
+                if u.email:
+                    users_map[u.email.upper()] = u
+                mat = (getattr(u, "matricula_pap", None) or "").strip().upper()
+                if mat and mat not in users_map:
+                    users_map[mat] = u
 
             planos_map = {p.nome.upper(): p for p in Plano.objects.all()}
             pgto_map = {fp.nome.upper(): fp for fp in FormaPagamento.objects.all()}
@@ -10519,7 +10730,7 @@ class ImportacaoLegadoView(APIView):
                     if mudou_cliente:
                         cliente.save()
 
-                    # 2. VENDEDOR
+                    # 2. VENDEDOR (username, e-mail ou matrícula PAP)
                     login_vend = str(row.get('LOGIN_VENDEDOR', '')).upper().strip()
                     vendedor = users_map.get(login_vend)
 
@@ -10630,6 +10841,55 @@ class ImportacaoLegadoView(APIView):
             if vendas_para_criar:
                 with transaction.atomic():
                     Venda.objects.bulk_create(vendas_para_criar, batch_size=1000)
+
+            # bulk_create não dispara signals: cria ContratoM10 das INSTALADAS
+            try:
+                from crm_app.models import ContratoM10, SafraM10
+                from crm_app.signals_m10_automacao import sincronizar_com_fpd
+
+                instaladas = [
+                    v for v in vendas_para_criar
+                    if v.status_esteira
+                    and str(v.status_esteira.nome).upper() == "INSTALADA"
+                    and v.data_instalacao
+                    and v.ordem_servico
+                ]
+                for venda in instaladas:
+                    if ContratoM10.objects.filter(ordem_servico=venda.ordem_servico).exists():
+                        continue
+                    mes_ref = venda.data_instalacao.replace(day=1)
+                    safra_str = venda.data_instalacao.strftime("%Y-%m")
+                    SafraM10.objects.get_or_create(
+                        mes_referencia=mes_ref,
+                        defaults={
+                            "total_instalados": 0,
+                            "total_ativos": 0,
+                            "total_elegivel_bonus": 0,
+                            "valor_bonus_total": 0,
+                        },
+                    )
+                    contrato = ContratoM10.objects.create(
+                        numero_contrato=venda.ordem_servico,
+                        safra=safra_str,
+                        venda=venda,
+                        ordem_servico=venda.ordem_servico,
+                        cliente_nome=venda.cliente.nome_razao_social if venda.cliente else "",
+                        cpf_cliente=venda.cliente.cpf_cnpj if venda.cliente else "",
+                        vendedor=venda.vendedor,
+                        data_instalacao=venda.data_instalacao,
+                        plano_original=venda.plano.nome if venda.plano else "N/A",
+                        plano_atual=venda.plano.nome if venda.plano else "N/A",
+                        valor_plano=(getattr(venda.plano, "valor", 0) or 0) if venda.plano else 0,
+                        status_contrato="ATIVO",
+                        elegivel_bonus=False,
+                        observacao=f"Importado de Venda legado #{getattr(venda, 'id', '')}",
+                    )
+                    try:
+                        sincronizar_com_fpd(contrato, venda.ordem_servico)
+                    except Exception:
+                        pass
+            except Exception as exc_m10:
+                logs_erro.append(f"Aviso M-10 pós-import: {exc_m10}")
 
             # Atualizar log
             log.total_processadas = vendas_criadas
@@ -11335,6 +11595,7 @@ class CdoiDashboardView(APIView):
 
     def get(self, request):
         from django.db.models import Sum
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
 
         queryset = CdoiSolicitacao.objects.all()
         total_acionamentos = queryset.count()
@@ -11359,7 +11620,10 @@ class CdoiDashboardView(APIView):
         if pares:
             ceps = list({p[0] for p in pares})
             pares_set = set(pares)
-            vendas = Venda.objects.filter(cep__in=ceps).values('cep', 'numero_residencia')
+            vendas = filtrar_vendas_por_operadora(
+                Venda.objects.filter(cep__in=ceps),
+                request.user,
+            ).values('cep', 'numero_residencia')
             for v in vendas:
                 cep_limpo = re.sub(r'\D', '', str(v.get('cep') or ''))
                 numero = str(v.get('numero_residencia') or '').strip()
@@ -12479,7 +12743,7 @@ def page_validacao_recompra(request):
 
 
 def page_record_apoia(request):
-    """View para renderizar a página HTML do Apoia"""
+    """View para renderizar a página HTML do Futura Telecom Apoia"""
     return render(request, 'record_apoia.html')
 
 
@@ -12493,6 +12757,8 @@ class SafraM10ListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         safras = SafraM10.objects.all().order_by('-mes_referencia')
         data = []
         # Mapeamento de meses em português
@@ -12504,16 +12770,54 @@ class SafraM10ListView(APIView):
         
         pode_ver_valor_bonus = is_member(request.user, ['Diretoria', 'Admin'])
         for s in safras:
+            inicio = s.mes_referencia
+            fim = inicio + relativedelta(months=1)
+            contratos = filtrar_vendas_por_operadora(
+                ContratoM10.objects.filter(
+                    data_instalacao__gte=inicio,
+                    data_instalacao__lt=fim,
+                ),
+                request.user,
+                campo_plano='venda__plano',
+            ).annotate(
+                total_faturas=Count('faturas', distinct=True),
+                faturas_pagas=Count(
+                    'faturas',
+                    filter=Q(faturas__status='PAGO'),
+                    distinct=True,
+                ),
+            )
+            contratos_lista = list(contratos)
+            total_instalados = len(contratos_lista)
+            total_ativos = sum(
+                contrato.status_contrato == 'ATIVO'
+                for contrato in contratos_lista
+            )
+            total_elegivel = sum(
+                contrato.status_contrato == 'ATIVO'
+                and not contrato.teve_downgrade
+                and (
+                    (
+                        (contrato.total_faturas or 0) > 0
+                        and contrato.total_faturas == contrato.faturas_pagas
+                    )
+                    or (
+                        (contrato.total_faturas or 0) == 0
+                        and (contrato.status_fatura_fpd or '').lower().startswith('paga')
+                    )
+                )
+                for contrato in contratos_lista
+            )
             mes_nome = meses_pt.get(s.mes_referencia.month, s.mes_referencia.strftime('%m'))
             mes_formatado = f"{mes_nome}/{s.mes_referencia.year}"
             data.append({
                 'id': s.id,
                 'mes_referencia': s.mes_referencia.isoformat(),
                 'mes_referencia_formatado': mes_formatado,
-                'total_instalados': s.total_instalados,
-                'total_ativos': s.total_ativos,
-                'total_elegivel_bonus': s.total_elegivel_bonus,
-                'valor_bonus_total': float(s.valor_bonus_total) if pode_ver_valor_bonus else 0,
+                'total_instalados': total_instalados,
+                'total_ativos': total_ativos,
+                'total_elegivel_bonus': total_elegivel,
+                'valor_bonus_total': float(total_elegivel * 150) if pode_ver_valor_bonus else 0,
             })
         return Response(data)
 
@@ -12613,8 +12917,15 @@ class VendedoresM10View(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         safra_param = request.GET.get('safra')
         queryset = ContratoM10.objects.select_related('vendedor').filter(vendedor__isnull=False)
+        queryset = filtrar_vendas_por_operadora(
+            queryset,
+            request.user,
+            campo_plano='venda__plano',
+        )
         if safra_param:
             data_inicio, data_fim = _safra_to_data_range(safra_param)
             if data_inicio is not None and data_fim is not None:
@@ -12645,6 +12956,8 @@ class DashboardM10View(APIView):
 
     def get(self, request):
         try:
+            from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
             safra_id = request.GET.get('safra')
             if not safra_id:
                 return Response({'error': 'Safra não informada'}, status=400)
@@ -12663,6 +12976,11 @@ class DashboardM10View(APIView):
                 data_instalacao__gte=data_inicio,
                 data_instalacao__lt=data_fim,
             ).select_related('vendedor')
+            queryset = filtrar_vendas_por_operadora(
+                queryset,
+                request.user,
+                campo_plano='venda__plano',
+            )
             
             vendedor = request.GET.get('vendedor')
             if vendedor:
@@ -12808,10 +13126,17 @@ class DashboardFPDView(APIView):
 
     def get(self, request):
         try:
+            from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
             mes_str = request.GET.get('mes')  # formato: 2025-07
             
             # Filtrar faturas número 1 (primeira fatura)
             queryset = FaturaM10.objects.filter(numero_fatura=1)
+            queryset = filtrar_vendas_por_operadora(
+                queryset,
+                request.user,
+                campo_plano='contrato__venda__plano',
+            )
             
             if mes_str:
                 try:
@@ -12880,6 +13205,8 @@ class PopularSafraM10View(APIView):
             return Response({'error': 'mes_referencia é obrigatório (formato: YYYY-MM)'}, status=400)
 
         try:
+            from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
             # Converte para data (primeiro dia do mês)
             ano, mes = mes_referencia.split('-')
             data_inicio = datetime(int(ano), int(mes), 1).date()
@@ -12913,6 +13240,7 @@ class PopularSafraM10View(APIView):
                 ativo=True,
                 status_esteira__nome__iexact='INSTALADA'
             ).order_by('data_criacao').select_related('cliente', 'vendedor', 'status_esteira', 'plano')
+            vendas = filtrar_vendas_por_operadora(vendas, request.user)
 
             contratos_criados = 0
             contratos_duplicados = 0
@@ -12983,8 +13311,14 @@ class ContratoM10DetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         try:
-            contrato = ContratoM10.objects.get(pk=pk)
+            contrato = filtrar_vendas_por_operadora(
+                ContratoM10.objects.all(),
+                request.user,
+                campo_plano='venda__plano',
+            ).get(pk=pk)
             faturas = []
             for f in contrato.faturas.all().order_by('numero_fatura'):
                 data_venc = f.data_vencimento.isoformat() if f.data_vencimento else None
@@ -13063,45 +13397,38 @@ class ImportarFPDView(APIView):
         })
     
     def _processar_fpd_interno(self, log_id, arquivo_bytes, arquivo_nome, user_id):
-        """Processa planilha FPD/SPD/TPD em background e atualiza FaturaM10 1/2/3."""
-        from .models import ImportacaoFPD, LogImportacaoFPD, Venda
-        from crm_app.services.fpd_import_service import (
-            MATCH_FALTA_CRM,
-            MATCH_MATCHED,
-            ORIGEM_FPD,
-            aplicar_status_fpd_com_conferencia,
-            buscar_venda_por_os,
-            chave_importacao,
-            criar_contrato_de_venda,
-            extrair_campos_linha_fpd,
-            normalizar_nr_ordem,
-            sincronizar_vencimentos_fpd_nas_faturas,
-            variacoes_ordem_servico,
-        )
+        """Processa FPD em background thread"""
+        from .models import ImportacaoFPD, LogImportacaoFPD
         from django.utils import timezone
         from django.db import transaction
         from io import BytesIO
-
+        
+        # Recuperar log e usuário
         log = LogImportacaoFPD.objects.get(id=log_id)
         User = get_user_model()
         usuario = User.objects.get(id=user_id)
-
+        # Recuperar log e usuário
+        log = LogImportacaoFPD.objects.get(id=log_id)
+        User = get_user_model()
+        usuario = User.objects.get(id=user_id)
+        
+        inicio = timezone.now()
         os_nao_encontradas = []
         erros_detalhados = []
 
         try:
+            # Criar objeto BytesIO do arquivo
             arquivo_io = BytesIO(arquivo_bytes)
-
+            
+            # Lê arquivo Excel/CSV
+            # IMPORTANTE: Ler colunas numéricas como STRING para preservar leading zeros
             dtype_spec = {
-                'ID_CONTRATO': str,
-                'CONTRATO': str,
-                'NR_FATURA': str,
-                'NR_ORDEM': str,
-                'NR_ORDEM_VENDA': str,
-                'nr_ordem': str,
-                'INDICADOR': str,
+                'ID_CONTRATO': str,      # Força leitura como texto
+                'NR_FATURA': str,        # Força leitura como texto
+                'NR_ORDEM': str,         # Força leitura como texto
+                'NR_ORDEM_VENDA': str,   # Portal Parceiros
             }
-
+            
             if arquivo_nome.endswith('.csv'):
                 df = pd.read_csv(arquivo_io, dtype=dtype_spec)
             elif arquivo_nome.endswith('.xlsb'):
@@ -13117,81 +13444,87 @@ class ImportarFPDView(APIView):
             else:
                 df = pd.read_excel(arquivo_io, dtype=dtype_spec)
 
+            # Normalizar nomes de colunas (inclui layout Portal Parceiros)
             from crm_app.portal_parceiros_import_utils import (
                 coluna_nr_ordem_fpd_presente,
+                extrair_indicador_fpd,
+                extrair_vl_fatura_fpd,
                 normalizar_colunas_fpd,
             )
 
             df = normalizar_colunas_fpd(df)
-            if 'id_contrato' not in df.columns and 'contrato' in df.columns:
-                df['id_contrato'] = df['contrato']
 
+            # Validar presença da coluna obrigatória NR_ORDEM (ou alias nr_ordem_venda)
             if not coluna_nr_ordem_fpd_presente(df):
                 colunas_encontradas = ', '.join(sorted(df.columns[:15]))
                 log.status = 'ERRO'
                 log.mensagem_erro = (
                     'Coluna NR_ORDEM não encontrada no arquivo. '
                     'A planilha FPD deve ter "NR_ORDEM" ou "NR_ORDEM_VENDA" (Portal Parceiros). '
-                    f'Colunas encontradas: {colunas_encontradas}'
-                    + ('...' if len(df.columns) > 15 else '')
+                    f'Colunas encontradas: {colunas_encontradas}' + ('...' if len(df.columns) > 15 else '')
                 )
                 log.finalizado_em = timezone.now()
                 log.calcular_duracao()
                 log.save()
                 return
-
+            
             log.total_linhas = len(df)
             log.save(update_fields=['total_linhas'])
             registros_nao_encontrados = 0
             registros_importacoes_fpd = 0
             registros_atualizados = 0
             registros_pulados = 0
-            registros_criados_venda = 0
-            contagem_por_indicador = {'FPD': 0, 'SPD': 0, 'TPD': 0}
             valor_total = 0
             data_importacao_agora = timezone.now()
-            hoje = timezone.localdate()
-
+            
+            # Otimização: pre-carregar contratos em memória para evitar N queries
+            # Criar dicionário com múltiplas variações de chaves para melhor matching
             contratos_dict = {}
+            # Pre-carregar faturas para evitar N+1 queries
             contratos_list = list(ContratoM10.objects.prefetch_related('faturas').all())
+            # Criar dicionário de faturas por contrato para acesso rápido
             faturas_por_contrato = {}
             for c in contratos_list:
                 if c.ordem_servico:
-                    for variacao in variacoes_ordem_servico(str(c.ordem_servico).strip()):
-                        if variacao not in contratos_dict:
+                    os = str(c.ordem_servico).strip()
+                    if not os:
+                        continue
+                    # Indexar por múltiplas variações para facilitar busca
+                    os_sem_zeros = os.lstrip('0') or '0'  # Proteger contra string vazia
+                    variacoes = [
+                        os,
+                        os_sem_zeros,
+                        os.zfill(8) if len(os) <= 8 else os,  # 8 dígitos (compatível com churn)
+                        f'OS-{os}',
+                        f'OS-{os_sem_zeros}',
+                        f'OS-{os.zfill(8)}' if len(os) <= 8 else None,
+                    ]
+                    variacoes = [v for v in variacoes if v]
+                    for variacao in variacoes:
+                        if variacao and variacao not in contratos_dict:
                             contratos_dict[variacao] = c
-                faturas_por_contrato[c.id] = {f.numero_fatura: f for f in c.faturas.all()}
-
-            # Vendas INSTALADAS sem ContratoM10 — fallback de matching
-            vendas_dict = {}
-            vendas_qs = (
-                Venda.objects.filter(
-                    ativo=True,
-                    ordem_servico__isnull=False,
-                    status_esteira__nome__iexact='INSTALADA',
-                )
-                .exclude(ordem_servico='')
-                .select_related('cliente', 'vendedor', 'plano', 'status_esteira')
-            )
-            for venda in vendas_qs.iterator(chunk_size=2000):
-                for variacao in variacoes_ordem_servico(str(venda.ordem_servico).strip()):
-                    if variacao not in vendas_dict:
-                        vendas_dict[variacao] = venda
-
+                # Pre-carregar faturas do contrato em dicionário para acesso rápido
+                faturas_contrato = list(c.faturas.all())
+                faturas_por_contrato[c.id] = {f.numero_fatura: f for f in faturas_contrato}
+            
+            # Otimização: pre-carregar ImportacaoFPD em memória também
+            # Indexar apenas por nr_ordem (atualizar registro existente com mesmo nr_ordem)
             importacoes_dict = {}
             for imp in ImportacaoFPD.objects.all().order_by('-atualizada_em'):
-                chave = chave_importacao(imp.nr_ordem, getattr(imp, 'indicador', None) or 'FPD')
-                if chave not in importacoes_dict:
-                    importacoes_dict[chave] = imp
-
+                if imp.nr_ordem and imp.nr_ordem not in importacoes_dict:
+                    importacoes_dict[imp.nr_ordem] = imp
+            
+            # Listas para bulk operations (reduz queries drasticamente)
             faturas_para_criar = []
             faturas_para_atualizar = []
             importacoes_para_criar = []
             importacoes_para_atualizar = []
+            # GAP 1+2: contratos que tiveram fatura 1 criada/atualizada (para atualizar ContratoM10 e elegibilidade)
             contratos_afetados_ids = set()
             faturas_atualizar_ids: set[int] = set()
 
             def _carregar_faturas_contrato(contrato_id: int) -> dict:
+                """Garante cache com faturas do banco (signal de órfão cria fatura 1 na hora)."""
                 cache = faturas_por_contrato.get(contrato_id)
                 if cache is None:
                     cache = {
@@ -13201,190 +13534,302 @@ class ImportarFPDView(APIView):
                     faturas_por_contrato[contrato_id] = cache
                 return cache
 
-            def _agendar_fatura_n(contrato, numero_fatura: int, campos: dict) -> None:
-                """Agenda create/update da fatura N (1=FPD, 2=SPD, 3=TPD).
-
-                Se o BO alterou o status no tratamento (AGUARDANDO), confere com a
-                planilha: confirma, marca divergente ou aplica FPD normalmente.
-                """
+            def _agendar_fatura1(contrato, campos: dict) -> None:
+                """Agenda create/update da fatura 1 sem duplicar (mesmo O.S ou signal)."""
                 cache = _carregar_faturas_contrato(contrato.id)
-                fatura = cache.get(numero_fatura)
+                fatura = cache.get(1)
                 if fatura is None:
                     fatura = FaturaM10.objects.filter(
-                        contrato_id=contrato.id, numero_fatura=numero_fatura
+                        contrato_id=contrato.id, numero_fatura=1
                     ).first()
                     if fatura:
-                        cache[numero_fatura] = fatura
-
-                status_fpd = campos.get('status') or 'NAO_PAGO'
-                if fatura is not None:
-                    campos_aplicados = aplicar_status_fpd_com_conferencia(
-                        fatura,
-                        status_fpd=status_fpd,
-                        campos_fpd=campos,
-                    )
-                else:
-                    campos_aplicados = dict(campos)
-                    campos_aplicados['status'] = status_fpd
-                    campos_aplicados['status_origem'] = ORIGEM_FPD
-                    campos_aplicados['conferencia_fpd'] = ''
+                        cache[1] = fatura
 
                 if fatura is not None and getattr(fatura, 'pk', None):
-                    for chave, valor in campos_aplicados.items():
+                    for chave, valor in campos.items():
                         setattr(fatura, chave, valor)
                     if fatura.pk not in faturas_atualizar_ids:
                         faturas_para_atualizar.append(fatura)
                         faturas_atualizar_ids.add(fatura.pk)
-                    cache[numero_fatura] = fatura
+                    cache[1] = fatura
                 elif fatura is not None:
-                    for chave, valor in campos_aplicados.items():
+                    # Já enfileirada em faturas_para_criar (O.S repetida na planilha)
+                    for chave, valor in campos.items():
                         setattr(fatura, chave, valor)
                 else:
-                    nova = FaturaM10(
-                        contrato=contrato, numero_fatura=numero_fatura, **campos_aplicados
-                    )
+                    nova = FaturaM10(contrato=contrato, numero_fatura=1, **campos)
                     faturas_para_criar.append(nova)
-                    cache[numero_fatura] = nova
+                    cache[1] = nova
 
-            def _aplicar_importacao(nr_ordem, campos, contrato, match_status):
-                nonlocal registros_atualizados, registros_importacoes_fpd, valor_total
-                chave = chave_importacao(nr_ordem, campos['indicador'])
-                payload = {
-                    'id_contrato': campos['id_contrato'],
-                    'nr_fatura': campos['nr_fatura'],
-                    'dt_venc_orig': campos['dt_venc_date'],
-                    'dt_pagamento': campos['dt_pgto_date'],
-                    'nr_dias_atraso': campos['nr_dias_atraso'],
-                    'ds_status_fatura': campos['status_str'],
-                    'vl_fatura': campos['vl_fatura'],
-                    'contrato_m10': contrato,
-                    'indicador': campos['indicador'],
-                    'numero_fatura_m10': campos['numero_fatura'],
-                    'ds_sit_fatura': campos['ds_sit_fatura'],
-                    'faixa': campos['faixa'],
-                    'municipio': campos['municipio'],
-                    'uf': campos['uf'],
-                    'cd_vendedor_original': campos['cd_vendedor_original'],
-                    'nm_pdv': campos['nm_pdv'],
-                    'nm_gc': campos['nm_gc'],
-                    'nm_seg': campos.get('nm_seg') or '',
-                    'match_status': match_status,
-                }
-                existente = importacoes_dict.get(chave)
-                if existente:
-                    for k, v in payload.items():
-                        setattr(existente, k, v)
-                    importacoes_para_atualizar.append(existente)
-                    registros_atualizados += 1
-                else:
-                    nova_imp = ImportacaoFPD(nr_ordem=nr_ordem, **payload)
-                    importacoes_para_criar.append(nova_imp)
-                    importacoes_dict[chave] = nova_imp
-                    registros_importacoes_fpd += 1
-                valor_total += campos['vl_fatura']
-
-            with transaction.atomic():
+            with transaction.atomic():  # Garantir atomicidade
                 for idx, row in df.iterrows():
                     try:
-                        nr_ordem = normalizar_nr_ordem(row.get('nr_ordem', ''))
-                        if not nr_ordem:
+                        # Busca por O.S (nr_ordem - com coluna normalizada para minúsculas)
+                        nr_ordem_raw = row.get('nr_ordem', '')
+                        
+                        # Converter para string mas MANTER ZEROS à esquerda
+                        if pd.isna(nr_ordem_raw):
+                            registros_pulados += 1
+                            continue
+                        
+                        nr_ordem = str(nr_ordem_raw).strip()
+                        
+                        # Se for número, remover ".0" se existir (vem do pandas quando lê números do Excel)
+                        if nr_ordem.replace('.', '').replace('-', '').isdigit():
+                            nr_ordem = nr_ordem.split('.')[0]
+                        
+                        if not nr_ordem or nr_ordem == 'nan':
                             registros_pulados += 1
                             continue
 
-                        campos = extrair_campos_linha_fpd(row, hoje=hoje)
-                        contagem_por_indicador[campos['indicador']] = (
-                            contagem_por_indicador.get(campos['indicador'], 0) + 1
-                        )
-
+                        # Tenta encontrar contrato por ordem_servico com variações (lookup em memória)
+                        # Tenta múltiplas variações para melhor matching
                         contrato = None
-                        for variacao in variacoes_ordem_servico(nr_ordem):
+                        variacoes_nr_ordem = [
+                            nr_ordem,                          # Exato (como veio)
+                            nr_ordem.zfill(8),                # Com zeros à esquerda (8 dígitos)
+                            nr_ordem.lstrip('0') or '0',       # Sem zeros à esquerda
+                            f'OS-{nr_ordem}',                  # Com prefixo OS-
+                            f'OS-{nr_ordem.zfill(8)}',         # Prefixo OS- com zeros
+                            f'OS-{nr_ordem.lstrip("0") or "0"}', # Prefixo OS- sem zeros
+                        ]
+                        for variacao in variacoes_nr_ordem:
                             if variacao in contratos_dict:
                                 contrato = contratos_dict[variacao]
                                 break
-
-                        if contrato is None:
-                            venda = buscar_venda_por_os(nr_ordem, vendas_dict)
-                            if venda is not None:
-                                try:
-                                    contrato = criar_contrato_de_venda(
-                                        venda, id_contrato=campos['id_contrato'] or None
-                                    )
-                                    for variacao in variacoes_ordem_servico(nr_ordem):
-                                        contratos_dict[variacao] = contrato
-                                    faturas_por_contrato[contrato.id] = {
-                                        f.numero_fatura: f
-                                        for f in FaturaM10.objects.filter(
-                                            contrato_id=contrato.id
-                                        )
-                                    }
-                                    registros_criados_venda += 1
-                                except Exception as e_venda:
-                                    logger.warning(
-                                        'Falha ao criar ContratoM10 da venda OS=%s: %s',
-                                        nr_ordem,
-                                        e_venda,
-                                    )
-                                    contrato = None
-
-                        if contrato is not None:
+                        if contrato:
+                            # Enriquece CPF/nome a partir da venda quando o FPD só traz O.S.
                             if contrato.venda_id:
                                 venda_fk = contrato.venda
                                 if venda_fk and venda_fk.cliente_id:
                                     cli = venda_fk.cliente
-                                    updates = []
                                     if cli and cli.cpf_cnpj and not (contrato.cpf_cliente or '').strip():
                                         contrato.cpf_cliente = cli.cpf_cnpj
-                                        updates.append('cpf_cliente')
                                     if cli and cli.nome_razao_social:
                                         contrato.cliente_nome = cli.nome_razao_social
-                                        updates.append('cliente_nome')
                                     if getattr(contrato, 'orfao', False) and (contrato.cpf_cliente or '').strip():
                                         contrato.orfao = False
-                                        updates.append('orfao')
-                                    if updates:
-                                        updates.append('atualizado_em')
-                                        contrato.save(update_fields=list(dict.fromkeys(updates)))
+                                    contrato.save(update_fields=[
+                                        'cpf_cliente', 'cliente_nome', 'orfao', 'atualizado_em'
+                                    ] if hasattr(contrato, 'orfao') else [
+                                        'cpf_cliente', 'cliente_nome', 'atualizado_em'
+                                    ])
+                            
+                            # ID_CONTRATO e NR_FATURA já vêm como STRING do pandas (dtype=str)
+                            nr_contrato = str(row.get('id_contrato', '')).strip()
+                            if nr_contrato and nr_contrato != 'nan':
+                                contrato.numero_contrato_definitivo = nr_contrato
+                                # Save será feito em bulk ao final
+                            
+                            # Extrai dados FPD
+                            # Já vêm como STRING do pandas, preservando zeros
+                            id_contrato = str(row.get('id_contrato', '')).strip()
+                            dt_venc = row.get('dt_venc_orig')
+                            dt_pgto = row.get('dt_pagamento')
+                            status_str = str(row.get('ds_status_fatura', 'NAO_PAGO')).upper()
+                            nr_fatura = str(row.get('nr_fatura', '')).strip()
+                            vl_fatura_float = extrair_vl_fatura_fpd(row)
+                            indicador_fpd = extrair_indicador_fpd(row)
+                            nr_dias_atraso = row.get('nr_dias_atraso', 0)
+                            
+                            # Normalizar status usando mapeamento padronizado
+                            status = normalizar_status_fpd(status_str)
 
-                            if campos['id_contrato']:
-                                contrato.numero_contrato_definitivo = campos['id_contrato']
+                            # Extrair e converter datas - Excel armazena como números serial
+                            dt_venc = row.get('dt_venc_orig')
+                            if pd.notna(dt_venc):
+                                # Se for número, converter de serial Excel
+                                if isinstance(dt_venc, (int, float)):
+                                    dt_venc_date = (pd.Timestamp("1900-01-01") + pd.Timedelta(days=dt_venc - 2)).date()
+                                else:
+                                    dt_venc_date = pd.to_datetime(dt_venc).date()
+                            else:
+                                dt_venc_date = timezone.now().date()
 
-                            if campos['dt_venc_date'] and campos['numero_fatura'] == 1:
-                                safra_fpd_mes = campos['dt_venc_date'].replace(day=1)
-                                SafraM10.objects.get_or_create(
+                            dt_pgto = row.get('dt_pagamento')
+                            if pd.notna(dt_pgto):
+                                # Se for número, converter de serial Excel
+                                if isinstance(dt_pgto, (int, float)):
+                                    dt_pgto_date = (pd.Timestamp("1900-01-01") + pd.Timedelta(days=dt_pgto - 2)).date()
+                                else:
+                                    dt_pgto_date = pd.to_datetime(dt_pgto).date()
+                            else:
+                                dt_pgto_date = None
+
+                            # Se houver data de vencimento, define safra de FPD por mês de vencimento
+                            if dt_venc_date:
+                                safra_fpd_mes = dt_venc_date.replace(day=1)
+                                safra_fpd, _ = SafraM10.objects.get_or_create(
                                     mes_referencia=safra_fpd_mes,
-                                    defaults={'total_instalados': 0, 'total_ativos': 0},
+                                    defaults={'total_instalados': 0, 'total_ativos': 0}
                                 )
 
-                            _agendar_fatura_n(contrato, campos['numero_fatura'], {
-                                'numero_fatura_operadora': campos['nr_fatura'],
-                                'valor': campos['vl_fatura'],
-                                'data_vencimento': campos['dt_venc_date'],
-                                'data_pagamento': campos['dt_pgto_date'],
-                                'dias_atraso': campos['nr_dias_atraso'],
-                                'status': campos['status'],
-                                'id_contrato_fpd': campos['id_contrato'],
-                                'dt_pagamento_fpd': campos['dt_pgto_date'],
-                                'ds_status_fatura_fpd': campos['status_str'],
+                            # Preparar fatura 1 (update se já existe — inclusive via signal)
+                            nr_dias_atraso_int = int(nr_dias_atraso) if pd.notna(nr_dias_atraso) else 0
+
+                            _agendar_fatura1(contrato, {
+                                'numero_fatura_operadora': nr_fatura,
+                                'valor': vl_fatura_float,
+                                'data_vencimento': dt_venc_date,
+                                'data_pagamento': dt_pgto_date,
+                                'dias_atraso': nr_dias_atraso_int,
+                                'status': status,
+                                'id_contrato_fpd': id_contrato,
+                                'dt_pagamento_fpd': dt_pgto_date,
+                                'ds_status_fatura_fpd': status_str,
                                 'data_importacao_fpd': data_importacao_agora,
                             })
                             contratos_afetados_ids.add(contrato.id)
-                            _aplicar_importacao(nr_ordem, campos, contrato, MATCH_MATCHED)
-                        else:
-                            # Sem ContratoM10 nem Venda → "faltam no CRM" (não cria órfão)
-                            _aplicar_importacao(nr_ordem, campos, None, MATCH_FALTA_CRM)
-                            registros_nao_encontrados += 1
-                            if len(os_nao_encontradas) < 30:
-                                os_nao_encontradas.append(
-                                    f"{nr_ordem} ({campos['indicador']})"
+
+                            # Preparar ImportacaoFPD para bulk
+                            # Buscar por nr_ordem (atualizar se existir, criar se não existir)
+                            importacao_existente = importacoes_dict.get(nr_ordem)
+                            
+                            if importacao_existente:
+                                # Atualizar registro existente com novos dados da planilha
+                                importacao_existente.id_contrato = id_contrato
+                                importacao_existente.nr_fatura = nr_fatura  # Atualiza também o nr_fatura
+                                importacao_existente.dt_venc_orig = dt_venc_date
+                                importacao_existente.dt_pagamento = dt_pgto_date
+                                importacao_existente.nr_dias_atraso = nr_dias_atraso_int
+                                importacao_existente.ds_status_fatura = status_str
+                                importacao_existente.vl_fatura = vl_fatura_float
+                                importacao_existente.indicador = indicador_fpd
+                                importacao_existente.contrato_m10 = contrato
+                                importacoes_para_atualizar.append(importacao_existente)
+                                registros_atualizados += 1
+                            else:
+                                # Criar novo registro
+                                importacoes_para_criar.append(ImportacaoFPD(
+                                    nr_ordem=nr_ordem,
+                                    nr_fatura=nr_fatura,
+                                    id_contrato=id_contrato,
+                                    dt_venc_orig=dt_venc_date,
+                                    dt_pagamento=dt_pgto_date,
+                                    nr_dias_atraso=nr_dias_atraso_int,
+                                    ds_status_fatura=status_str,
+                                    vl_fatura=vl_fatura_float,
+                                    indicador=indicador_fpd,
+                                    contrato_m10=contrato
+                                ))
+                                registros_importacoes_fpd += 1
+                            
+                            valor_total += vl_fatura_float
+                        else:  # Contrato não encontrado → cria órfão Qualidade (double-check FPD)
+                            from crm_app.services.qualidade_service import criar_contrato_orfao_fpd
+
+                            id_contrato = str(row.get('id_contrato', '')).strip()
+                            if id_contrato == 'nan':
+                                id_contrato = ''
+                            dt_venc = row.get('dt_venc_orig')
+                            dt_pgto = row.get('dt_pagamento')
+                            status_str = str(row.get('ds_status_fatura', 'NAO_PAGO')).upper()
+                            nr_fatura = str(row.get('nr_fatura', '')).strip()
+                            vl_fatura_float = extrair_vl_fatura_fpd(row)
+                            indicador_fpd = extrair_indicador_fpd(row)
+                            nr_dias_atraso = row.get('nr_dias_atraso', 0)
+                            status = normalizar_status_fpd(status_str)
+
+                            if pd.notna(dt_venc):
+                                if isinstance(dt_venc, (int, float)):
+                                    dt_venc_date = (pd.Timestamp("1900-01-01") + pd.Timedelta(days=dt_venc - 2)).date()
+                                else:
+                                    dt_venc_date = pd.to_datetime(dt_venc).date()
+                            else:
+                                dt_venc_date = timezone.now().date()
+
+                            if pd.notna(dt_pgto):
+                                if isinstance(dt_pgto, (int, float)):
+                                    dt_pgto_date = (pd.Timestamp("1900-01-01") + pd.Timedelta(days=dt_pgto - 2)).date()
+                                else:
+                                    dt_pgto_date = pd.to_datetime(dt_pgto).date()
+                            else:
+                                dt_pgto_date = None
+
+                            vl_fatura_float = extrair_vl_fatura_fpd(row)
+                            nr_dias_atraso_int = int(nr_dias_atraso) if pd.notna(nr_dias_atraso) else 0
+
+                            try:
+                                contrato_orfao = criar_contrato_orfao_fpd(
+                                    ordem_servico=nr_ordem,
+                                    id_contrato=id_contrato or None,
+                                    dt_vencimento=dt_venc_date,
+                                    valor_fatura=vl_fatura_float,
+                                    status_fatura=status_str,
                                 )
+                                # Indexa para não recriar na mesma importação
+                                for variacao in [
+                                    nr_ordem,
+                                    nr_ordem.zfill(8),
+                                    nr_ordem.lstrip('0') or '0',
+                                    f'OS-{nr_ordem}',
+                                ]:
+                                    contratos_dict[variacao] = contrato_orfao
+                                # Signal post_save já pode ter criado fatura 1 — recarrega do banco
+                                faturas_por_contrato[contrato_orfao.id] = {
+                                    f.numero_fatura: f
+                                    for f in FaturaM10.objects.filter(contrato_id=contrato_orfao.id)
+                                }
+                                _agendar_fatura1(contrato_orfao, {
+                                    'numero_fatura_operadora': nr_fatura,
+                                    'valor': vl_fatura_float,
+                                    'data_vencimento': dt_venc_date,
+                                    'data_pagamento': dt_pgto_date,
+                                    'dias_atraso': nr_dias_atraso_int,
+                                    'status': status,
+                                    'id_contrato_fpd': id_contrato,
+                                    'dt_pagamento_fpd': dt_pgto_date,
+                                    'ds_status_fatura_fpd': status_str,
+                                    'data_importacao_fpd': data_importacao_agora,
+                                })
+                                contratos_afetados_ids.add(contrato_orfao.id)
+                                vinculo_contrato = contrato_orfao
+                            except Exception as e_orf:
+                                logger.warning('Falha ao criar órfão FPD OS=%s: %s', nr_ordem, e_orf)
+                                vinculo_contrato = None
 
+                            importacao_sem_contrato = importacoes_dict.get(nr_ordem)
+                            if importacao_sem_contrato:
+                                importacao_sem_contrato.id_contrato = id_contrato
+                                importacao_sem_contrato.nr_fatura = nr_fatura
+                                importacao_sem_contrato.dt_venc_orig = dt_venc_date
+                                importacao_sem_contrato.dt_pagamento = dt_pgto_date
+                                importacao_sem_contrato.nr_dias_atraso = nr_dias_atraso_int
+                                importacao_sem_contrato.ds_status_fatura = status_str
+                                importacao_sem_contrato.vl_fatura = vl_fatura_float
+                                importacao_sem_contrato.indicador = indicador_fpd
+                                importacao_sem_contrato.contrato_m10 = vinculo_contrato
+                                importacoes_para_atualizar.append(importacao_sem_contrato)
+                                registros_nao_encontrados += 1
+                            else:
+                                importacoes_para_criar.append(ImportacaoFPD(
+                                    nr_ordem=nr_ordem,
+                                    nr_fatura=nr_fatura,
+                                    id_contrato=id_contrato,
+                                    dt_venc_orig=dt_venc_date,
+                                    dt_pagamento=dt_pgto_date,
+                                    nr_dias_atraso=nr_dias_atraso_int,
+                                    ds_status_fatura=status_str,
+                                    vl_fatura=vl_fatura_float,
+                                    indicador=indicador_fpd,
+                                    contrato_m10=vinculo_contrato,
+                                ))
+                                registros_importacoes_fpd += 1
+                                registros_nao_encontrados += 1
+
+                            valor_total += vl_fatura_float
+                            if len(os_nao_encontradas) < 20:
+                                os_nao_encontradas.append(f"{nr_ordem} (órfão criado)" if vinculo_contrato else f"{nr_ordem} (sem contrato)")
+                            continue
+                    
                     except Exception as e:
-                        erros_detalhados.append(f"Linha {idx + 2}: {str(e)}")
+                        erros_detalhados.append(f"Linha {idx+2}: {str(e)}")
                         if len(erros_detalhados) <= 10:
-                            log.detalhes_json = log.detalhes_json or {}
                             log.detalhes_json['erros'] = erros_detalhados
-
+                
+                # Executar bulk operations (reduz milhares de queries para dezenas)
                 if faturas_para_criar:
+                    # Última defesa: evita duplicate key se o mesmo (contrato, nº) entrou 2x
                     vistas: dict[tuple, int] = {}
                     faturas_dedup: list = []
                     for fat in faturas_para_criar:
@@ -13403,7 +13848,7 @@ class ImportarFPDView(APIView):
                         (cid, num): pk
                         for cid, num, pk in FaturaM10.objects.filter(
                             contrato_id__in=ids_contratos_criar,
-                            numero_fatura__in=[1, 2, 3],
+                            numero_fatura=1,
                         ).values_list('contrato_id', 'numero_fatura', 'id')
                     } if ids_contratos_criar else {}
 
@@ -13422,58 +13867,38 @@ class ImportarFPDView(APIView):
                             so_criar.append(fat)
                     if so_criar:
                         FaturaM10.objects.bulk_create(so_criar, batch_size=500)
-
                 if faturas_para_atualizar:
                     FaturaM10.objects.bulk_update(faturas_para_atualizar, [
                         'numero_fatura_operadora', 'valor', 'data_vencimento',
                         'data_pagamento', 'dias_atraso', 'status', 'id_contrato_fpd',
-                        'dt_pagamento_fpd', 'ds_status_fatura_fpd', 'data_importacao_fpd',
-                        'status_origem', 'conferencia_fpd',
+                        'dt_pagamento_fpd', 'ds_status_fatura_fpd', 'data_importacao_fpd'
                     ], batch_size=500)
-
-                campos_imp_update = [
-                    'id_contrato', 'nr_fatura', 'dt_venc_orig', 'dt_pagamento',
-                    'nr_dias_atraso', 'ds_status_fatura', 'vl_fatura', 'contrato_m10',
-                    'indicador', 'numero_fatura_m10', 'ds_sit_fatura', 'faixa',
-                    'municipio', 'uf', 'cd_vendedor_original', 'nm_pdv', 'nm_gc',
-                    'nm_seg', 'match_status',
-                ]
+                
                 if importacoes_para_criar:
                     ImportacaoFPD.objects.bulk_create(importacoes_para_criar, batch_size=500)
                 if importacoes_para_atualizar:
-                    ImportacaoFPD.objects.bulk_update(
-                        importacoes_para_atualizar, campos_imp_update, batch_size=500
-                    )
+                    ImportacaoFPD.objects.bulk_update(importacoes_para_atualizar, [
+                        'id_contrato', 'nr_fatura', 'dt_venc_orig', 'dt_pagamento', 'nr_dias_atraso',
+                        'ds_status_fatura', 'vl_fatura', 'indicador', 'contrato_m10'
+                    ], batch_size=500)
+                
+                # Salvar contratos atualizados em bulk
+                contratos_para_atualizar = [c for c in contratos_dict.values() if c.numero_contrato_definitivo]
+                if contratos_para_atualizar:
+                    ContratoM10.objects.bulk_update(contratos_para_atualizar, ['numero_contrato_definitivo'], batch_size=500)
 
-                contratos_para_atualizar = [
-                    c for c in contratos_dict.values() if c.numero_contrato_definitivo
-                ]
-                # Dedup por id (dict pode ter várias chaves para o mesmo contrato)
-                vistos_cids = set()
-                contratos_uniq = []
-                for c in contratos_para_atualizar:
-                    if c.id not in vistos_cids:
-                        vistos_cids.add(c.id)
-                        contratos_uniq.append(c)
-                if contratos_uniq:
-                    ContratoM10.objects.bulk_update(
-                        contratos_uniq, ['numero_contrato_definitivo'], batch_size=500
-                    )
-
-                # Espelha campos *_fpd do ContratoM10 a partir da 1ª fatura (FPD)
+                # GAP 1+2: Atualizar campos FPD no ContratoM10 e recalcular elegibilidade nos contratos afetados
                 if contratos_afetados_ids:
                     faturas1 = FaturaM10.objects.filter(
                         contrato_id__in=contratos_afetados_ids,
-                        numero_fatura=1,
+                        numero_fatura=1
                     ).select_related('contrato')
                     contratos_fpd_atualizar = []
                     for fatura in faturas1:
                         c = fatura.contrato
                         c.data_vencimento_fpd = fatura.data_vencimento
                         c.data_pagamento_fpd = fatura.data_pagamento
-                        c.status_fatura_fpd = fatura.ds_status_fatura_fpd or (
-                            fatura.status if fatura.status else None
-                        )
+                        c.status_fatura_fpd = fatura.ds_status_fatura_fpd or (fatura.status if fatura.status else None)
                         c.valor_fatura_fpd = fatura.valor
                         c.nr_dias_atraso_fpd = fatura.dias_atraso or 0
                         c.data_ultima_sincronizacao_fpd = data_importacao_agora
@@ -13481,8 +13906,7 @@ class ImportarFPDView(APIView):
                     if contratos_fpd_atualizar:
                         ContratoM10.objects.bulk_update(contratos_fpd_atualizar, [
                             'data_vencimento_fpd', 'data_pagamento_fpd', 'status_fatura_fpd',
-                            'valor_fatura_fpd', 'nr_dias_atraso_fpd',
-                            'data_ultima_sincronizacao_fpd',
+                            'valor_fatura_fpd', 'nr_dias_atraso_fpd', 'data_ultima_sincronizacao_fpd'
                         ], batch_size=500)
                     for cid in contratos_afetados_ids:
                         try:
@@ -13490,67 +13914,47 @@ class ImportarFPDView(APIView):
                             contrato.calcular_elegibilidade()
                         except ContratoM10.DoesNotExist:
                             pass
+                    # GAP 3: Recalcular totais das safras afetadas
                     safras_afetadas = set(
-                        ContratoM10.objects.filter(id__in=contratos_afetados_ids)
-                        .values_list('safra', flat=True)
+                        ContratoM10.objects.filter(id__in=contratos_afetados_ids).values_list('safra', flat=True)
                     )
                     safras_afetadas.discard(None)
                     safras_afetadas.discard('')
                     for safra_str in safras_afetadas:
                         _recalcular_totais_safra_m10(safra_str)
 
-            # Garante vencimento da planilha após elegibilidade/signals
-            try:
-                sync_venc = sincronizar_vencimentos_fpd_nas_faturas()
-            except Exception as e_sync:
-                logger.exception('Falha ao sincronizar vencimentos FPD: %s', e_sync)
-                sync_venc = {'erro': str(e_sync)}
-
+            # Finalizar log
             log.finalizado_em = timezone.now()
             log.calcular_duracao()
+            # Total processadas = novos criados + atualizados + sem contrato criados/atualizados
             log.total_processadas = registros_importacoes_fpd + registros_atualizados
-            log.erros = len(erros_detalhados)
+            log.total_erros = len(erros_detalhados)
             log.total_contratos_nao_encontrados = registros_nao_encontrados
             log.total_valor_importado = valor_total
-            log.exemplos_nao_encontrados = (
-                ', '.join(os_nao_encontradas[:15]) if os_nao_encontradas else None
-            )
-            log.detalhes_json = {
-                **(log.detalhes_json or {}),
-                'por_indicador': contagem_por_indicador,
-                'criados_via_venda': registros_criados_venda,
-                'faltam_crm': registros_nao_encontrados,
-                'pulados': registros_pulados,
-                'usuario_id': usuario.id if usuario else None,
-                'sync_vencimentos': sync_venc,
-            }
-
+            log.exemplos_nao_encontrados = ', '.join(os_nao_encontradas[:10]) if os_nao_encontradas else None
+            
+            # Debug log
+            print(f"DEBUG Final: Pulados={registros_pulados} | Criados={registros_importacoes_fpd} | Atualizados={registros_atualizados} | Sem M10={registros_nao_encontrados}")
+            
             if registros_pulados == log.total_linhas:
+                # TODAS as linhas foram puladas!
                 log.status = 'ERRO'
-                log.mensagem_erro = (
-                    f'Todas as {registros_pulados} linhas foram puladas '
-                    '(NR_ORDEM vazio ou inválido). Verificar formato do arquivo.'
-                )
-            elif registros_nao_encontrados > 0:
+                log.mensagem_erro = f'Todas as {registros_pulados} linhas foram puladas (NR_ORDEM vazio ou inválido). Verificar formato do arquivo.'
+            elif registros_nao_encontrados > 0 and registros_atualizados == 0:
+                # Todos os registros foram salvos sem contrato (sem vincular ao M10)
                 log.status = 'PARCIAL'
-                log.mensagem_erro = (
-                    f'FPD={contagem_por_indicador.get("FPD", 0)}, '
-                    f'SPD={contagem_por_indicador.get("SPD", 0)}, '
-                    f'TPD={contagem_por_indicador.get("TPD", 0)}. '
-                    f'{registros_nao_encontrados} O.S. sem match no CRM '
-                    f'(aba "Faltam no CRM"). '
-                    f'{registros_criados_venda} contratos criados a partir de Venda.'
-                )
+                log.mensagem_erro = f'{registros_nao_encontrados} registros FPD importados sem vínculo M10 (O.S não encontrados na base ContratoM10). Você pode fazer matching depois.'
+            elif registros_nao_encontrados > 0:
+                # Alguns registros com contrato, alguns sem
+                log.status = 'PARCIAL'
+                log.mensagem_erro = f'{registros_atualizados} registros vinculados a contratos M10, {registros_nao_encontrados} importados sem vínculo (O.S não encontradas). Pode fazer matching depois.'
             else:
                 log.status = 'SUCESSO'
-                log.mensagem = (
-                    f'Importação OK — FPD={contagem_por_indicador.get("FPD", 0)}, '
-                    f'SPD={contagem_por_indicador.get("SPD", 0)}, '
-                    f'TPD={contagem_por_indicador.get("TPD", 0)}'
-                )
-
+            
             log.save()
 
+            # FIM DO PROCESSAMENTO - retorno já foi enviado antes via HTTP
+            
         except Exception as e:
             log.status = 'ERRO'
             log.mensagem_erro = str(e)
@@ -14891,6 +15295,8 @@ class ExportarM10View(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         # Cria workbook
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -14915,6 +15321,11 @@ class ExportarM10View(APIView):
                 total_faturas=Count('faturas', distinct=True),
                 faturas_pagas=Count('faturas', filter=Q(faturas__status='PAGO'), distinct=True),
             )
+        )
+        contratos = filtrar_vendas_por_operadora(
+            contratos,
+            request.user,
+            campo_plano='venda__plano',
         )
         if safra_param:
             data_inicio, data_fim = _safra_to_data_range(safra_param)
@@ -14975,6 +15386,8 @@ class ExportarAgendamentosDiaView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         from django.utils import timezone
         from datetime import date
         
@@ -14993,6 +15406,7 @@ class ExportarAgendamentosDiaView(APIView):
             data_agendamento=data_filtro,
             status_esteira__nome__icontains='AGENDADO'
         ).select_related('cliente', 'vendedor', 'plano')
+        vendas = filtrar_vendas_por_operadora(vendas, request.user)
         
         # Cria workbook
         wb = openpyxl.Workbook()
@@ -15036,7 +15450,7 @@ class ExportarAgendamentosDiaView(APIView):
             tel2 = re.sub(r'\D', '', v.telefone2 or '') if v.telefone2 else ''
             
             ws.append([
-                getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso'),  # Parceiro
+                settings.SITE_BRAND_NAME,                          # Parceiro (fixo)
                 v.ordem_servico or '',             # Pedido (O.S)
                 (v.estado or '').upper()[:2],      # UF
                 (v.cidade or '').upper(),          # Cidade
@@ -15126,8 +15540,9 @@ class ExportarAgendadosPendentesEsteiraView(APIView):
             consultor_respondeu_reagendar,
             formatar_reagendar_consultor_exibicao_com_consultor,
         )
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
 
-        if not is_member(request.user, GRUPOS_EXPORT_AGENDADOS_PENDENTES):
+        if not is_member(request.user, ['Diretoria', 'BackOffice', 'Supervisor', 'Admin']):
             return Response({'detail': 'Acesso negado.'}, status=status.HTTP_403_FORBIDDEN)
 
         vendas = (
@@ -15144,6 +15559,7 @@ class ExportarAgendadosPendentesEsteiraView(APIView):
             .select_related('cliente', 'vendedor', 'plano', 'status_esteira', 'motivo_pendencia')
             .order_by('data_agendamento', '-data_criacao')
         )
+        vendas = filtrar_vendas_por_operadora(vendas, request.user)
 
         vendedor_id = request.query_params.get('vendedor_id')
         if vendedor_id and str(vendedor_id).isdigit():
@@ -15295,6 +15711,7 @@ class EnviarLembreteInstalacaoView(APIView):
         from django.utils import timezone
         from datetime import datetime
         from crm_app.whatsapp_service import WhatsAppService
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
 
         data_str = request.data.get('data')
         turno = (request.data.get('turno') or '').strip().upper()
@@ -15319,10 +15736,12 @@ class EnviarLembreteInstalacaoView(APIView):
             periodo_agendamento=turno,
             status_esteira__nome__icontains='AGENDADO'
         ).exclude(telefone1__isnull=True).exclude(telefone1='').select_related('cliente').order_by('id')
+        vendas_qs = filtrar_vendas_por_operadora(vendas_qs, request.user)
         total_na_data = vendas_qs.count()
         vendas = list(vendas_qs[offset:offset + limite])
         random.shuffle(vendas)
 
+        primeiro_nome = (request.user.first_name or request.user.username or 'Especialista').strip().split()[0] or 'Especialista'
         agora = timezone.now()
         saudacao = 'boa tarde' if agora.hour >= 12 else 'bom dia'
         dd_mm = data_filtro.strftime('%d/%m')
@@ -15333,7 +15752,7 @@ class EnviarLembreteInstalacaoView(APIView):
 
         enviados = 0
         erros = []
-        from crm_app.services.whatsapp.nio_templates import enviar_lembrete_instalacao
+        svc = WhatsAppService()
 
         for i, venda in enumerate(vendas):
             if i > 0:
@@ -15341,24 +15760,19 @@ class EnviarLembreteInstalacaoView(APIView):
                 time.sleep(delay)
             nome_cliente = (venda.cliente.nome_razao_social if venda.cliente else '').strip() or 'Cliente'
             mensagem = (
-                f"Olá, {saudacao} {nome_cliente.split()[0]}\n\n"
-                f"Parceiro oficial da Nio Fibra.\n"
-                f"Sua instalação da Nio Fibra está agendada para hoje ({dd_mm}), "
-                f"no período das {periodo_texto}.\n\n"
+                f"Olá, {saudacao} Sr(a). {nome_cliente}\n\n"
+                f"Me chamo {primeiro_nome}, sou especialista de qualidade da {settings.SITE_BRAND_NAME}, parceiro Oficial da Nio Fibra.\n\n"
+                f"A sua instalação da Nio Fibra está agendada para hoje ({dd_mm}), no período das {periodo_texto}.\n\n"
                 "Se você não puder estar presente, é necessário que uma pessoa maior de 18 anos esteja no local.\n\n"
+                "Informações sobre sua instalação:\n"
                 "A instalação é gratuita.\n"
                 "Não realizamos instalações em dias de chuva.\n\n"
-                "Toque em *Confirmar*, *Reagendar* ou *Suporte* "
-                "(ou digite SIM / REAGENDAR / SUPORTE)."
+                "Para confirmar, digite SIM\n"
+                "Para reagendar, envie o dia e o período (manhã/tarde)\n"
+                "Para falar com suporte, envie SUPORTE"
             )
             try:
-                ok, _, canal = enviar_lembrete_instalacao(
-                    venda.telefone1,
-                    nome_cliente,
-                    data_filtro,
-                    turno,
-                    mensagem,
-                )
+                ok, _ = svc.enviar_mensagem_texto(venda.telefone1, mensagem)
                 if ok:
                     enviados += 1
                     tel_chave = _normalizar_telefone_chave(venda.telefone1)
@@ -15369,11 +15783,6 @@ class EnviarLembreteInstalacaoView(APIView):
                             data_agendamento=venda.data_agendamento,
                             periodo_agendamento=venda.periodo_agendamento or turno,
                         )
-                    logger.info(
-                        "[LembreteInstalacao] venda=%s canal=%s",
-                        venda.id,
-                        canal,
-                    )
                 else:
                     erros.append(f"Venda #{venda.id} ({venda.telefone1})")
             except Exception as e:
@@ -15398,8 +15807,13 @@ class EnviarPossoAnteciparVendedorView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, venda_id):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         try:
-            venda = Venda.objects.select_related('vendedor', 'cliente', 'status_esteira').get(pk=venda_id, ativo=True)
+            venda = filtrar_vendas_por_operadora(
+                Venda.objects.select_related('vendedor', 'cliente', 'status_esteira'),
+                request.user,
+            ).get(pk=venda_id, ativo=True)
         except Venda.DoesNotExist:
             return Response({'detail': 'Venda não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -15421,9 +15835,14 @@ class EnviarPossoReagendarConsultorView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, venda_id):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         try:
-            venda = Venda.objects.select_related(
-                'vendedor', 'cliente', 'status_esteira', 'motivo_pendencia',
+            venda = filtrar_vendas_por_operadora(
+                Venda.objects.select_related(
+                    'vendedor', 'cliente', 'status_esteira', 'motivo_pendencia',
+                ),
+                request.user,
             ).get(pk=venda_id, ativo=True)
         except Venda.DoesNotExist:
             return Response({'detail': 'Venda não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
@@ -15444,36 +15863,6 @@ class EnviarPossoReagendarConsultorView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-def _resposta_canal_cliente_indisponivel():
-    from crm_app.services.whatsapp_config_service import (
-        canal_cliente_pronto,
-        motivo_canal_cliente_bloqueado,
-    )
-
-    if canal_cliente_pronto():
-        return None
-    return Response(
-        {
-            'detail': motivo_canal_cliente_bloqueado(),
-            'canalClientePronto': False,
-        },
-        status=status.HTTP_409_CONFLICT,
-    )
-
-
-def _payload_canal_cliente() -> dict:
-    from crm_app.services.whatsapp_config_service import (
-        canal_cliente_pronto,
-        motivo_canal_cliente_bloqueado,
-    )
-
-    pronto = canal_cliente_pronto()
-    return {
-        'canalClientePronto': pronto,
-        'canalClienteMotivo': '' if pronto else motivo_canal_cliente_bloqueado(),
-    }
-
-
 class EnviarBoasVindasView(APIView):
     """Envia mensagem de boas-vindas para clientes com venda Instalada na data de instalação informada.
     Envio em lotes com intervalo ALEATÓRIO entre mensagens (padrão diferente a cada vez) para evitar bloqueio.
@@ -15481,13 +15870,13 @@ class EnviarBoasVindasView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        bloqueio = _resposta_canal_cliente_indisponivel()
-        if bloqueio is not None:
-            return bloqueio
         import time
         import random
+        from django.utils import timezone
         from datetime import datetime
-        from crm_app.services.boas_vindas_envio_service import enviar_boas_vindas_venda
+        from crm_app.whatsapp_service import WhatsAppService
+        from crm_app.models import BoasVindasEnviado
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
 
         data_str = request.data.get('data')
         if not data_str:
@@ -15511,26 +15900,55 @@ class EnviarBoasVindasView(APIView):
             status_esteira__nome__icontains='INSTALADA',
             boas_vindas_enviado_em__isnull=True,
         ).exclude(telefone1__isnull=True).exclude(telefone1='').select_related('cliente').order_by('id')
+        vendas_qs = filtrar_vendas_por_operadora(vendas_qs, request.user)
         total_na_data = vendas_qs.count()
         vendas = list(vendas_qs[offset:offset + limite])
         random.shuffle(vendas)  # ordem de envio aleatória dentro do lote
 
         primeiro_nome = (request.user.first_name or request.user.username or 'Especialista').strip().split()[0] or 'Especialista'
+        agora = timezone.now()
+        saudacao = 'boa tarde' if agora.hour >= 12 else 'bom dia'
+        despedida = 'boa tarde!' if agora.hour >= 12 else 'bom dia!'
+
+        msg_base = (
+            f"Olá {saudacao}, {{nome_cliente}} tudo bem?\n\n"
+            f"Me chamo {primeiro_nome}, sou especialista de qualidade da {settings.SITE_BRAND_NAME}, parceiro Oficial da Nio Fibra.\n\n"
+            "Estou entrando em contato para informar que estamos à sua disposição, caso você precise tirar dúvidas sobre seu plano e faturas.\n\n"
+            "Sua primeira fatura irá vencer 25 dias após a instalação.\n\n"
+            "Você também pode acompanhar sua conta através do app Nio.\n"
+            "Instale o aplicativo no seu aparelho celular.\n\n"
+            "Disponível para Android e iOS:\n"
+            "Google Play Store (Android)\n"
+            "https://play.google.com/store/apps/details?id=br.com.niointernet.app\n\n"
+            "Apple Store (iOS):\n"
+            "https://apps.apple.com/br/app/nio-internet/id6746278488\n\n"
+            "Você ainda pode realizar contato pelos canais de comunicação oficiais da Nio:\n"
+            "SAC:0800 001 1000\n"
+            "WhatsApp: 21-3605-1000\n\n"
+            f"Obrigado e tenha um {despedida}"
+        )
+
         enviados = 0
         erros = []
+        svc = WhatsAppService()
 
         for i, venda in enumerate(vendas):
             if i > 0:
                 delay = random.randint(min_intervalo, max_intervalo)
                 time.sleep(delay)
+            nome_cliente = (venda.cliente.nome_razao_social if venda.cliente else '').strip() or 'Cliente'
+            mensagem = msg_base.format(nome_cliente=nome_cliente)
             try:
-                res = enviar_boas_vindas_venda(
-                    venda, usuario=request.user, especialista=primeiro_nome,
-                )
-                if res.get('enviado'):
+                ok, _ = svc.enviar_mensagem_texto(venda.telefone1, mensagem)
+                if ok:
                     enviados += 1
-                elif not res.get('ok') or 'já enviad' not in (res.get('detail') or '').lower():
-                    erros.append(f"Venda #{venda.id}: {res.get('detail') or 'falha'}")
+                    venda.boas_vindas_enviado_em = timezone.now()
+                    venda.save(update_fields=['boas_vindas_enviado_em'])
+                    tel_chave = _normalizar_telefone_chave(venda.telefone1)
+                    if tel_chave:
+                        BoasVindasEnviado.objects.create(telefone=tel_chave, venda=venda)
+                else:
+                    erros.append(f"Venda #{venda.id} ({venda.telefone1})")
             except Exception as e:
                 erros.append(f"Venda #{venda.id}: {str(e)}")
 
@@ -15561,6 +15979,8 @@ class BoasVindasInstalacoesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
         from datetime import datetime, timedelta
@@ -15579,6 +15999,7 @@ class BoasVindasInstalacoesView(APIView):
         ).exclude(telefone1__isnull=True).exclude(telefone1='').select_related(
             'cliente', 'vendedor', 'plano', 'status_esteira'
         ).order_by('id')
+        vendas = filtrar_vendas_por_operadora(vendas, request.user)
         pendentes = vendas.filter(boas_vindas_enviado_em__isnull=True)
         enviados = vendas.exclude(boas_vindas_enviado_em__isnull=True)
         items = []
@@ -15598,7 +16019,6 @@ class BoasVindasInstalacoesView(APIView):
             'pendentes': pendentes.count(),
             'enviados': enviados.count(),
             'items': items,
-            **_payload_canal_cliente(),
         })
 
 
@@ -15607,6 +16027,8 @@ class BoasVindasRetornosView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
         from datetime import timedelta
@@ -15616,6 +16038,11 @@ class BoasVindasRetornosView(APIView):
             respondido_em__isnull=False,
             data_envio__gte=data_min,
         ).select_related('venda__cliente', 'venda__vendedor', 'status_boas_vindas').order_by('-respondido_em')
+        bvs = filtrar_vendas_por_operadora(
+            bvs,
+            request.user,
+            campo_plano='venda__plano',
+        )
         items = []
         for bv in bvs:
             v = bv.venda
@@ -15641,10 +16068,17 @@ class BoasVindasDetalheView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
-        bv = BoasVindasEnviado.objects.filter(pk=pk).select_related(
-            'venda__cliente', 'venda__vendedor', 'venda__plano', 'status_boas_vindas', 'status_definido_por'
+        bv = filtrar_vendas_por_operadora(
+            BoasVindasEnviado.objects.filter(pk=pk),
+            request.user,
+            campo_plano='venda__plano',
+        ).select_related(
+            'venda__cliente', 'venda__vendedor', 'venda__plano',
+            'status_boas_vindas', 'status_definido_por',
         ).prefetch_related('mensagens').first()
         if not bv:
             return Response({'detail': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
@@ -15668,6 +16102,8 @@ class BoasVindasDetalheView(APIView):
         })
 
     def post(self, request, pk):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
         status_codigo = (request.data.get('status_codigo') or '').strip().upper()
@@ -15676,7 +16112,11 @@ class BoasVindasDetalheView(APIView):
         st = StatusBoasVindas.objects.filter(codigo=status_codigo).first()
         if not st:
             return Response({'detail': f'Status "{status_codigo}" não encontrado.'}, status=status.HTTP_400_BAD_REQUEST)
-        bv = BoasVindasEnviado.objects.filter(pk=pk).first()
+        bv = filtrar_vendas_por_operadora(
+            BoasVindasEnviado.objects.filter(pk=pk),
+            request.user,
+            campo_plano='venda__plano',
+        ).first()
         if not bv:
             return Response({'detail': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
         bv.status_boas_vindas = st
@@ -15722,12 +16162,11 @@ class BoasVindasEnviarGestaoView(APIView):
     def post(self, request):
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
-        bloqueio = _resposta_canal_cliente_indisponivel()
-        if bloqueio is not None:
-            return bloqueio
         import time
         import random
         from datetime import datetime
+        from crm_app.whatsapp_service import WhatsAppService
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
 
         data_str = request.data.get('data')
         if not data_str:
@@ -15751,28 +16190,55 @@ class BoasVindasEnviarGestaoView(APIView):
             status_esteira__nome__icontains='INSTALADA',
             boas_vindas_enviado_em__isnull=True,
         ).exclude(telefone1__isnull=True).exclude(telefone1='').select_related('cliente').order_by('id')
+        vendas_qs = filtrar_vendas_por_operadora(vendas_qs, request.user)
         total_na_data = vendas_qs.count()
         vendas = list(vendas_qs[offset:offset + limite])
         random.shuffle(vendas)
 
         primeiro_nome = (request.user.first_name or request.user.username or 'Especialista').strip().split()[0] or 'Especialista'
+        agora = timezone.now()
+        saudacao = 'boa tarde' if agora.hour >= 12 else 'bom dia'
+        despedida = 'boa tarde!' if agora.hour >= 12 else 'bom dia!'
+
+        msg_base = (
+            f"Olá {saudacao}, {{nome_cliente}} tudo bem?\n\n"
+            f"Me chamo {primeiro_nome}, sou especialista de qualidade da {settings.SITE_BRAND_NAME}, parceiro Oficial da Nio Fibra.\n\n"
+            "Estou entrando em contato para informar que estamos à sua disposição, caso você precise tirar dúvidas sobre seu plano e faturas.\n\n"
+            "Sua primeira fatura irá vencer 25 dias após a instalação.\n\n"
+            "Você também pode acompanhar sua conta através do app Nio.\n"
+            "Instale o aplicativo no seu aparelho celular.\n\n"
+            "Disponível para Android e iOS:\n"
+            "Google Play Store (Android)\n"
+            "https://play.google.com/store/apps/details?id=br.com.niointernet.app\n\n"
+            "Apple Store (iOS):\n"
+            "https://apps.apple.com/br/app/nio-internet/id6746278488\n\n"
+            "Você ainda pode realizar contato pelos canais de comunicação oficiais da Nio:\n"
+            "SAC:0800 001 1000\n"
+            "WhatsApp: 21-3605-1000\n\n"
+            f"Obrigado e tenha um {despedida}"
+        )
+
         enviados = 0
         erros = []
-
-        from crm_app.services.boas_vindas_envio_service import enviar_boas_vindas_venda
+        svc = WhatsAppService()
 
         for i, venda in enumerate(vendas):
             if i > 0:
                 delay = random.randint(min_intervalo, max_intervalo)
                 time.sleep(delay)
+            nome_cliente = (venda.cliente.nome_razao_social if venda.cliente else '').strip() or 'Cliente'
+            mensagem = msg_base.format(nome_cliente=nome_cliente)
             try:
-                res = enviar_boas_vindas_venda(
-                    venda, usuario=request.user, especialista=primeiro_nome,
-                )
-                if res.get('enviado'):
+                ok, _ = svc.enviar_mensagem_texto(venda.telefone1, mensagem)
+                if ok:
                     enviados += 1
-                elif not res.get('ok') or 'já enviad' not in (res.get('detail') or '').lower():
-                    erros.append(f"Venda #{venda.id}: {res.get('detail') or 'falha'}")
+                    venda.boas_vindas_enviado_em = timezone.now()
+                    venda.save(update_fields=['boas_vindas_enviado_em'])
+                    tel_chave = _normalizar_telefone_chave(venda.telefone1)
+                    if tel_chave:
+                        BoasVindasEnviado.objects.create(telefone=tel_chave, venda=venda)
+                else:
+                    erros.append(f"Venda #{venda.id} ({venda.telefone1})")
             except Exception as e:
                 erros.append(f"Venda #{venda.id}: {str(e)}")
 
@@ -15798,11 +16264,9 @@ class BoasVindasAgendarView(APIView):
     def post(self, request):
         if not is_member(request.user, ['Diretoria', 'Admin', 'BackOffice', 'Auditoria', 'Qualidade']):
             return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
-        bloqueio = _resposta_canal_cliente_indisponivel()
-        if bloqueio is not None:
-            return bloqueio
         from datetime import datetime, timedelta
         import random
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
 
         data_str = request.data.get('data')
         if not data_str:
@@ -15815,12 +16279,17 @@ class BoasVindasAgendarView(APIView):
         except ValueError:
             return Response({'detail': 'Data inválida. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        vendas = list(Venda.objects.filter(
-            ativo=True,
-            data_instalacao=data_instalacao,
-            status_esteira__nome__icontains='INSTALADA',
-            boas_vindas_enviado_em__isnull=True,
-        ).exclude(telefone1__isnull=True).exclude(telefone1='').values_list('id', flat=True))
+        vendas = list(
+            filtrar_vendas_por_operadora(
+                Venda.objects.filter(
+                    ativo=True,
+                    data_instalacao=data_instalacao,
+                    status_esteira__nome__icontains='INSTALADA',
+                    boas_vindas_enviado_em__isnull=True,
+                ).exclude(telefone1__isnull=True).exclude(telefone1=''),
+                request.user,
+            ).values_list('id', flat=True)
+        )
 
         if not vendas:
             return Response({
@@ -15898,15 +16367,22 @@ class BoasVindasFilaStatusView(APIView):
         else:
             data_filtro = (timezone.now() - timedelta(days=1)).date()
 
-        pendentes = FilaEnvioBoasVindas.objects.filter(
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+        base_fila = filtrar_vendas_por_operadora(
+            FilaEnvioBoasVindas.objects.all(),
+            request.user,
+            campo_plano='venda__plano',
+        )
+        pendentes = base_fila.filter(
             data_instalacao=data_filtro,
             enviado_em__isnull=True,
         ).count()
-        enviados = FilaEnvioBoasVindas.objects.filter(
+        enviados = base_fila.filter(
             data_instalacao=data_filtro,
             enviado_em__isnull=False,
         ).count()
-        com_erro = FilaEnvioBoasVindas.objects.filter(
+        com_erro = base_fila.filter(
             data_instalacao=data_filtro,
             enviado_em__isnull=True,
             erro__isnull=False,
@@ -15918,7 +16394,6 @@ class BoasVindasFilaStatusView(APIView):
             'enviados': enviados,
             'com_erro': com_erro,
             'total_fila': pendentes + enviados,
-            **_payload_canal_cliente(),
         })
 
 
@@ -15942,6 +16417,9 @@ def _antecipar_instalacao_queryset_vendas(request):
         status_esteira__nome__iexact='AGENDADO',
         data_agendamento__isnull=False
     ).select_related('cliente', 'status_esteira')
+    from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+    base = filtrar_vendas_por_operadora(base, request.user)
     if is_member(request.user, ['Diretoria', 'Admin', 'BackOffice']):
         return base
     if is_member(request.user, ['Supervisor']):
@@ -15963,6 +16441,9 @@ def _antecipar_instalacao_queryset_vendas_reparo(request):
         data_instalacao__gte=data_limite,
         data_instalacao__lte=hoje,
     ).select_related('cliente', 'status_esteira')
+    from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+    base = filtrar_vendas_por_operadora(base, request.user)
     if is_member(request.user, ['Diretoria', 'Admin', 'BackOffice']):
         return base
     if is_member(request.user, ['Supervisor']):
@@ -15980,6 +16461,9 @@ def _antecipar_instalacao_queryset_vendas_instalacao_fisica(request):
     ).exclude(
         status_esteira__nome__iexact='INSTALADA'
     ).select_related('cliente', 'status_esteira')
+    from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+    base = filtrar_vendas_por_operadora(base, request.user)
     if is_member(request.user, ['Diretoria', 'Admin', 'BackOffice']):
         return base
     if is_member(request.user, ['Supervisor']):
@@ -16659,7 +17143,7 @@ def _mensagem_padrao_instalacao_fisica(os_num, endereco, data_fisica_fmt, descri
         "*SINALIZAÇÃO - INSTALAÇÃO FÍSICA / PENDÊNCIA NO SISTEMA:*\n\n"
         f"- *OS:* {os_num}\n"
         f"- *ENDEREÇO COMPLETO:* {endereco}\n"
-        f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso').upper()}\n"
+        f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'ClickUp').upper()}\n"
         f"- *DATA INSTALAÇÃO FÍSICA (NO CLIENTE):* {data_fisica_fmt}\n"
         "- *CONTEXTO:* Houve instalação física; o pedido segue com pendência na esteira.\n"
         f"- *DESCRIÇÃO DETALHADA:* {descricao}"
@@ -16810,7 +17294,7 @@ class SolicitarAnteciparInstalacaoView(APIView):
                 "*MÁSCARA PADRÃO DE ACIONAMENTO - GRUPO ELITE:*\n\n"
                 f"- *OS:* {os_num}\n"
                 f"- *ENDEREÇO COMPLETO:* {endereco}\n"
-                f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso').upper()}\n"
+                f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'ClickUp').upper()}\n"
                 f"- *DATA AGENDADA:* {data_ag_fmt} - {turno}\n"
                 f"- *DESCRIÇÃO DETALHADA DA SOLICITAÇÃO:* {descricao}"
             )
@@ -16949,7 +17433,13 @@ class DadosFPDView(APIView):
             return Response({'error': 'Parâmetro os (Ordem de Serviço) é obrigatório'}, status=400)
         
         try:
-            contrato = ContratoM10.objects.get(ordem_servico=nr_ordem)
+            from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+            contrato = filtrar_vendas_por_operadora(
+                ContratoM10.objects.all(),
+                request.user,
+                campo_plano='venda__plano',
+            ).get(ordem_servico=nr_ordem)
             
             # Busca registros de importação FPD para esta O.S
             from .models import ImportacaoFPD
@@ -17455,7 +17945,13 @@ class FaturaM10ListView(generics.ListCreateAPIView):
             return Response({'error': 'contrato e numero_fatura são obrigatórios'}, status=400)
         
         try:
-            contrato = ContratoM10.objects.get(id=contrato_id)
+            from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+            contrato = filtrar_vendas_por_operadora(
+                ContratoM10.objects.all(),
+                request.user,
+                campo_plano='venda__plano',
+            ).get(id=contrato_id)
         except ContratoM10.DoesNotExist:
             return Response({'error': 'Contrato não encontrado'}, status=404)
         
@@ -17531,6 +18027,15 @@ class FaturaM10ListView(generics.ListCreateAPIView):
     def get_queryset(self):
         contrato_id = self.request.query_params.get('contrato_id')
         if contrato_id:
+            from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+            contrato_permitido = filtrar_vendas_por_operadora(
+                ContratoM10.objects.filter(id=contrato_id),
+                self.request.user,
+                campo_plano='venda__plano',
+            ).exists()
+            if not contrato_permitido:
+                return FaturaM10.objects.none()
             self._sincronizar_primeira_fatura_com_fpd(contrato_id)
             return FaturaM10.objects.filter(contrato_id=contrato_id).order_by('numero_fatura')
         return FaturaM10.objects.none()
@@ -17547,6 +18052,15 @@ class FaturaM10DetailView(generics.RetrieveUpdateAPIView):
     serializer_class = FaturaM10Serializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def get_queryset(self):
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+        return filtrar_vendas_por_operadora(
+            FaturaM10.objects.select_related('contrato__venda__plano'),
+            self.request.user,
+            campo_plano='contrato__venda__plano',
+        )
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -17575,6 +18089,32 @@ class BuscarFaturaNioView(APIView):
         contrato_id = request.data.get('contrato_id')
         numero_fatura = request.data.get('numero_fatura')
         salvar = request.data.get('salvar', False)
+
+        from crm_app.services.escopo_operadora import (
+            filtrar_vendas_por_operadora,
+            usuario_pode_acessar_operadora,
+        )
+
+        contratos_permitidos = filtrar_vendas_por_operadora(
+            ContratoM10.objects.all(),
+            request.user,
+            campo_plano='venda__plano',
+        )
+        if contrato_id:
+            try:
+                contrato = contratos_permitidos.get(id=contrato_id)
+            except ContratoM10.DoesNotExist:
+                return Response({'error': 'Contrato não encontrado'}, status=404)
+        else:
+            nio_id = Operadora.objects.filter(
+                nome__iexact='NIO',
+                ativo=True,
+            ).values_list('id', flat=True).first()
+            if not usuario_pode_acessar_operadora(request.user, nio_id):
+                return Response(
+                    {'error': 'Você não possui acesso à operadora NIO.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         
         if not cpf:
             return Response({'error': 'CPF não informado'}, status=400)
@@ -17582,7 +18122,7 @@ class BuscarFaturaNioView(APIView):
         # Verificar se a fatura já está disponível
         if contrato_id and numero_fatura:
             try:
-                contrato = ContratoM10.objects.get(id=contrato_id)
+                contrato = contratos_permitidos.get(id=contrato_id)
                 fatura = FaturaM10.objects.filter(
                     contrato=contrato,
                     numero_fatura=numero_fatura
@@ -17598,7 +18138,7 @@ class BuscarFaturaNioView(APIView):
                             'disponivel': False
                         }, status=400)
             except ContratoM10.DoesNotExist:
-                pass
+                return Response({'error': 'Contrato não encontrado'}, status=404)
         
         try:
             # Plano A = mesma consulta do WhatsApp: API Nio (consultar_dividas_nio). Sem Playwright.
@@ -17624,7 +18164,7 @@ class BuscarFaturaNioView(APIView):
             data_vencimento_esperada = None
             if contrato_id and numero_fatura:
                 try:
-                    contrato = ContratoM10.objects.get(id=contrato_id)
+                    contrato = contratos_permitidos.get(id=contrato_id)
                     fatura = FaturaM10.objects.filter(
                         contrato=contrato,
                         numero_fatura=numero_fatura
@@ -17634,7 +18174,7 @@ class BuscarFaturaNioView(APIView):
                     else:
                         data_vencimento_esperada = contrato.calcular_vencimento_fatura_n(numero_fatura)
                 except ContratoM10.DoesNotExist:
-                    pass
+                    return Response({'error': 'Contrato não encontrado'}, status=404)
             # Aceitar também do body (valor do formulário quando o usuário alterou a data)
             data_vencimento_form = request.data.get('data_vencimento_esperada')
             if data_vencimento_form:
@@ -17731,7 +18271,7 @@ class BuscarFaturaNioView(APIView):
             # Se deve salvar automaticamente
             if salvar and contrato_id and numero_fatura:
                 try:
-                    contrato = ContratoM10.objects.get(id=contrato_id)
+                    contrato = contratos_permitidos.get(id=contrato_id)
                     fatura, created = FaturaM10.objects.get_or_create(
                         contrato=contrato,
                         numero_fatura=numero_fatura,
@@ -18352,3 +18892,442 @@ def baixar_screenshot_debug(request, nome_arquivo):
         return JsonResponse({
             'erro': str(e)
         }, status=500)
+
+
+class AtuacaoCampoView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        vendedor = request.query_params.get('vendedor')
+        uf = request.query_params.get('uf')
+        cidade = request.query_params.get('cidade')
+        bairro = request.query_params.get('bairro')
+        agrupamento_str = request.query_params.get('agrupamento')
+        
+        from dateutil.relativedelta import relativedelta
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        import calendar
+        from datetime import date
+        from .models import Venda
+        
+        hoje = timezone.localtime(timezone.now()).date()
+        meses = []
+        for i in range(6):
+            m = hoje - relativedelta(months=i)
+            meses.append(m)
+        
+        qs = Venda.objects.filter(
+            ativo=True,
+            status_tratamento__nome__iexact='CADASTRADA'
+        )
+        if vendedor:
+            qs = qs.filter(vendedor__username__iexact=vendedor)
+            
+        if uf: qs = qs.filter(estado__iexact=uf)
+        if cidade: qs = qs.filter(cidade__iexact=cidade)
+        if bairro: qs = qs.filter(bairro__iexact=bairro)
+            
+        annotations = {}
+        for idx, m in enumerate(meses):
+            start = date(m.year, m.month, 1)
+            end = date(m.year, m.month, calendar.monthrange(m.year, m.month)[1])
+            annotations[f'mes_{idx}'] = Count('id', filter=Q(data_abertura__date__gte=start, data_abertura__date__lte=end))
+        
+        valid_fields = {
+            'estado': 'estado',
+            'cidade': 'cidade',
+            'bairro': 'bairro',
+            'vendedor': 'vendedor__username',
+            'canal': 'canal',
+            'cluster': 'cluster'
+        }
+        
+        group_fields = []
+        if agrupamento_str:
+            for f in agrupamento_str.split(','):
+                if f in valid_fields:
+                    group_fields.append(valid_fields[f])
+                    
+        if not group_fields:
+            group_fields = ['estado', 'cidade', 'bairro']
+            
+        dados = qs.values(*group_fields).annotate(
+            total_6m=Count('id', filter=Q(data_abertura__date__gte=date(meses[-1].year, meses[-1].month, 1))),
+            **annotations
+        ).filter(total_6m__gt=0).order_by('-total_6m')
+        
+        return Response({
+            'meses': [m.strftime('%m/%Y') for m in meses],
+            'dados': list(dados)
+        })
+
+class ExportarAtuacaoCampoExcelView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        vendedor = request.query_params.get('vendedor')
+        uf = request.query_params.get('uf')
+        cidade = request.query_params.get('cidade')
+        bairro = request.query_params.get('bairro')
+        agrupamento_str = request.query_params.get('agrupamento')
+        
+        from dateutil.relativedelta import relativedelta
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        import calendar
+        from datetime import date
+        from .models import Venda
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from io import BytesIO
+        from django.http import HttpResponse
+        
+        hoje = timezone.localtime(timezone.now()).date()
+        meses = []
+        for i in range(6):
+            m = hoje - relativedelta(months=i)
+            meses.append(m)
+        
+        qs = Venda.objects.filter(
+            ativo=True,
+            status_tratamento__nome__iexact='CADASTRADA'
+        )
+        if vendedor: qs = qs.filter(vendedor__username__iexact=vendedor)
+        if uf: qs = qs.filter(estado__iexact=uf)
+        if cidade: qs = qs.filter(cidade__iexact=cidade)
+        if bairro: qs = qs.filter(bairro__iexact=bairro)
+            
+        annotations = {}
+        for idx, m in enumerate(meses):
+            start = date(m.year, m.month, 1)
+            end = date(m.year, m.month, calendar.monthrange(m.year, m.month)[1])
+            annotations[f'mes_{idx}'] = Count('id', filter=Q(data_abertura__date__gte=start, data_abertura__date__lte=end))
+        
+        valid_fields = {
+            'estado': 'estado',
+            'cidade': 'cidade',
+            'bairro': 'bairro',
+            'vendedor': 'vendedor__username',
+            'canal': 'canal',
+            'cluster': 'cluster'
+        }
+        
+        group_fields = []
+        if agrupamento_str:
+            for f in agrupamento_str.split(','):
+                if f in valid_fields:
+                    group_fields.append(valid_fields[f])
+                    
+        if not group_fields:
+            group_fields = ['estado', 'cidade', 'bairro']
+            
+        dados = qs.values(*group_fields).annotate(
+            total_6m=Count('id', filter=Q(data_abertura__date__gte=date(meses[-1].year, meses[-1].month, 1))),
+            **annotations
+        ).filter(total_6m__gt=0).order_by('-total_6m')
+        
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Atuação em Campo"
+        
+        headers = ["Local", "Evolução"] + [m.strftime('%m/%Y') for m in meses] + ["Total 6m"]
+        ws.append(headers)
+        
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="111827", end_color="111827", fill_type="solid")
+        
+        border_thin = Border(left=Side(style='thin', color='E5E7EB'),
+                             right=Side(style='thin', color='E5E7EB'),
+                             top=Side(style='thin', color='E5E7EB'),
+                             bottom=Side(style='thin', color='E5E7EB'))
+                             
+        fill_level_0 = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+        font_level_0 = Font(bold=True, color="FFFFFF")
+        
+        fill_level_1 = PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid")
+        font_level_1 = Font(bold=True, color="111827")
+        
+        fill_level_2 = PatternFill(start_color="F9FAFB", end_color="F9FAFB", fill_type="solid")
+        font_level_2 = Font(bold=True, color="374151")
+        
+        fill_level_3 = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+        font_level_3 = Font(color="4B5563")
+        
+        font_success = Font(bold=True, color="16A34A")
+        font_danger = Font(bold=True, color="DC2626")
+        font_muted = Font(color="9CA3AF")
+        
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 15
+        ws.column_dimensions['A'].width = 40
+        
+        root = {'nome': 'TOTAL', 'totais': [0]*len(meses), 'total_6m': 0, 'children': {}}
+        for d in dados:
+            current = root
+            current['total_6m'] += d['total_6m']
+            for i in range(len(meses)):
+                current['totais'][i] += d.get(f'mes_{i}', 0)
+                
+            path = [d.get(f) or 'NI' for f in group_fields]
+            for p in path:
+                if p not in current['children']:
+                    current['children'][p] = {'nome': p, 'totais': [0]*len(meses), 'total_6m': 0, 'children': {}}
+                current = current['children'][p]
+                current['total_6m'] += d['total_6m']
+                for i in range(len(meses)):
+                    current['totais'][i] += d.get(f'mes_{i}', 0)
+                    
+        current_row = 2
+        def write_node(node, level):
+            nonlocal current_row
+            
+            diff = node['totais'][0] - node['totais'][1] if len(meses) > 1 else 0
+            trend = f"+{diff}" if diff > 0 else str(diff) if diff < 0 else "-"
+            
+            indent = "    " * level
+            row_data = [f"{indent}{node['nome']}", trend] + node['totais'] + [node['total_6m']]
+            ws.append(row_data)
+            
+            row_idx = current_row
+            fill = fill_level_0 if level == 0 else fill_level_1 if level == 1 else fill_level_2 if level == 2 else fill_level_3
+            font = font_level_0 if level == 0 else font_level_1 if level == 1 else font_level_2 if level == 2 else font_level_3
+            
+            for col in range(1, len(row_data) + 1):
+                cell = ws.cell(row=row_idx, column=col)
+                cell.fill = fill
+                cell.font = font
+                cell.border = border_thin
+                if col > 1:
+                    cell.alignment = Alignment(horizontal="center")
+                    if col == 2: # Trend
+                        if diff > 0:
+                            cell.font = font_success if level > 0 else font_level_0
+                        elif diff < 0:
+                            cell.font = font_danger if level > 0 else font_level_0
+                        else:
+                            cell.font = font_muted if level > 0 else font_level_0
+                    elif col > 2 and col < len(row_data) + 1:
+                        if row_data[col-1] == 0:
+                            cell.font = font_muted if level > 0 else font_level_0
+            
+            if level > 0:
+                ws.row_dimensions[row_idx].outline_level = level
+                ws.row_dimensions[row_idx].hidden = True
+                
+            current_row += 1
+            
+            if node['children']:
+                sorted_children = sorted(node['children'].values(), key=lambda x: x['total_6m'], reverse=True)
+                for child in sorted_children:
+                    write_node(child, level + 1)
+                    
+        write_node(root, 0)
+        
+        # --- PLANILHA 2: VISÃO DIÁRIA ---
+        ws2 = wb.create_sheet(title="Visão Diária")
+        
+        start_m0 = date(hoje.year, hoje.month, 1)
+        end_m0 = date(hoje.year, hoje.month, calendar.monthrange(hoje.year, hoje.month)[1])
+        qs_m0 = qs.filter(data_abertura__date__gte=start_m0, data_abertura__date__lte=end_m0)
+        
+        annotations_d = {}
+        for d in range(1, 32):
+            try:
+                dia_date = date(hoje.year, hoje.month, d)
+                annotations_d[f'dia_{d}'] = Count('id', filter=Q(data_abertura__date=dia_date))
+            except ValueError:
+                annotations_d[f'dia_{d}'] = Count('id', filter=Q(id__isnull=True))
+                
+        dados_d = qs_m0.values(*group_fields).annotate(
+            total_mes=Count('id'),
+            **annotations_d
+        ).filter(total_mes__gt=0).order_by('-total_mes')
+        
+        headers_d = ["Local"] + [str(i) for i in range(1, 32)] + ["Total Mês"]
+        ws2.append(headers_d)
+        
+        for col, h in enumerate(headers_d, 1):
+            cell = ws2.cell(row=1, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+            ws2.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 6
+        ws2.column_dimensions['A'].width = 40
+        
+        root_d = {'nome': 'TOTAL ' + start_m0.strftime('%m/%Y'), 'totais': [0]*31, 'total_mes': 0, 'children': {}}
+        for d in dados_d:
+            current = root_d
+            current['total_mes'] += d['total_mes']
+            for i in range(1, 32):
+                current['totais'][i-1] += d.get(f'dia_{i}', 0)
+                
+            path = [d.get(f) or 'NI' for f in group_fields]
+            for p in path:
+                if p not in current['children']:
+                    current['children'][p] = {'nome': p, 'totais': [0]*31, 'total_mes': 0, 'children': {}}
+                current = current['children'][p]
+                current['total_mes'] += d['total_mes']
+                for i in range(1, 32):
+                    current['totais'][i-1] += d.get(f'dia_{i}', 0)
+                    
+        current_row_d = 2
+        def write_node_d(node, level):
+            nonlocal current_row_d
+            
+            indent = "    " * level
+            row_data = [f"{indent}{node['nome']}"] + [v if v > 0 else '-' for v in node['totais']] + [node['total_mes']]
+            ws2.append(row_data)
+            
+            row_idx = current_row_d
+            fill = fill_level_0 if level == 0 else fill_level_1 if level == 1 else fill_level_2 if level == 2 else fill_level_3
+            font = font_level_0 if level == 0 else font_level_1 if level == 1 else font_level_2 if level == 2 else font_level_3
+            
+            for col in range(1, len(row_data) + 1):
+                cell = ws2.cell(row=row_idx, column=col)
+                cell.fill = fill
+                cell.font = font
+                cell.border = border_thin
+                if col > 1:
+                    cell.alignment = Alignment(horizontal="center")
+                    if col < len(row_data) and row_data[col-1] == '-':
+                        cell.font = font_muted if level > 0 else font_level_0
+            
+            if level > 0:
+                ws2.row_dimensions[row_idx].outline_level = level
+                ws2.row_dimensions[row_idx].hidden = True
+                
+            current_row_d += 1
+            
+            if node['children']:
+                sorted_children = sorted(node['children'].values(), key=lambda x: x['total_mes'], reverse=True)
+                for child in sorted_children:
+                    write_node_d(child, level + 1)
+                    
+        write_node_d(root_d, 0)
+        
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        response = HttpResponse(output.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response['Content-Disposition'] = 'attachment; filename="Atuacao_em_Campo.xlsx"'
+        return response
+
+
+class AtuacaoCampoDiarioView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        vendedor = request.query_params.get('vendedor')
+        uf = request.query_params.get('uf')
+        cidade = request.query_params.get('cidade')
+        bairro = request.query_params.get('bairro')
+        agrupamento_str = request.query_params.get('agrupamento')
+        
+        from django.db.models import Count, Q
+        from django.utils import timezone
+        import calendar
+        from datetime import date
+        from .models import Venda
+        
+        hoje = timezone.localtime(timezone.now()).date()
+        
+        qs = Venda.objects.filter(
+            ativo=True,
+            status_tratamento__nome__iexact='CADASTRADA'
+        )
+        if vendedor: qs = qs.filter(vendedor__username__iexact=vendedor)
+        if uf: qs = qs.filter(estado__iexact=uf)
+        if cidade: qs = qs.filter(cidade__iexact=cidade)
+        if bairro: qs = qs.filter(bairro__iexact=bairro)
+            
+        start_m0 = date(hoje.year, hoje.month, 1)
+        end_m0 = date(hoje.year, hoje.month, calendar.monthrange(hoje.year, hoje.month)[1])
+        
+        if hoje.month == 1:
+            start_m1 = date(hoje.year - 1, 12, 1)
+            end_m1 = date(hoje.year - 1, 12, calendar.monthrange(hoje.year - 1, 12)[1])
+        else:
+            start_m1 = date(hoje.year, hoje.month - 1, 1)
+            end_m1 = date(hoje.year, hoje.month - 1, calendar.monthrange(hoje.year, hoje.month - 1)[1])
+            
+        qs_combined = qs.filter(data_abertura__date__gte=start_m1, data_abertura__date__lte=end_m0)
+        
+        valid_fields = {
+            'estado': 'estado',
+            'cidade': 'cidade',
+            'bairro': 'bairro',
+            'vendedor': 'vendedor__username',
+            'canal': 'canal',
+            'cluster': 'cluster'
+        }
+        
+        group_fields = []
+        if agrupamento_str:
+            for f in agrupamento_str.split(','):
+                if f in valid_fields:
+                    group_fields.append(valid_fields[f])
+                    
+        if not group_fields:
+            group_fields = ['estado', 'cidade', 'bairro']
+            
+        annotations = {}
+        for d in range(1, 32):
+            try:
+                dia_date_m0 = date(hoje.year, hoje.month, d)
+                annotations[f'm0_dia_{d}'] = Count('id', filter=Q(data_abertura__date=dia_date_m0))
+            except ValueError:
+                annotations[f'm0_dia_{d}'] = Count('id', filter=Q(id__isnull=True))
+                
+            try:
+                dia_date_m1 = date(start_m1.year, start_m1.month, d)
+                annotations[f'm1_dia_{d}'] = Count('id', filter=Q(data_abertura__date=dia_date_m1))
+            except ValueError:
+                annotations[f'm1_dia_{d}'] = Count('id', filter=Q(id__isnull=True))
+                
+        dados = qs_combined.values(*group_fields).annotate(
+            total_mes_m0=Count('id', filter=Q(data_abertura__date__gte=start_m0)),
+            total_mes_m1=Count('id', filter=Q(data_abertura__date__lt=start_m0)),
+            **annotations
+        ).filter(Q(total_mes_m0__gt=0) | Q(total_mes_m1__gt=0)).order_by('-total_mes_m0')
+        
+        return Response({
+            'mes_atual': start_m0.strftime('%m/%Y'),
+            'dias': list(range(1, 32)),
+            'dados': list(dados)
+        })
+
+# Injetado de site-gm
+def _resposta_canal_cliente_indisponivel():
+    from crm_app.services.whatsapp_config_service import (
+        canal_cliente_pronto,
+        motivo_canal_cliente_bloqueado,
+    )
+
+    if canal_cliente_pronto():
+        return None
+    return Response(
+        {
+            'detail': motivo_canal_cliente_bloqueado(),
+            'canalClientePronto': False,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+# Injetado de site-gm
+def _payload_canal_cliente() -> dict:
+    from crm_app.services.whatsapp_config_service import (
+        canal_cliente_pronto,
+        motivo_canal_cliente_bloqueado,
+    )
+
+    pronto = canal_cliente_pronto()
+    return {
+        'canalClientePronto': pronto,
+        'canalClienteMotivo': '' if pronto else motivo_canal_cliente_bloqueado(),
+    }

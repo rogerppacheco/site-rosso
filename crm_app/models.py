@@ -12,6 +12,14 @@ class Operadora(models.Model):
     nome = models.CharField(max_length=100, unique=True)
     cnpj = models.CharField(max_length=18, unique=True, null=True, blank=True)
     ativo = models.BooleanField(default=True)
+    usa_pap_nio = models.BooleanField(
+        default=False,
+        verbose_name="Usa PAP Nio",
+        help_text=(
+            "Marque somente para a operadora Nio. O portal PAP não atende Vero, Velox "
+            "nem demais operadoras; vendas sem este flag não entram na automação de status."
+        ),
+    )
 
     def __str__(self): return self.nome
     class Meta:
@@ -36,6 +44,14 @@ class Plano(models.Model):
         default=0,
         verbose_name='Índice oferta GDP',
         help_text='Quando há mais de uma oferta com a mesma velocidade (ex.: dois planos 1GB), use 0 ou 1.',
+    )
+    ignorar_preco_gdp = models.BooleanField(
+        default=False,
+        verbose_name='Preço fixo (não usar GDP)',
+        help_text=(
+            'Marque em planos fora da tabela GDP (ex.: exclusivos CNPJ). '
+            'O valor mensal do cadastro passa a valer, em vez do preço por município.'
+        ),
     )
 
     def __str__(self): return f"{self.nome} - {self.operadora.nome}"
@@ -284,7 +300,7 @@ class Venda(models.Model):
     )
     data_ultima_alteracao = models.DateTimeField(auto_now=True, verbose_name="Data da Última Alteração")
     # --------------------------------------------
-
+    
     pedido_pap = models.CharField(max_length=50, null=True, blank=True, unique=True, db_index=True, verbose_name="Pedido PAP")
     valor_plano_pap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Valor Mensal PAP")
     vendedor_matricula_pap = models.CharField(max_length=50, null=True, blank=True, verbose_name="Matrícula Vendedor PAP")
@@ -1712,7 +1728,7 @@ class Comunicado(models.Model):
         return f"{self.titulo} - {self.get_status_display()}"
     
     class Meta:
-        verbose_name = "Comunicado (Rosso Informa)"
+        verbose_name = "Comunicado (Futura Telecom Informa)"
         verbose_name_plural = "Comunicados"
         ordering = ['-data_programada', '-hora_programada']
 
@@ -3177,7 +3193,7 @@ class LinkPublicoPreVenda(models.Model):
             base_url = request.build_absolute_uri('/')[:-1]
         else:
             from django.conf import settings
-            base_url = getattr(settings, 'SITE_URL', 'https://site-rosso-production.up.railway.app')
+            base_url = getattr(settings, 'SITE_URL', 'https://site-clickup-production.up.railway.app')
         return f"{base_url}/prevenda-publica/{self.codigo_unico}/"
 
 
@@ -4302,6 +4318,97 @@ class LogImportacaoGdpPreco(models.Model):
         return f'{self.nome_arquivo} - {self.status} ({self.iniciado_em.strftime("%d/%m/%Y %H:%M")})'
 
 
+# Injetado de nova-velox
+class GdpPrecoMunicipioQuerySet(models.QuerySet):
+    """Consultas eficientes para preços GDP vigentes."""
+
+    def da_importacao_vigente(self) -> "GdpPrecoMunicipioQuerySet":
+        from crm_app.services.gdp_preco_service import get_log_vigente_id
+
+        log_id = get_log_vigente_id()
+        if not log_id:
+            return self.none()
+        return self.filter(log_importacao_id=log_id)
+
+    def ofertas_principais(self) -> "GdpPrecoMunicipioQuerySet":
+        """Oferta índice 0 (principal) por velocidade — evita duplicatas 1000Mbps."""
+        return self.filter(indice_oferta=0)
+
+    def para_municipio(
+        self,
+        *,
+        cidade: str = "",
+        uf: str = "",
+        cod_ibge: str = "",
+    ) -> "GdpPrecoMunicipioQuerySet":
+        from crm_app.services.gdp_preco_service import normalizar_municipio
+
+        qs = self
+        if cod_ibge:
+            por_ibge = qs.filter(cod_ibge=str(cod_ibge).strip())
+            if por_ibge.exists():
+                return por_ibge
+        municipio_norm = normalizar_municipio(cidade)
+        if not municipio_norm:
+            return qs.none()
+        qs = qs.filter(municipio_normalizado=municipio_norm)
+        uf_norm = (uf or "").strip().upper()
+        if uf_norm:
+            qs = qs.filter(uf=uf_norm)
+        return qs
+
+
+# Injetado de nova-velox
+class GdpPrecoMunicipioQuerySet(models.QuerySet):
+    """Consultas eficientes para preços GDP vigentes."""
+
+    def da_importacao_vigente(self) -> "GdpPrecoMunicipioQuerySet":
+        from crm_app.services.gdp_preco_service import get_log_vigente_id
+
+        log_id = get_log_vigente_id()
+        if not log_id:
+            return self.none()
+        return self.filter(log_importacao_id=log_id)
+
+    def ofertas_principais(self) -> "GdpPrecoMunicipioQuerySet":
+        """Oferta índice 0 (principal) por velocidade — evita duplicatas 1000Mbps."""
+        return self.filter(indice_oferta=0)
+
+    def para_municipio(
+        self,
+        *,
+        cidade: str = "",
+        uf: str = "",
+        cod_ibge: str = "",
+    ) -> "GdpPrecoMunicipioQuerySet":
+        from crm_app.services.gdp_preco_service import normalizar_municipio
+
+        qs = self
+        if cod_ibge:
+            por_ibge = qs.filter(cod_ibge=str(cod_ibge).strip())
+            if por_ibge.exists():
+                return por_ibge
+        municipio_norm = normalizar_municipio(cidade)
+        if not municipio_norm:
+            return qs.none()
+        qs = qs.filter(municipio_normalizado=municipio_norm)
+        uf_norm = (uf or "").strip().upper()
+        if uf_norm:
+            qs = qs.filter(uf=uf_norm)
+        return qs
+
+# Injetado de nova-velox
+class GdpPrecoMunicipioManager(models.Manager):
+    def get_queryset(self) -> GdpPrecoMunicipioQuerySet:
+        return GdpPrecoMunicipioQuerySet(self.model, using=self._db)
+
+    def da_importacao_vigente(self) -> GdpPrecoMunicipioQuerySet:
+        return self.get_queryset().da_importacao_vigente()
+
+    def para_municipio(self, **kwargs) -> GdpPrecoMunicipioQuerySet:
+        return self.get_queryset().da_importacao_vigente().para_municipio(**kwargs)
+
+
 class GdpPrecoMunicipio(models.Model):
     """Preço de plano Nio por município, meio de pagamento e velocidade (fonte: GDP)."""
 
@@ -4324,6 +4431,8 @@ class GdpPrecoMunicipio(models.Model):
     velocidade_mbps = models.PositiveIntegerField(db_index=True)
     indice_oferta = models.PositiveSmallIntegerField(default=0)
     valor = models.DecimalField(max_digits=10, decimal_places=2)
+
+    objects = GdpPrecoMunicipioManager()
 
     class Meta:
         db_table = 'crm_gdp_preco_municipio'
@@ -4399,7 +4508,7 @@ class LogImportacaoRecompra(models.Model):
 
 
 class RecordApoia(models.Model):
-    """Repositório de arquivos Apoia - Acesso público para todos os usuários"""
+    """Repositório de arquivos Futura Telecom Apoia - Acesso público para todos os usuários"""
     
     TIPO_ARQUIVO_CHOICES = [
         ('PDF', 'PDF'),
@@ -4480,8 +4589,8 @@ class RecordApoia(models.Model):
     )
     
     class Meta:
-        verbose_name = "Arquivo Apoia"
-        verbose_name_plural = "Arquivos Apoia"
+        verbose_name = "Arquivo Futura Telecom Apoia"
+        verbose_name_plural = "Arquivos Futura Telecom Apoia"
         ordering = ['-data_upload']
         indexes = [
             models.Index(fields=['tipo_arquivo']),
@@ -5287,3 +5396,15 @@ class HistoricoPapBusca(models.Model):
 
     def __str__(self) -> str:
         return f"Busca PAP #{self.pk} {self.status}"
+
+
+# Injetado de nova-velox
+class GdpPrecoMunicipioManager(models.Manager):
+    def get_queryset(self) -> GdpPrecoMunicipioQuerySet:
+        return GdpPrecoMunicipioQuerySet(self.model, using=self._db)
+
+    def da_importacao_vigente(self) -> GdpPrecoMunicipioQuerySet:
+        return self.get_queryset().da_importacao_vigente()
+
+    def para_municipio(self, **kwargs) -> GdpPrecoMunicipioQuerySet:
+        return self.get_queryset().da_importacao_vigente().para_municipio(**kwargs)

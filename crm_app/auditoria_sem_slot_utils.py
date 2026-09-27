@@ -119,16 +119,26 @@ def destinatarios_configurados():
 
 
 def destinatarios_gc_e_diretoria():
-    """
-    Compatibilidade: retorna (primeiro_telefone, demais_telefones).
-
-    Diretoria não é mais destino automático — apenas telefones_destino.
-    """
-    destinos = destinatarios_configurados()
-    telefones = destinos['telefones']
-    if not telefones:
-        return '', []
-    return telefones[0], telefones[1:]
+    """Telefone do GC (config) + WhatsApp de usuários ativos do perfil Diretoria."""
+    config = _get_config_gc()
+    telefone_gc = (config.telefone_gc or '').strip()
+    User = get_user_model()
+    diretoria_users = User.objects.filter(
+        groups__name='Diretoria', is_active=True,
+    ).distinct()
+    diretoria_tels = []
+    vistos = set()
+    if telefone_gc:
+        vistos.add(''.join(c for c in telefone_gc if c.isdigit()))
+    for u in diretoria_users:
+        tel = (getattr(u, 'tel_whatsapp', None) or '').strip()
+        if not tel:
+            continue
+        key = ''.join(c for c in tel if c.isdigit())
+        if key and key not in vistos:
+            vistos.add(key)
+            diretoria_tels.append(tel)
+    return telefone_gc, diretoria_tels
 
 
 def validar_endereco_completo_venda(venda):

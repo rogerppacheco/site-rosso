@@ -28,6 +28,7 @@ def _calcular_resumo_card_consultor(
     mes: int,
     consultor: Any,
     todas_regras: list[RegraComissao],
+    usuario_escopo: Any = None,
 ) -> dict[str, Any]:
     """
     Calcula o resumo de comissão do consultor no mês para montagem do card WhatsApp.
@@ -45,6 +46,10 @@ def _calcular_resumo_card_consultor(
         data_instalacao__gte=data_inicio,
         data_instalacao__lt=data_fim,
     ).select_related("plano", "forma_pagamento", "cliente")
+    if usuario_escopo is not None:
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+        vendas = filtrar_vendas_por_operadora(vendas, usuario_escopo)
 
     qtd_instaladas = vendas.count()
     meta = consultor.meta_comissao or 0
@@ -127,6 +132,7 @@ def enviar_comissao_whatsapp_consultores(
     ano: int,
     mes: int,
     consultores_ids: list[int],
+    usuario_escopo: Any = None,
 ) -> tuple[int, list[str]]:
     """
     Envia o card de resumo de comissão por WhatsApp para cada consultor informado.
@@ -145,9 +151,20 @@ def enviar_comissao_whatsapp_consultores(
         Tupla (quantidade de envios com sucesso, lista de mensagens de erro).
     """
     User = get_user_model()
-    todas_regras = list(
-        RegraComissao.objects.select_related("plano", "consultor").all()
+    regras_qs = RegraComissao.objects.select_related(
+        "plano",
+        "plano__operadora",
+        "consultor",
     )
+    if usuario_escopo is not None:
+        from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
+
+        regras_qs = filtrar_planos_por_operadora(
+            regras_qs,
+            usuario_escopo,
+            campo_operadora="plano__operadora_id",
+        )
+    todas_regras = list(regras_qs)
 
     from crm_app.whatsapp_service import WhatsAppService
 
@@ -164,7 +181,11 @@ def enviar_comissao_whatsapp_consultores(
                 continue
 
             dados_img = _calcular_resumo_card_consultor(
-                ano, mes, consultor, todas_regras
+                ano,
+                mes,
+                consultor,
+                todas_regras,
+                usuario_escopo,
             )
             if svc.enviar_resumo_comissao(telefone, dados_img):
                 sucessos += 1

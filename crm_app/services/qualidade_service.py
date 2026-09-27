@@ -632,10 +632,10 @@ def _q_fatura1_atrasada_gte60(hoje: date) -> Q:
 
 
 def _q_fatura1_em_aberto(hoje: date) -> Q:
-    """1ª fatura em aberto ainda no prazo (visão tratamento / BO)."""
+    """1ª fatura em aberto ainda no prazo (não paga e vencimento >= hoje)."""
     return (
         Q(faturas__numero_fatura=1)
-        & Q(faturas__status__in=['NAO_PAGO', 'AGUARDANDO'])
+        & Q(faturas__status__in=['NAO_PAGO', 'AGUARDANDO', 'OUTROS'])
         & Q(faturas__data_vencimento__gte=hoje)
     )
 
@@ -799,10 +799,34 @@ def _resolver_fatura_envio(
     return None
 
 
+def fatura_tem_evidencia_emissao(fatura: Any) -> bool:
+    """Indica se a fatura foi emitida/sincronizada (não é só placeholder do plano).
+
+    Aceita qualquer evidência forte:
+    - meios de pagamento (PIX, barras, PDF)
+    - número da fatura na operadora
+    - importação FPD
+    - busca Nio com status SUCESSO
+    """
+    if fatura is None:
+        return False
+    for campo in ('codigo_pix', 'codigo_barras', 'pdf_url', 'numero_fatura_operadora'):
+        raw = getattr(fatura, campo, None)
+        if raw is not None and str(raw).strip():
+            return True
+    if getattr(fatura, 'data_importacao_fpd', None):
+        return True
+    status_busca = (getattr(fatura, 'status_busca', None) or '').strip().upper()
+    return status_busca == 'SUCESSO'
+
+
 def validar_fatura_para_envio_cobranca(fatura: FaturaM10) -> tuple[bool, str]:
     """
     Impede cobrança WhatsApp/e-mail sem variáveis mínimas do template Meta
-    (valor e vencimento). R$ 0,00 ou nulo bloqueia o envio.
+    e sem evidência de fatura emitida (evita cobrança de placeholder M-10).
+
+    Exige: vencimento, valor > 0 e ao menos um sinal de emissão
+    (PIX, barras, PDF, nº operadora, import FPD ou busca Nio SUCESSO).
     """
     if fatura is None:
         return False, 'Fatura não encontrada.'
@@ -819,6 +843,12 @@ def validar_fatura_para_envio_cobranca(fatura: FaturaM10) -> tuple[bool, str]:
         return False, (
             'Fatura sem valor válido (R$ 0,00 ou vazio). '
             'Atualize o valor da fatura antes de enviar a cobrança.'
+        )
+    if not fatura_tem_evidencia_emissao(fatura):
+        return False, (
+            'Fatura sem evidência de emissão (PIX, código de barras, PDF, '
+            'número na operadora, importação FPD ou busca Nio com sucesso). '
+            'Não envie cobrança de fatura apenas projetada pelo plano.'
         )
     return True, ''
 
@@ -2362,7 +2392,7 @@ def montar_mensagem_cobranca_roteiro1(
     nome_atendente: str = '_________',
 ) -> str:
     """Monta texto do Roteiro 1 da Jornada de Cobrança (2ª via + barras + PIX)."""
-    parceiro = (nome_parceiro or getattr(settings, 'SITE_BRAND', 'Rosso')).strip() or 'Rosso'
+    parceiro = (nome_parceiro or getattr(settings, 'SITE_BRAND', 'ClickUp')).strip() or 'ClickUp'
     nome_cliente = (contrato.cliente_nome or 'cliente').strip()
     saudacao = _saudacao_periodo()
     codigo_barras = (fatura.codigo_barras or '').strip() or '(código de barras indisponível)'
@@ -3571,6 +3601,8 @@ def classificar_motivo_bloqueio_cobranca(ok_tratar: bool, motivo_dados: str) -> 
         return 'Sem data de vencimento'
     if 'valor' in motivo:
         return 'Valor zerado ou vazio'
+    if 'evidência de emissão' in motivo or 'evidencia de emissao' in motivo:
+        return 'Sem fatura emitida (Nio/FPD)'
     return (motivo_dados or 'Dados incompletos')[:80]
 
 
@@ -3645,7 +3677,7 @@ def preview_cobranca_templates_dia(
     Critérios (iguais ao management command):
     - fatura aberta com vencimento em D−5 / D+5 / D+12,19…
     - contrato tratável (não órfão / com CPF)
-    - valor > 0 e vencimento preenchido
+    - valor > 0, vencimento preenchido e evidência de emissão (Nio/FPD)
     - ainda sem WhatsApp template sucesso no dia
     """
     from crm_app.services.whatsapp.nio_templates import templates_habilitados
@@ -3774,6 +3806,7 @@ def preview_cobranca_templates_dia(
             'Vencimento em D−5, D+5 ou D+12/19/26…',
             'Contrato tratável (não órfão, com CPF)',
             'Valor > 0 e vencimento preenchidos',
+            'Fatura emitida (PIX, barras, PDF, nº operadora, FPD ou busca Nio ok)',
             'Sem WhatsApp template com sucesso no dia',
             criterio_job,
         ],

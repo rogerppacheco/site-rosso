@@ -58,7 +58,7 @@ def _resposta_duplicado(registro: AuditoriaSemSlotGC | None, mensagem: str) -> R
 
 
 class AuditoriaSemSlotEnviarView(APIView):
-    """POST multipart após venda CADASTRADA: envia WhatsApp aos destinos configurados."""
+    """POST multipart após venda CADASTRADA: envia WhatsApp ao GC + Diretoria."""
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     permission_classes = [permissions.IsAuthenticated]
 
@@ -69,8 +69,13 @@ class AuditoriaSemSlotEnviarView(APIView):
         venda_id = request.data.get('venda_id')
         if not venda_id:
             return Response({'detail': 'venda_id é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
         try:
-            venda = Venda.objects.select_related('cliente').get(id=int(venda_id))
+            venda = filtrar_vendas_por_operadora(
+                Venda.objects.select_related('cliente'),
+                request.user,
+            ).get(id=int(venda_id))
         except (Venda.DoesNotExist, TypeError, ValueError):
             return Response({'detail': 'Venda não encontrada.'}, status=status.HTTP_404_NOT_FOUND)
 

@@ -12,18 +12,35 @@ from crm_app.services.whatsapp.phone_utils import destino_evolution, formatar_te
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_INSTANCE = "site_record_zap"
+DEFAULT_INSTANCE = "nova_velox_zap"
 
 
 class EvolutionProvider(WhatsAppProvider):
     def __init__(self) -> None:
-        self.base_url = (os.environ.get("EVOLUTION_API_URL") or "").rstrip("/")
-        self.api_key = os.environ.get("EVOLUTION_API_KEY", "")
-        self.instance_name = os.environ.get("EVOLUTION_INSTANCE_NAME", DEFAULT_INSTANCE)
+        from django.conf import settings
+
+        self.base_url = (
+            os.environ.get("EVOLUTION_API_URL")
+            or getattr(settings, "EVOLUTION_API_URL", "")
+            or ""
+        ).rstrip("/")
+        self.api_key = (
+            os.environ.get("EVOLUTION_API_KEY")
+            or getattr(settings, "EVOLUTION_API_KEY", "")
+            or ""
+        )
+        self.instance_name = (
+            os.environ.get("EVOLUTION_INSTANCE_NAME")
+            or getattr(settings, "EVOLUTION_INSTANCE_NAME", DEFAULT_INSTANCE)
+            or DEFAULT_INSTANCE
+        )
         if not self.base_url or not self.api_key:
             logger.error(
                 "Evolution CRITICO: EVOLUTION_API_URL / EVOLUTION_API_KEY não configurados"
             )
+
+    def is_configured(self) -> bool:
+        return bool(self.base_url and self.api_key)
 
     def _headers(self) -> Dict[str, str]:
         return {"apikey": self.api_key, "Content-Type": "application/json"}
@@ -88,27 +105,70 @@ class EvolutionProvider(WhatsAppProvider):
         return {"raw": resp}
 
     def verificar_numero_existe(self, telefone: str) -> Optional[bool]:
+        """Consulta POST /chat/whatsappNumbers/{instance}.
+
+        Em sucesso a Evolution v2 retorna uma **lista**
+        ``[{"exists": true, "jid": "...", "number": "..."}]``.
+        Respostas boom (ex.: Connection Closed) vêm como dict.
+        """
         if not self.base_url or not self.api_key:
             return True
         numero = formatar_telefone_br(telefone)
         path = f"/chat/whatsappNumbers/{self.instance_name}"
         data = self._request("POST", path, {"numbers": [numero]})
-        if not isinstance(data, dict):
+
+        items: List[Any] = []
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            boom = (data.get("output") or {}).get("payload") or {}
+            if data.get("isBoom") or boom.get("statusCode") or data.get("error"):
+                msg = (
+                    boom.get("message")
+                    or data.get("message")
+                    or data.get("error")
+                    or "erro desconhecido"
+                )
+                logger.warning(
+                    "[Evolution] whatsappNumbers indisponível (%s): %s",
+                    self.instance_name,
+                    msg,
+                )
+                return None
+            raw_items = data.get("response") or data.get("numbers") or data.get("data") or []
+            items = raw_items if isinstance(raw_items, list) else []
+        else:
             return None
-        items = data.get("response") or data.get("numbers") or data.get("data") or []
-        if isinstance(items, list):
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                jid = str(item.get("jid") or item.get("number") or "")
-                if numero in jid.replace("@s.whatsapp.net", ""):
-                    exists = item.get("exists")
-                    if exists is not None:
-                        return bool(exists)
-                    return True
-        if data.get("error"):
+
+        if not items:
             return None
-        return True
+
+        for item in items:
+            if not isinstance(item, dict) or "exists" not in item:
+                continue
+            item_number = "".join(
+                filter(str.isdigit, str(item.get("number") or ""))
+            )
+            jid_digits = "".join(
+                filter(
+                    str.isdigit,
+                    str(item.get("jid") or "").split("@")[0],
+                )
+            )
+            matches_request = (
+                (item_number and item_number == numero)
+                or (jid_digits and jid_digits == numero)
+                or (
+                    jid_digits
+                    and len(jid_digits) >= 8
+                    and numero.endswith(jid_digits[-8:])
+                )
+                or len(items) == 1
+            )
+            if matches_request:
+                return bool(item.get("exists"))
+
+        return None
 
     def enviar_mensagem_texto_raw(
         self, telefone: str, mensagem: str
@@ -230,6 +290,29 @@ class EvolutionProvider(WhatsAppProvider):
     def listar_grupos(self) -> List[Dict[str, str]]:
         path = f"/group/fetchAllGroups/{self.instance_name}?getParticipants=false"
         data = self._request("GET", path, timeout=45)
+
+        if isinstance(data, dict):
+            boom = (data.get("output") or {}).get("payload") or {}
+            resp_msg = data.get("response")
+            msg = None
+            if isinstance(resp_msg, dict):
+                msg = resp_msg.get("message")
+            msg = (
+                boom.get("message")
+                or msg
+                or data.get("message")
+                or data.get("error")
+            )
+            if data.get("isBoom") or boom.get("statusCode") or (
+                isinstance(data.get("status"), int) and data["status"] >= 400
+            ):
+                logger.warning(
+                    "[Evolution] fetchAllGroups indisponível (%s): %s",
+                    self.instance_name,
+                    msg or data,
+                )
+                return []
+
         grupos_raw: List[Any] = []
         if isinstance(data, list):
             grupos_raw = data
@@ -242,6 +325,8 @@ class EvolutionProvider(WhatsAppProvider):
             )
             if isinstance(grupos_raw, dict):
                 grupos_raw = list(grupos_raw.values())
+            if isinstance(grupos_raw, str):
+                grupos_raw = []
 
         lista: List[Dict[str, str]] = []
         seen: set[str] = set()
@@ -274,3 +359,12 @@ class EvolutionProvider(WhatsAppProvider):
         if isinstance(b64, str) and b64:
             return b64
         return None
+
+# Injetado de site-gm
+def _evo_cfg(name: str, default: str = "") -> str:
+    val = ""
+    if django_settings is not None:
+        val = getattr(django_settings, name, None) or ""
+    if not val:
+        val = os.environ.get(name, "") or ""
+    return str(val or default).strip()

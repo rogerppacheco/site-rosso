@@ -57,6 +57,13 @@ class WhatsAppService:
     def verificar_numero_existe(self, telefone):
         return self._provider.verificar_numero_existe(telefone)
 
+    def pode_verificar_numero(self) -> bool:
+        """True se o provedor ativo consegue consultar existência no WhatsApp."""
+        fn = getattr(self._provider, "pode_verificar_numero", None)
+        if callable(fn):
+            return bool(fn())
+        return bool(self.instance_id and self.token)
+
     def enviar_mensagem_texto(self, telefone, mensagem, variar=True):
         try:
             if variar and mensagem and len(mensagem) > 20:

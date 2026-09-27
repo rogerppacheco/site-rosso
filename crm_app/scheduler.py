@@ -45,11 +45,11 @@ def _wrap_scheduler_job(func: _F) -> _F:
 
 def buscar_faturas_automatico():
     try:
-        logger.info("🤖 Iniciando lote de match Nio noturno...")
-        call_command('match_faturas_nio_noturno')
-        logger.info("✅ Lote de match Nio noturno concluído")
+        logger.info("🤖 Iniciando busca automática de faturas no Nio...")
+        call_command('buscar_faturas_nio_automatico')
+        logger.info("✅ Busca automática concluída com sucesso!")
     except Exception as e:
-        logger.error(f"❌ Erro no match Nio noturno: {str(e)}")
+        logger.error(f"❌ Erro na busca automática: {str(e)}")
 
 
 def finalizar_match_nio_noturno():

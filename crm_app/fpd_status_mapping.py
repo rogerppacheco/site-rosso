@@ -69,18 +69,27 @@ def normalizar_indicador_fpd(indicador_raw) -> str:
     return 'FPD'
 
 
-def normalizar_status_fpd(status_str) -> str:
+def normalizar_status_fpd(status_str):
     """
     Normaliza um status vindo do FPD para o sistema interno.
-
+    
+    Args:
+        status_str: String com o status do FPD
+        
     Returns:
         String com status normalizado (PAGO, NAO_PAGO, AGUARDANDO, ATRASADO, OUTROS)
     """
     if not status_str:
-        return 'NAO_PAGO'
+        return 'NAO_PAGO'  # Padrão se vazio
+    
+    # Normalizar: remover espaços, converter para maiúsculas
+    status_normalizado = status_str.strip().upper()
+    status_normalizado = status_normalizado.replace(' ', '_')
 
-    status_normalizado = str(status_str).strip().upper().replace(' ', '_')
-    return FPD_STATUS_MAP.get(status_normalizado, 'OUTROS')
+    # Buscar no mapa
+    status_interno = FPD_STATUS_MAP.get(status_normalizado, 'OUTROS')
+    
+    return status_interno
 
 
 def resolver_status_fatura_fpd(

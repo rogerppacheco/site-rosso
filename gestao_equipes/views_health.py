@@ -3,6 +3,7 @@ Endpoints de saúde para probe do Railway e monitoramento interno.
 """
 from __future__ import annotations
 
+import io
 import os
 import time
 from typing import Any
@@ -11,6 +12,8 @@ from django.conf import settings
 from django.db import connection
 from django.http import HttpRequest, JsonResponse
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 
 def _memoria_mb() -> float | None:
@@ -34,7 +37,7 @@ class HealthView(View):
         payload: dict[str, Any] = {
             "status": "ok",
             "service": os.environ.get("RAILWAY_SERVICE_NAME")
-            or getattr(settings, "SITE_BRAND", "Rosso"),
+            or getattr(settings, "SITE_BRAND", "site-record"),
         }
         return JsonResponse(payload)
 
@@ -118,3 +121,32 @@ class MetricsView(View):
                 "pid": os.getpid(),
             }
         )
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ManutencaoView(View):
+    """Endpoint de manutenção para rodar management commands no servidor.
+    Protegido pelo SECRET_KEY via header X-Manutencao-Token.
+    """
+
+    def post(self, request: HttpRequest) -> JsonResponse:
+        token_esperado = settings.SECRET_KEY
+        token_recebido = request.headers.get('X-Manutencao-Token', '')
+        if token_recebido != token_esperado:
+            return JsonResponse({'error': 'Forbidden'}, status=403)
+
+        comando = request.POST.get('comando') or ''
+        comandos_permitidos = ['corrigir_tipo_venda_pap']
+        if comando not in comandos_permitidos:
+            return JsonResponse(
+                {'error': f'Comando não permitido. Permitidos: {comandos_permitidos}'},
+                status=400
+            )
+
+        try:
+            from django.core.management import call_command
+            buf = io.StringIO()
+            call_command(comando, stdout=buf, stderr=buf)
+            output = buf.getvalue()
+            return JsonResponse({'success': True, 'output': output})
+        except Exception as exc:
+            return JsonResponse({'success': False, 'error': str(exc)}, status=500)

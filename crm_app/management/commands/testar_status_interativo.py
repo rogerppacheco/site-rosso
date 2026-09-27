@@ -23,8 +23,7 @@ _mensagens_async = []
 
 _DICA_POR_ETAPA = {
     "inicial": "comando perdido — use /reset para reabrir STATUS",
-    "status_documento": "digite o CPF (11 dígitos) ou a O.S (8 dígitos / X-12dígitos)",
-    "status_tipo": "digite o CPF ou a O.S (detecta automaticamente)",
+    "status_tipo": "digite 1 (CPF) ou 2 (O.S.)",
     "status_cpf": "digite o CPF (apenas números)",
     "status_os": "digite o número da O.S.",
     "status_aguardando_online": "aguarde o PAP (Enter vazio atualiza)",
@@ -215,6 +214,20 @@ class Command(BaseCommand):
                             self.stdout.write(f"  {i}. {f}")
                     else:
                         self.stdout.write("  Nenhuma falha registrada.")
+                    continue
+
+                # Atalho: 1/2 na etapa inicial reinicia STATUS e aplica a opção
+                if etapa == "inicial" and entrada in ("1", "2"):
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "  (você digitou só a opção — reiniciando STATUS e aplicando…)\n"
+                        )
+                    )
+                    iniciar_fluxo_status()
+                    etapa, _ = obter_estado()
+                    if etapa != "status_tipo":
+                        continue
+                    processar_entrada(entrada, etapa)
                     continue
 
                 processar_entrada(entrada, etapa)

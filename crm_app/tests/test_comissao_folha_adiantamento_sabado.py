@@ -11,8 +11,9 @@ from crm_app.services.adiantamento_sabado_service import (
 
 
 class _PlanoStub:
-    def __init__(self, nome: str) -> None:
+    def __init__(self, nome: str, plano_id: int = 1) -> None:
         self.nome = nome
+        self.id = plano_id
 
 
 class _ClienteStub:
@@ -278,7 +279,7 @@ class ComplementoMeiVsCnpjTests(SimpleTestCase):
             usar_manual=False,
         )
         self.assertEqual(30.0, res['total_complemento'])
-        self.assertEqual('500MB_PAP', res['por_venda'][20]['chave'])
+        self.assertEqual('plano_1_PAP', res['por_venda'][20]['chave'])
         self.assertEqual('MEI', res['detalhes'][0]['classificacao_mei'])
         self.assertEqual('CPF', res['detalhes'][0]['tipo_cliente'])
 
@@ -299,4 +300,4 @@ class ComplementoMeiVsCnpjTests(SimpleTestCase):
             usar_manual=False,
         )
         self.assertEqual(30.0, res['total_complemento'])
-        self.assertEqual('500MB_CNPJ', res['por_venda'][21]['chave'])
+        self.assertEqual('plano_1_CNPJ', res['por_venda'][21]['chave'])

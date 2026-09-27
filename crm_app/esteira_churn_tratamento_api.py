@@ -136,6 +136,9 @@ class EsteiraChurnTratamentoView(APIView):
         ).exclude(
             Q(ordem_servico__isnull=True) | Q(ordem_servico=''),
         ).select_related('vendedor', 'cliente', 'status_esteira')
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+        vendas_qs = filtrar_vendas_por_operadora(vendas_qs, request.user)
 
         lookup = build_venda_lookup_por_os(vendas_qs)
 

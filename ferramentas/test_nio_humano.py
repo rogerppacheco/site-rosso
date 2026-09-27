@@ -4,7 +4,7 @@ COM CLIQUES E DIGITAÇÃO VISÍVEIS
 """
 import os
 import sys
-sys.path.insert(0, 'C:/site-record')
+sys.path.insert(0, 'C:/site-bn')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gestao_equipes.settings')
 
 import django
@@ -369,3 +369,4 @@ except Exception as e:
 print('\n' + '='*80)
 print('FIM DO TESTE')
 print('='*80)
+

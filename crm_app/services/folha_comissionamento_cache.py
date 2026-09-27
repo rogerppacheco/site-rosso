@@ -15,9 +15,9 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 _VERSION_KEY = "folha_comissao_ver:{ano}:{mes}"
-# v2: linhas 600MB e 600MB Cidade Especial separadas do 500MB
-_FOLHA_SCHEMA = 2
-_DATA_KEY = "folha_comissao:s{schema}:{ano}:{mes}:{vendedor_id}:{use_effective}:{version}"
+_DATA_KEY = (
+    "folha_comissao:{ano}:{mes}:{vendedor_id}:{use_effective}:{scope}:{version}"
+)
 
 
 def _cache_ttl() -> int:
@@ -38,16 +38,34 @@ def _data_key(
     vendedor_id: Optional[int],
     use_effective_date: bool,
     version: int,
+    scope: str = "all",
 ) -> str:
     vid = vendedor_id if vendedor_id is not None else "all"
     return _DATA_KEY.format(
-        schema=_FOLHA_SCHEMA,
         ano=ano,
         mes=mes,
         vendedor_id=vid,
         use_effective=int(use_effective_date),
+        scope=scope,
         version=version,
     )
+
+
+def _scope_key(usuario_escopo: Any = None) -> str:
+    """Separa o cache global dos resultados filtrados por operadora."""
+    if usuario_escopo is None:
+        return "all"
+    from crm_app.services.escopo_operadora import (
+        operadora_ids_permitidas,
+        usuario_tem_bypass_operadora,
+    )
+
+    if usuario_tem_bypass_operadora(usuario_escopo):
+        return "all"
+    ids = operadora_ids_permitidas(usuario_escopo)
+    if ids is None:
+        return "mapped"
+    return "ops-" + "-".join(str(item) for item in sorted(ids))
 
 
 def obter_versao_cache(ano: int, mes: int) -> int:
@@ -86,12 +104,20 @@ def obter_folha_cacheada(
     mes: int,
     vendedor_id: Optional[int],
     use_effective_date: bool,
+    usuario_escopo: Any = None,
 ) -> Optional[dict[str, Any]]:
     """Retorna folha do cache ou None se ausente/desabilitado."""
     if not _cache_enabled():
         return None
     version = obter_versao_cache(ano, mes)
-    key = _data_key(ano, mes, vendedor_id, use_effective_date, version)
+    key = _data_key(
+        ano,
+        mes,
+        vendedor_id,
+        use_effective_date,
+        version,
+        _scope_key(usuario_escopo),
+    )
     dados = cache.get(key)
     if dados is not None:
         logger.info(
@@ -111,12 +137,20 @@ def salvar_folha_cache(
     vendedor_id: Optional[int],
     use_effective_date: bool,
     dados: dict[str, Any],
+    usuario_escopo: Any = None,
 ) -> None:
     """Persiste folha calculada no cache."""
     if not _cache_enabled():
         return
     version = obter_versao_cache(ano, mes)
-    key = _data_key(ano, mes, vendedor_id, use_effective_date, version)
+    key = _data_key(
+        ano,
+        mes,
+        vendedor_id,
+        use_effective_date,
+        version,
+        _scope_key(usuario_escopo),
+    )
     cache.set(key, dados, timeout=_cache_ttl())
     logger.info(
         "[FOLHA_CACHE] Miss — salvo ano=%s mes=%s vendedor=%s effective=%s v=%s ttl=%ss",
@@ -134,9 +168,16 @@ def calcular_folha_mes_com_cache(
     mes: int,
     vendedor_id: Optional[int] = None,
     use_effective_date_for_display: bool = False,
+    usuario_escopo: Any = None,
 ) -> dict[str, Any]:
     """Wrapper com cache sobre calcular_folha_mes."""
-    cached = obter_folha_cacheada(ano, mes, vendedor_id, use_effective_date_for_display)
+    cached = obter_folha_cacheada(
+        ano,
+        mes,
+        vendedor_id,
+        use_effective_date_for_display,
+        usuario_escopo,
+    )
     if cached is not None:
         return cached
 
@@ -147,6 +188,14 @@ def calcular_folha_mes_com_cache(
         mes,
         vendedor_id,
         use_effective_date_for_display=use_effective_date_for_display,
+        usuario_escopo=usuario_escopo,
     )
-    salvar_folha_cache(ano, mes, vendedor_id, use_effective_date_for_display, dados)
+    salvar_folha_cache(
+        ano,
+        mes,
+        vendedor_id,
+        use_effective_date_for_display,
+        dados,
+        usuario_escopo,
+    )
     return dados

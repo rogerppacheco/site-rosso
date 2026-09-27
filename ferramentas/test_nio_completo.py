@@ -8,7 +8,7 @@ Script COMPLETO para extrair dados do Nio seguindo o fluxo correto:
 import os
 import sys
 from urllib.parse import urlparse
-sys.path.insert(0, 'C:/site-record')
+sys.path.insert(0, 'C:/site-bn')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gestao_equipes.settings')
 
 import django
@@ -307,3 +307,4 @@ except Exception as e:
 print('\n' + '='*80)
 print('FIM')
 print('='*80)
+

@@ -19,6 +19,18 @@ def verificar_mudanca_status(sender, instance, **kwargs):
             instance._old_status_tratamento = old_instance.status_tratamento
             instance._old_status_esteira = old_instance.status_esteira
             instance._old_reemissao = old_instance.reemissao
+            instance._folha_snapshot_anterior = {
+                'plano_id': old_instance.plano_id,
+                'status_esteira_id': old_instance.status_esteira_id,
+                'data_instalacao': old_instance.data_instalacao,
+                'data_instalacao_fisica': old_instance.data_instalacao_fisica,
+                'ativo': old_instance.ativo,
+                'antecipacao_comissao': old_instance.antecipacao_comissao,
+                'vendedor_id': old_instance.vendedor_id,
+            }
+            from crm_app.comissao_folha_service import data_instalacao_efetiva_folha
+
+            instance._folha_data_anterior = data_instalacao_efetiva_folha(old_instance)
             
             # Se reemissão foi marcada como True, definir status_esteira como AGENDADO
             if instance.reemissao and not old_instance.reemissao:
@@ -105,6 +117,34 @@ def disparar_whatsapp_cadastrada(sender, instance, created, **kwargs):
             
         except Exception as e:
             logger.error(f"Erro ao enviar WhatsApp na venda #{instance.id}: {e}")
+
+
+@receiver(post_save, sender=Venda)
+def invalidar_cache_folha_apos_alterar_venda(sender, instance, created, **kwargs) -> None:
+    """Status, plano ou data de instalação devem refletir na folha sem esperar o TTL."""
+    snapshot = getattr(instance, '_folha_snapshot_anterior', None)
+    if not created and snapshot:
+        atual = {
+            'plano_id': instance.plano_id,
+            'status_esteira_id': instance.status_esteira_id,
+            'data_instalacao': instance.data_instalacao,
+            'data_instalacao_fisica': instance.data_instalacao_fisica,
+            'ativo': instance.ativo,
+            'antecipacao_comissao': instance.antecipacao_comissao,
+            'vendedor_id': instance.vendedor_id,
+        }
+        if atual == snapshot:
+            return
+    from crm_app.comissao_folha_service import data_instalacao_efetiva_folha
+    from crm_app.services.folha_comissionamento_cache import invalidar_folha_por_data
+
+    datas = [getattr(instance, '_folha_data_anterior', None), data_instalacao_efetiva_folha(instance)]
+    vistos: set = set()
+    for dt in datas:
+        if dt is None or dt in vistos:
+            continue
+        vistos.add(dt)
+        invalidar_folha_por_data(dt)
 
 
 # Signal para criar/atualizar faturas automaticamente ao salvar contrato M-10

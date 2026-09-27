@@ -106,6 +106,18 @@ def cadastrar_venda_crm(dados: Dict[str, Any], vendedor) -> Tuple[Optional[int],
         plano = Plano.objects.filter(pk=plano_id).first() if plano_id else None
         forma_pagamento = FormaPagamento.objects.filter(pk=forma_pagamento_id).first() if forma_pagamento_id else None
 
+        from crm_app.services.escopo_operadora import validar_plano_para_usuario
+
+        forma_entrada = (dados.get("forma_entrada") or "APP").upper()[:10]
+        # Via APP o plano é preenchido depois; Sem APP exige plano no cadastro.
+        erro_plano = validar_plano_para_usuario(
+            vendedor,
+            plano,
+            exigir_plano=(forma_entrada != "APP"),
+        )
+        if erro_plano:
+            return None, erro_plano
+
         # Data de nascimento
         data_nasc = None
         dn = dados.get("data_nascimento")
@@ -126,7 +138,7 @@ def cadastrar_venda_crm(dados: Dict[str, Any], vendedor) -> Tuple[Optional[int],
             plano=plano,
             forma_pagamento=forma_pagamento,
             status_tratamento=status_inicial,
-            forma_entrada=(dados.get("forma_entrada") or "APP").upper()[:10],
+            forma_entrada=forma_entrada,
             tem_fixo=bool(dados.get("tem_fixo", False)),
             gerada_os_automatica=bool(dados.get("gerada_os_automatica", False)),
             telefone1=dados.get("telefone1"),

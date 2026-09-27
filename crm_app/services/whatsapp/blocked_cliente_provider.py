@@ -26,6 +26,9 @@ class ClienteCanalBloqueadoProvider(WhatsAppProvider):
     def verificar_numero_existe(self, telefone: str) -> Optional[bool]:
         return None
 
+    def pode_verificar_numero(self) -> bool:
+        return False
+
     def enviar_mensagem_texto_raw(self, telefone: str, mensagem: str) -> Tuple[bool, Any]:
         ok, resp = self._falha(telefone)
         return ok, resp

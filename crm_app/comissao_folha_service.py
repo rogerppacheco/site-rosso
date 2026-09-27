@@ -423,7 +423,12 @@ def vendas_instaladas_folha_periodo(consultor, data_inicio, data_fim):
     )
 
 
-def _agrupar_vendas_folha_bulk(vendedor_ids, data_inicio, data_fim):
+def _agrupar_vendas_folha_bulk(
+    vendedor_ids,
+    data_inicio,
+    data_fim,
+    usuario_escopo=None,
+):
     """Carrega vendas da folha de todos os vendedores em uma única query."""
     from collections import defaultdict
     from .models import Venda
@@ -445,12 +450,13 @@ def _agrupar_vendas_folha_bulk(vendedor_ids, data_inicio, data_fim):
             data_folha_comissao__gte=di,
             data_folha_comissao__lt=df,
         )
-        .select_related(
-            'plano', 'plano__valores_comissao', 'cliente',
-            'forma_pagamento', 'status_tratamento', 'status_esteira',
-        )
+        .select_related('plano', 'cliente', 'forma_pagamento', 'status_tratamento', 'status_esteira')
         .order_by('vendedor_id', 'data_folha_comissao', 'id')
     )
+    if usuario_escopo is not None:
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+        qs = filtrar_vendas_por_operadora(qs, usuario_escopo)
     grupos = defaultdict(list)
     for venda in qs:
         grupos[venda.vendedor_id].append(venda)
@@ -516,17 +522,22 @@ def resolver_valor_comissao_venda(
     return None
 
 
-def get_valor_manual(config, chave, plano=None, matriz_cache=None):
+def get_valor_manual(config, chave, plano=None, matriz_cache=None, tipo_cliente: str | None = None):
     """Retorna valor manual do vendedor (por plano ou colunas legadas 500/700/1GB)."""
-    if plano and config and chave:
+    if plano and config:
         from crm_app.services.comissao_matriz_service import get_valor_manual_vendedor_plano
-        tipo = 'CPF' if str(chave).endswith('_PAP') else 'CNPJ'
+
+        if tipo_cliente in ('CPF', 'CNPJ'):
+            tipo = tipo_cliente
+        elif chave:
+            tipo = 'CPF' if str(chave).endswith('_PAP') else 'CNPJ'
+        else:
+            tipo = 'CPF'
         v_plano = get_valor_manual_vendedor_plano(config, plano, tipo, matriz_cache=matriz_cache)
         if v_plano is not None:
             return v_plano
     if not config or not chave:
         return None
-    chave_lookup = chave_legado_lookup(chave)
     m = {
         '500MB_PAP': config.valor_500mb_pap_manual,
         '700MB_PAP': config.valor_700mb_pap_manual,
@@ -535,7 +546,7 @@ def get_valor_manual(config, chave, plano=None, matriz_cache=None):
         '700MB_CNPJ': config.valor_700mb_cnpj_manual,
         '1GB_CNPJ': config.valor_1gb_cnpj_manual,
     }
-    v = m.get(chave_lookup)
+    v = m.get(chave)
     return float(v) if v is not None else None
 
 
@@ -1735,3 +1746,124 @@ def get_vendas_ids_desconto_churn_mes(ano, mes):
         if _norm_os_variantes(v.ordem_servico) & set_os_m1:
             ids_marcar.append(v.id)
     return ids_marcar
+
+# Injetado de nova-velox
+def _sufixo_tipo_cliente(tipo_cliente: str) -> str:
+    return 'PAP' if tipo_cliente == 'CPF' else 'CNPJ'
+
+# Injetado de nova-velox
+def chave_agrupamento_folha(venda, tipo_cliente: str | None = None) -> str:
+    """Agrupa a folha pelo plano cadastrado, não pela grade fixa 500/700/1GB."""
+    if tipo_cliente is None:
+        from crm_app.services.cnpj_mei_service import tipo_cliente_comissao
+
+        tipo_cliente = tipo_cliente_comissao(venda)
+    sufixo = _sufixo_tipo_cliente(tipo_cliente)
+    plano = getattr(venda, 'plano', None)
+    plano_id = getattr(plano, 'id', None) or getattr(venda, 'plano_id', None)
+    if plano_id:
+        return f'plano_{int(plano_id)}_{sufixo}'
+    return f'sem_plano_{sufixo}'
+
+# Injetado de nova-velox
+def label_plano_folha(venda, tipo_cliente: str | None = None) -> str:
+    """Rótulo do resumo/extrato: nome do plano cadastrado + PAP/CNPJ."""
+    if tipo_cliente is None:
+        from crm_app.services.cnpj_mei_service import tipo_cliente_comissao
+
+        tipo_cliente = tipo_cliente_comissao(venda)
+    sufixo = _sufixo_tipo_cliente(tipo_cliente)
+    plano = getattr(venda, 'plano', None)
+    nome = (getattr(plano, 'nome', None) or '').strip() or 'SEM PLANO'
+    return f'{nome} {sufixo}'
+
+# Injetado de nova-velox
+def _safe_min_max_faixa(regra) -> tuple[int, int]:
+    min_v = regra.min_vendas if getattr(regra, 'min_vendas', None) is not None else 0
+    max_v = regra.max_vendas if getattr(regra, 'max_vendas', None) is not None else (10 ** 9)
+    return int(min_v), int(max_v)
+
+# Injetado de nova-velox
+def encontrar_faixa_comissao(
+    consultor,
+    qtd_vendas: int,
+    regras_faixa_perfil,
+    regras_faixa_vendedor,
+    config=None,
+):
+    """
+    Resolve a faixa COMISSAO aplicável: regra individual do vendedor, depois perfil.
+    Mesma prioridade usada na folha de pagamento.
+    """
+    vendedor_id = getattr(consultor, 'id', None)
+    listas = []
+    if vendedor_id is not None and regras_faixa_vendedor:
+        listas = regras_faixa_vendedor.get(vendedor_id, []) or []
+    qtd = int(qtd_vendas or 0)
+    for regra in sorted(listas, key=lambda item: _safe_min_max_faixa(item)[0], reverse=True):
+        min_v, max_v = _safe_min_max_faixa(regra)
+        if min_v <= qtd <= max_v:
+            return regra
+    perfil = resolver_perfil_comissao_consultor(consultor, config)
+    for regra in regras_faixa_perfil or []:
+        if regra.perfil != perfil:
+            continue
+        min_v, max_v = _safe_min_max_faixa(regra)
+        if min_v <= qtd <= max_v:
+            return regra
+    return None
+
+# Injetado de nova-velox
+def carregar_contexto_estimativa_comissao(ano: int | None = None, mes: int | None = None) -> dict:
+    """Faixas COMISSAO, configs do mês e matriz faixa×plano para estimativa do dashboard."""
+    from crm_app.performance_helpers import carregar_contexto_faixas_comissao
+    from crm_app.services.comissao_matriz_service import MatrizComissaoCache
+
+    ctx = carregar_contexto_faixas_comissao(ano, mes)
+    config_ids = [c.id for c in (ctx.get('configs') or {}).values() if c]
+    ctx['matriz_cache'] = MatrizComissaoCache.carregar(config_ids)
+    return ctx
+
+# Injetado de nova-velox
+def estimar_comissao_instaladas(consultor, vendas, contexto: dict | None = None) -> float:
+    """
+    Soma a comissão configurada das vendas instaladas (faixas/matriz/cadastro do plano).
+
+    Usado no card Comissão Estimada do dashboard de vendas. Não usa o modelo legado
+    RegraComissao — a configuração vigente está em RegraComissaoFaixa.
+    """
+    from crm_app.services.cnpj_mei_service import tipo_cliente_comissao
+
+    vendas_list = list(vendas) if vendas is not None else []
+    if not vendas_list:
+        return 0.0
+    if contexto is None:
+        contexto = carregar_contexto_estimativa_comissao()
+
+    config = (contexto.get('configs') or {}).get(getattr(consultor, 'id', None))
+    faixa = encontrar_faixa_comissao(
+        consultor,
+        len(vendas_list),
+        contexto.get('regras_perfil') or [],
+        contexto.get('regras_vendedor') or {},
+        config=config,
+    )
+    usar_manual = bool(config and getattr(config, 'usar_valor_manual', False))
+    matriz_cache = contexto.get('matriz_cache')
+
+    total = 0.0
+    for venda in vendas_list:
+        tipo_cliente = tipo_cliente_comissao(venda)
+        plano = getattr(venda, 'plano', None)
+        chave = plano_tipo_to_chave(plano.nome if plano else '', tipo_cliente)
+        valor = resolver_valor_comissao_venda(
+            plano,
+            tipo_cliente,
+            faixa_regra=faixa,
+            config=config,
+            usar_manual=usar_manual,
+            chave=chave,
+            matriz_cache=matriz_cache,
+        )
+        total += float(valor or 0)
+    return round(total, 2)

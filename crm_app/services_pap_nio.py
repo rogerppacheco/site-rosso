@@ -267,6 +267,7 @@ class PAPNioAutomation:
         optimize_for_credit: bool = False,
         slow_mo: Optional[int] = None,
         record_trace: bool = False,
+        url_pos_login: Optional[str] = None,
     ):
         """
         Inicializa a automação PAP.
@@ -297,6 +298,7 @@ class PAPNioAutomation:
         self.optimize_for_credit = optimize_for_credit
         self.slow_mo = slow_mo
         self.record_trace = record_trace
+        self.url_pos_login = url_pos_login
 
         self.playwright = None  # sync_playwright instance; precisa .stop() para encerrar event loop
         self.browser: Optional[Browser] = None
@@ -586,6 +588,8 @@ class PAPNioAutomation:
 
     def _url_validacao_sessao_pos_login(self) -> str:
         """Rota para provar sessão após login. Crédito vai direto ao novo-pedido (evita Consulta OS)."""
+        if self.url_pos_login:
+            return self.url_pos_login
         if self.optimize_for_credit:
             return PAP_NOVO_PEDIDO_URL
         return PAP_CONSULTA_OS_URL
@@ -742,6 +746,17 @@ class PAPNioAutomation:
                 )
             
             self.page = self.context.new_page()
+            
+            # Global XHR Interceptor for Debugging 
+            self.captured_global_xhrs = []
+            def _log_req(req):
+                try:
+                    if req.resource_type in ["xhr", "fetch"]:
+                        self.captured_global_xhrs.append(f"{req.method} {req.url}")
+                except:
+                    pass
+            self.page.on("request", _log_req)
+            
             # Timeout padrão alto para evitar "Timeout 5000ms" em produção (rede/React lentos)
             self.page.set_default_timeout(25000)
             self.sessao_iniciada = True

@@ -352,44 +352,129 @@ class TestWhatsAtendeProvider(SimpleTestCase):
 
 
 class TestN8nOutboundProvider(SimpleTestCase):
+    @override_settings(N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/x")
+    def test_reconhece_confirmacao_aninhada_do_n8n(self) -> None:
+        provider = N8nOutboundProvider()
+        self.assertTrue(
+            provider._resposta_confirma_entrega(
+                [{"body": {"key": {"id": "MSG-ANINHADA"}}}],
+            )
+        )
+
     @override_settings(
-        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/site-record-enviar-mensagem",
+        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/nova-velox-enviar-mensagem",
     )
     @patch("crm_app.services.whatsapp.n8n_outbound_provider.requests.post")
     def test_enviar_texto_via_n8n(self, mock_post) -> None:
         mock_post.return_value.status_code = 200
         mock_post.return_value.content = b"{}"
-        mock_post.return_value.json.return_value = {"ok": True}
+        mock_post.return_value.json.return_value = {"key": {"id": "MSG-1"}}
         provider = N8nOutboundProvider()
-        ok, resp = provider.enviar_mensagem_texto_raw("31999882528", "Olá")
+        with patch.object(
+            provider._evolution,
+            "enviar_mensagem_texto_raw",
+        ) as mock_fallback:
+            ok, resp = provider.enviar_mensagem_texto_raw(
+                "31999882528",
+                "Olá",
+            )
         self.assertTrue(ok)
+        self.assertEqual(resp["key"]["id"], "MSG-1")
+        mock_fallback.assert_not_called()
         mock_post.assert_called_once()
         payload = mock_post.call_args.kwargs["json"]
         self.assertEqual(payload["phone_number"], "5531999882528")
         self.assertEqual(payload["message_body"], "Olá")
 
     @override_settings(N8N_OUTBOUND_WEBHOOK_URL="")
-    def test_texto_sem_webhook_falha(self) -> None:
+    def test_texto_sem_webhook_usa_fallback_evolution(self) -> None:
         provider = N8nOutboundProvider()
-        ok, err = provider.enviar_mensagem_texto_raw("31999882528", "Olá")
-        self.assertFalse(ok)
-        self.assertIn("N8N_OUTBOUND", str(err))
+        with patch.object(
+            provider._evolution,
+            "enviar_mensagem_texto_raw",
+            return_value=(True, {"key": {"id": "FALLBACK-1"}}),
+        ) as mock_fallback:
+            ok, resp = provider.enviar_mensagem_texto_raw(
+                "31999882528",
+                "Olá",
+            )
+        self.assertTrue(ok)
+        self.assertEqual(resp["fallback"], "evolution-direto")
+        mock_fallback.assert_called_once_with("31999882528", "Olá")
 
     @override_settings(
-        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/site-record-enviar-mensagem",
+        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/x",
+        N8N_OUTBOUND_DIRECT_FALLBACK=True,
+    )
+    @patch("crm_app.services.whatsapp.n8n_outbound_provider.requests.post")
+    def test_texto_sem_confirmacao_usa_fallback_evolution(
+        self,
+        mock_post,
+    ) -> None:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.content = b"{}"
+        mock_post.return_value.json.return_value = {
+            "message": "Workflow was started",
+        }
+        provider = N8nOutboundProvider()
+        with patch.object(
+            provider._evolution,
+            "enviar_mensagem_texto_raw",
+            return_value=(True, {"key": {"id": "FALLBACK-2"}}),
+        ) as mock_fallback:
+            ok, resp = provider.enviar_mensagem_texto_raw(
+                "31999882528",
+                "Olá",
+            )
+        self.assertTrue(ok)
+        self.assertEqual(resp["fallback"], "evolution-direto")
+        mock_fallback.assert_called_once()
+
+    @override_settings(
+        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/x",
+        N8N_OUTBOUND_DIRECT_FALLBACK=True,
+    )
+    @patch("crm_app.services.whatsapp.n8n_outbound_provider.requests.post")
+    def test_falha_n8n_e_fallback_retorna_erro(
+        self,
+        mock_post,
+    ) -> None:
+        mock_post.return_value.status_code = 500
+        mock_post.return_value.text = "erro n8n"
+        provider = N8nOutboundProvider()
+        with patch.object(
+            provider._evolution,
+            "enviar_mensagem_texto_raw",
+            return_value=(False, "erro evolution"),
+        ):
+            ok, resp = provider.enviar_mensagem_texto_raw(
+                "31999882528",
+                "Olá",
+            )
+        self.assertFalse(ok)
+        self.assertIn("fallback_error", resp)
+
+    @override_settings(
+        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/nova-velox-enviar-mensagem",
     )
     @patch("crm_app.services.whatsapp.n8n_outbound_provider.requests.post")
     def test_enviar_pdf_url_via_n8n(self, mock_post) -> None:
         mock_post.return_value.status_code = 200
-        mock_post.return_value.content = b""
+        mock_post.return_value.content = b"{}"
+        mock_post.return_value.json.return_value = {"key": {"id": "DOC-1"}}
         provider = N8nOutboundProvider()
-        ok = provider.enviar_pdf_url(
-            "31999882528",
-            "https://cdn.example/doc.pdf",
-            nome_arquivo="extrato.pdf",
-            caption="Segue extrato",
-        )
+        with patch.object(
+            provider._evolution,
+            "enviar_pdf_url",
+        ) as mock_fallback:
+            ok = provider.enviar_pdf_url(
+                "31999882528",
+                "https://cdn.example/doc.pdf",
+                nome_arquivo="extrato.pdf",
+                caption="Segue extrato",
+            )
         self.assertTrue(ok)
+        mock_fallback.assert_not_called()
         payload = mock_post.call_args.kwargs["json"]
         self.assertEqual(payload["media_type"], "document")
         self.assertEqual(payload["media_url"], "https://cdn.example/doc.pdf")
@@ -401,3 +486,63 @@ class TestN8nOutboundProvider(SimpleTestCase):
         result = provider.enviar_imagem_b64("31999882528", "abc123", caption="img")
         self.assertEqual(result, {"messageId": "1"})
         mock_b64.assert_called_once()
+
+
+class TestVerificacaoNumeroEvolution(SimpleTestCase):
+    @override_settings(
+        EVOLUTION_API_URL="https://evo.example",
+        EVOLUTION_API_KEY="key-evo",
+        EVOLUTION_INSTANCE_NAME="site_gm_zap",
+    )
+    def test_evolution_pode_verificar_com_credenciais(self) -> None:
+        provider = EvolutionProvider()
+        self.assertTrue(provider.pode_verificar_numero())
+
+    @override_settings(EVOLUTION_API_URL="", EVOLUTION_API_KEY="")
+    @patch.dict("os.environ", {"EVOLUTION_API_URL": "", "EVOLUTION_API_KEY": ""}, clear=False)
+    def test_evolution_sem_credenciais_nao_verifica(self) -> None:
+        provider = EvolutionProvider()
+        self.assertFalse(provider.pode_verificar_numero())
+
+    @override_settings(
+        EVOLUTION_API_URL="https://evo.example",
+        EVOLUTION_API_KEY="key-evo",
+    )
+    def test_evolution_parseia_lista_whatsapp_numbers(self) -> None:
+        provider = EvolutionProvider()
+        with patch.object(
+            EvolutionProvider,
+            "_request",
+            return_value=[
+                {
+                    "jid": "5531999882528@s.whatsapp.net",
+                    "exists": True,
+                    "number": "5531999882528",
+                }
+            ],
+        ):
+            self.assertTrue(provider.verificar_numero_existe("31999882528"))
+        with patch.object(
+            EvolutionProvider,
+            "_request",
+            return_value=[{"jid": "5531999882528@s.whatsapp.net", "exists": False}],
+        ):
+            self.assertFalse(provider.verificar_numero_existe("31999882528"))
+
+    @override_settings(
+        EVOLUTION_API_URL="https://evo.example",
+        EVOLUTION_API_KEY="key-evo",
+        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/x",
+    )
+    @patch(
+        "crm_app.services.whatsapp_config_service.get_active_whatsapp_provider_name",
+        return_value="evolution",
+    )
+    def test_service_evolution_nao_exige_zapi(self, _mock_name: object) -> None:
+        from crm_app.whatsapp_service import WhatsAppService
+
+        clear_whatsapp_provider_cache()
+        svc = WhatsAppService()
+        self.assertTrue(svc.pode_verificar_numero())
+        self.assertFalse(svc.instance_id)
+        self.assertFalse(svc.token)

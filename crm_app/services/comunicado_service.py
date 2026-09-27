@@ -1,4 +1,4 @@
-"""Regras de negócio para envio de comunicados (Informa)."""
+"""Regras de negócio para envio de comunicados ({{ SITE_BRAND_NAME }} Informa)."""
 from __future__ import annotations
 
 import logging
@@ -178,6 +178,7 @@ def processar_envio_comunicado(comunicado: Comunicado) -> bool:
     """
     Processa e envia um comunicado via WhatsApp.
     Usa envio individual (tel_whatsapp) quando há filtros granulares; caso contrário, grupos.
+    Se não houver grupos cadastrados em GrupoDisparo, faz fallback para envio individual.
     """
     try:
         if not comunicado_deve_enviar_agora(comunicado):
@@ -188,7 +189,22 @@ def processar_envio_comunicado(comunicado: Comunicado) -> bool:
         sucesso_total = True
         destinos_enviados = 0
 
-        if comunicado_usa_envio_individual(comunicado):
+        usar_individual = comunicado_usa_envio_individual(comunicado)
+        grupos_ids: list[str] = []
+        if not usar_individual:
+            grupos_ids = resolver_grupos_whatsapp(comunicado)
+            if not grupos_ids:
+                # Sem grupos cadastrados (comum após migração Z-API → Evolution):
+                # envia para tel_whatsapp dos usuários elegíveis.
+                logger.warning(
+                    "Nenhum grupo encontrado para perfil %s (comunicado %s) — "
+                    "fallback para envio individual",
+                    comunicado.perfil_destino,
+                    comunicado.id,
+                )
+                usar_individual = True
+
+        if usar_individual:
             destinatarios = resolver_destinatarios_individuais(comunicado)
             if not destinatarios:
                 logger.warning(
@@ -224,17 +240,6 @@ def processar_envio_comunicado(comunicado: Comunicado) -> bool:
                         exc,
                     )
         else:
-            grupos_ids = resolver_grupos_whatsapp(comunicado)
-            if not grupos_ids:
-                logger.warning(
-                    "Nenhum grupo encontrado para perfil %s (comunicado %s)",
-                    comunicado.perfil_destino,
-                    comunicado.id,
-                )
-                comunicado.status = 'ERRO'
-                comunicado.save(update_fields=['status'])
-                return False
-
             for grupo_id in grupos_ids:
                 try:
                     resultado, _ = whatsapp_service.enviar_mensagem_texto(

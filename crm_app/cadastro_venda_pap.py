@@ -87,9 +87,23 @@ def cadastrar_venda_pap_no_crm(dados: dict, numero_os: str, matricula_vendedor: 
             "500mega": "Nio Fibra Essencial 500 Mega",
         }
         plano_nome = plano_map.get(dados.get("plano", ""), "Nio Fibra Essencial 500 Mega")
-        plano = Plano.objects.filter(
+        plano_qs = Plano.objects.filter(
             nome__icontains=plano_nome.split()[2] if len(plano_nome.split()) > 2 else plano_nome
-        ).first()
+        )
+        from crm_app.services.escopo_operadora import (
+            filtrar_planos_por_operadora,
+            validar_plano_para_usuario,
+        )
+
+        plano = filtrar_planos_por_operadora(plano_qs, vendedor).first()
+        erro_plano = validar_plano_para_usuario(vendedor, plano)
+        if erro_plano:
+            logger.warning(
+                "[CRM] Venda PAP bloqueada por escopo de operadora (vendedor=%s): %s",
+                getattr(vendedor, 'username', vendedor),
+                erro_plano,
+            )
+            return False
 
         forma_map = {
             "boleto": "Boleto",

@@ -571,42 +571,55 @@ def _fetch_json(page, url: str, token: str = "") -> dict:
     return res if res.get("status") else res2
 
 
-def _navegar_ao_historico_spa(page, *, force_reload: bool = False) -> None:
+def _navegar_ao_historico_spa(page, *, force_reload: bool = False, rapido: bool = False) -> None:
     """Navega para o Histórico de Pedidos via menu lateral da SPA ou goto direto.
 
     force_reload=True: sempre recarrega a URL do histórico. Necessário na coleta,
     porque o login já pode ter aberto /historico e disparado /vendas antes dos
     listeners/route estarem instalados — sem reload, a SPA não chama de novo.
+
+    rapido=True: waits menores (período curto / "hoje").
     """
     if not page:
         return
     url_atual = (page.url or "").lower()
     ja_no_historico = "administrativo/historico" in url_atual
+    settle_reload = 800 if rapido else 2500
+    settle_menu = 1200 if rapido else 2000
+    settle_goto = 800 if rapido else 2000
+    sel_timeout = 6000 if rapido else 10000
 
     if ja_no_historico and force_reload:
         try:
             logger.info("[HISTORICO PAP] Reload forçado do Histórico para capturar /vendas.")
-            page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(2500)
+            try:
+                with page.expect_response(
+                    lambda r: "/api/portal/vendas" in ((r.url or "").lower()),
+                    timeout=8000 if rapido else 12000,
+                ):
+                    page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=30000 if rapido else 45000)
+            except Exception:
+                page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=30000 if rapido else 45000)
+                page.wait_for_timeout(settle_reload)
         except Exception as exc:
             logger.warning("[HISTORICO PAP] reload histórico: %s", exc)
         try:
             page.wait_for_selector(
                 'button#drawer-filter, button:has-text("Filtrar"), button:has-text("Buscar")',
-                timeout=10000,
+                timeout=sel_timeout,
             )
         except Exception:
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(800 if rapido else 2000)
         return
 
     if ja_no_historico:
         try:
             page.wait_for_selector(
                 'button#drawer-filter, button:has-text("Filtrar"), button:has-text("Buscar")',
-                timeout=10000,
+                timeout=sel_timeout,
             )
         except Exception:
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(1000 if rapido else 3000)
         return
 
     # Tentar navegação suave pelo menu da SPA (como a Ana faz)
@@ -614,11 +627,11 @@ def _navegar_ao_historico_spa(page, *, force_reload: bool = False) -> None:
         btn_pedidos = page.query_selector('text="Pedidos"') or page.query_selector('div:has-text("Pedidos")')
         if btn_pedidos and btn_pedidos.is_visible():
             btn_pedidos.click()
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(500 if rapido else 800)
             btn_hist = page.query_selector('text="Histórico de Pedidos"') or page.query_selector('a[href*="historico"]')
             if btn_hist and btn_hist.is_visible():
                 btn_hist.click()
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(settle_menu)
                 if "historico" in (page.url or "").lower():
                     logger.info("[HISTORICO PAP] Navegação ao Histórico via menu SPA concluída com sucesso!")
                     return
@@ -627,8 +640,8 @@ def _navegar_ao_historico_spa(page, *, force_reload: bool = False) -> None:
 
     # Fallback: goto direto
     try:
-        page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_timeout(2000)
+        page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=30000 if rapido else 45000)
+        page.wait_for_timeout(settle_goto)
     except Exception as exc:
         logger.warning("[HISTORICO PAP] goto histórico: %s", exc)
 
@@ -1648,8 +1661,8 @@ def _clicar_filtrar_no_drawer(page) -> bool:
         )
         logger.info("[HISTORICO PAP] Clique Filtrar (JS no paper): %s", clicked)
         if clicked and clicked.get("ok"):
-            page.wait_for_timeout(2800)
-            # Drawer pode fechar após Filtrar com sucesso — ok
+            # Clique já ocorreu no evaluate; espera curta pela rede (sem sleep 2.8s).
+            page.wait_for_timeout(700)
             return True
         if clicked and clicked.get("reason") == "disabled":
             logger.warning("[HISTORICO PAP] Filtrar ainda disabled no paper.")
@@ -1672,8 +1685,15 @@ def _clicar_filtrar_no_drawer(page) -> bool:
                 continue
             loc.scroll_into_view_if_needed(timeout=2000)
             logger.info("[HISTORICO PAP] Clicando Filtrar no paper: %s", sel)
-            loc.click(timeout=5000)  # SEM force — evita acertar backdrop
-            page.wait_for_timeout(2800)
+            try:
+                with page.expect_response(
+                    lambda r: "/api/portal/vendas" in ((r.url or "").lower()),
+                    timeout=8000,
+                ):
+                    loc.click(timeout=5000)  # SEM force — evita acertar backdrop
+            except Exception:
+                loc.click(timeout=5000)
+                page.wait_for_timeout(900)
             return True
         except Exception as exc:
             logger.debug("[HISTORICO PAP] clique paper '%s': %s", sel, exc)
@@ -1800,13 +1820,17 @@ def _coletar_vendas_via_rede_spa(
     Captura /api/portal/vendas pela rede da SPA (modo seguro).
 
     1) Intercepta o XHR da própria SPA com route.fetch (headers/Authorization frescos).
-    2) Se o período divergir, reescreve dataInicio/dataFim (+ tipoVenda/status se tipo_crm).
-    3) Nunca reutiliza Authorization fora do request original (anti-replay → jwt malformed).
+    2) Atalho: XHR via page.evaluate (JWT + anti-replay fresco) — evita drawer/calendário.
+    3) Se o período divergir, reescreve dataInicio/dataFim (+ tipoVenda/status se tipo_crm).
+    4) Nunca reutiliza Authorization fora do request original (anti-replay → jwt malformed).
     """
     if not page:
         return []
 
     collected: list[dict] = []
+    periodo_curto = bool(data_inicio and data_fim and data_inicio == data_fim)
+    auto_load_s = 4.0 if periodo_curto else min(12.0, timeout_ms / 1000.0)
+    filtrar_s = 12.0 if periodo_curto else min(25.0, timeout_ms / 1000.0)
     erros: list[str] = []
     captured_auth = {"value": ""}
     seen_urls: set[str] = set()
@@ -1945,38 +1969,67 @@ def _coletar_vendas_via_rede_spa(
         page.route("**/api/portal/vendas**", _on_route)
         route_installed = True
 
+        # Atalho rápido (hoje / 1 dia + VENDA): XHR JS com JWT+anti-replay fresco.
+        # Evita reload + drawer/calendário quando o token já está no browser pós-login.
+        if data_inicio and data_fim and (not tipo_api or tipo_api == "VENDA"):
+            js_pack = _disparar_vendas_via_spa_js(
+                page,
+                data_inicio=data_inicio,
+                data_fim=data_fim,
+                page_n=1,
+                limit=200,
+            )
+            if js_pack and isinstance(js_pack.get("json"), dict):
+                _append_pack(
+                    js_pack.get("url") or "",
+                    int(js_pack.get("status") or 200),
+                    js_pack["json"],
+                )
+                matched_js = _matched()
+                if matched_js:
+                    logger.info(
+                        "[HISTORICO PAP] Coleta rápida via XHR JS (%d pacote(s), período curto=%s)",
+                        len(matched_js),
+                        periodo_curto,
+                    )
+                    return matched_js
+                if collected:
+                    logger.info("[HISTORICO PAP] XHR JS ok; usando pacotes mesmo fora do match estrito")
+                    return list(collected)
+
         # Sempre recarrega COM route/listeners já ativos — o login já pode ter
         # aberto o histórico e disparado /vendas antes da interceptação.
-        _navegar_ao_historico_spa(page, force_reload=True)
-        try:
-            dbg = page.evaluate(
-                """() => ({
-                    url: location.href,
-                    title: document.title,
-                    nInputs: document.querySelectorAll('input').length,
-                    nButtons: document.querySelectorAll('button').length,
-                    btnTexts: [...document.querySelectorAll('button')]
-                        .map(b => (b.innerText || b.getAttribute('aria-label') || '').trim())
-                        .filter(Boolean)
-                        .slice(0, 25),
-                    inputHints: [...document.querySelectorAll('input')].slice(0, 25).map(i => ({
-                        type: i.type || '',
-                        ph: i.placeholder || '',
-                        name: i.name || '',
-                        id: i.id || '',
-                        cls: (i.className || '').toString().slice(0, 60),
-                        vis: !!(i.offsetParent || (i.getClientRects && i.getClientRects().length))
-                    }))
-                })"""
-            )
-            logger.info("[HISTORICO PAP] DOM pós-reload: %s", dbg)
-        except Exception as exc:
-            logger.debug("[HISTORICO PAP] DOM debug falhou: %s", exc)
+        _navegar_ao_historico_spa(page, force_reload=True, rapido=periodo_curto)
+        if not periodo_curto:
+            try:
+                dbg = page.evaluate(
+                    """() => ({
+                        url: location.href,
+                        title: document.title,
+                        nInputs: document.querySelectorAll('input').length,
+                        nButtons: document.querySelectorAll('button').length,
+                        btnTexts: [...document.querySelectorAll('button')]
+                            .map(b => (b.innerText || b.getAttribute('aria-label') || '').trim())
+                            .filter(Boolean)
+                            .slice(0, 25),
+                        inputHints: [...document.querySelectorAll('input')].slice(0, 25).map(i => ({
+                            type: i.type || '',
+                            ph: i.placeholder || '',
+                            name: i.name || '',
+                            id: i.id || '',
+                            cls: (i.className || '').toString().slice(0, 60),
+                            vis: !!(i.offsetParent || (i.getClientRects && i.getClientRects().length))
+                        }))
+                    })"""
+                )
+                logger.info("[HISTORICO PAP] DOM pós-reload: %s", dbg)
+            except Exception as exc:
+                logger.debug("[HISTORICO PAP] DOM debug falhou: %s", exc)
 
         # 1) Espera auto-load da SPA
-        fim_load = time.time() + min(12.0, timeout_ms / 1000.0)
+        fim_load = time.time() + auto_load_s
         while time.time() < fim_load and not collected and not captured_auth["value"]:
-            page.wait_for_timeout(400)
+            page.wait_for_timeout(250 if periodo_curto else 400)
 
         matched = _matched()
         # Auto-load da SPA é sempre Tipo=Venda — se pedimos Interesse/Pré-venda, força Filtrar
@@ -1997,12 +2050,12 @@ def _coletar_vendas_via_rede_spa(
             data_fim=data_fim,
             tipo_crm=tipo_crm,
         )
-        fim = time.time() + min(25.0, timeout_ms / 1000.0)
+        fim = time.time() + filtrar_s
         while time.time() < fim and not _matched():
             if collected:
                 # rewrite pode ter falhado; se já temos pacotes no período, sai
                 break
-            page.wait_for_timeout(400)
+            page.wait_for_timeout(250 if periodo_curto else 400)
 
         matched = _matched()
         if not matched and collected:
@@ -2228,7 +2281,21 @@ def _validar_credenciais(usuario) -> Tuple[bool, str]:
 
 
 def busca_em_andamento():
+    from django.utils import timezone
+    from datetime import timedelta
     from crm_app.models import HistoricoPapBusca
+
+    limite_timeout = timezone.now() - timedelta(minutes=10)
+    HistoricoPapBusca.objects.filter(
+        status__in=[
+            HistoricoPapBusca.STATUS_PENDENTE,
+            HistoricoPapBusca.STATUS_EM_ANDAMENTO,
+        ],
+        iniciado_em__lt=limite_timeout
+    ).update(
+        status=HistoricoPapBusca.STATUS_ERRO, 
+        mensagem='Cancelado por inatividade (Timeout de 10 min)'
+    )
 
     return (
         HistoricoPapBusca.objects.filter(
@@ -2559,13 +2626,20 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
         data_fim[:10],
     )
     respostas_spa: list[dict] = []
+    periodo_curto = bool(
+        getattr(busca, "data_inicio", None)
+        and getattr(busca, "data_fim", None)
+        and busca.data_inicio == busca.data_fim
+    )
+    timeout_coleta = 25000 if periodo_curto else 55000
+    max_paginas = 4 if periodo_curto else 12
     for tipo_crm in tipos_loop:
         packs = _coletar_vendas_via_rede_spa(
             page,
             data_inicio=busca.data_inicio,
             data_fim=busca.data_fim,
-            timeout_ms=55000,
-            max_paginas_ui=12,
+            timeout_ms=timeout_coleta,
+            max_paginas_ui=max_paginas,
             tipo_crm=tipo_crm,
         )
         if packs:
@@ -2617,7 +2691,7 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
         )
         try:
             page.goto(PAP_HISTORICO_URL, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(2500)
+            page.wait_for_timeout(800)
         except Exception as exc:
             logger.warning("[HISTORICO PAP] goto histórico (retry): %s", exc)
 
@@ -2626,8 +2700,8 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
                 page,
                 data_inicio=busca.data_inicio,
                 data_fim=busca.data_fim,
-                timeout_ms=55000,
-                max_paginas_ui=12,
+                timeout_ms=timeout_coleta,
+                max_paginas_ui=max_paginas,
                 tipo_crm=tipo_crm,
             )
             if packs:
@@ -2777,7 +2851,9 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
         vendedor_nome=getattr(login_pap, "username", "Historico-PAP") or "Historico-PAP",
         headless=getattr(settings, "PAP_HEADLESS", True),
         capture_screenshots=False,
-        optimize_for_credit=False,
+        # Mesmo caminho rápido do crédito: evita networkidle/sleeps longos (~10–20s).
+        optimize_for_credit=True,
+        url_pos_login=PAP_HISTORICO_URL,
     )
 
     def _rodar_com_sessao(*, forcar_login_fresco: bool) -> tuple[bool, str]:

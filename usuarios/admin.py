@@ -1,4 +1,4 @@
-# site-record/usuarios/admin.py
+# nova-velox/usuarios/admin.py
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
@@ -24,7 +24,13 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Informações Pessoais', {'fields': ('first_name', 'last_name', 'email', 'cpf')}),
-        ('Função e Estrutura', {'fields': ('perfil', 'supervisor', 'canal')}),
+        ('Função e Estrutura', {
+            'fields': ('perfil', 'supervisor', 'canal', 'operadoras_permitidas'),
+            'description': (
+                'Operadoras permitidas: sem seleção, o usuário acessa todas. '
+                'Admin também acessa registros sem plano.'
+            ),
+        }),
         ('Financeiro', {'fields': (
             'valor_almoco', 'valor_passagem', 'chave_pix', 'nome_da_conta'
         )}),
@@ -69,12 +75,13 @@ class CustomUserAdmin(UserAdmin):
     
     add_fieldsets = UserAdmin.add_fieldsets + (
         ('Informações Adicionais', {
-            'fields': ('perfil', 'supervisor', 'canal', 'cpf'),
+            'fields': ('perfil', 'supervisor', 'canal', 'cpf', 'operadoras_permitidas'),
         }),
     )
+    filter_horizontal = ('groups', 'user_permissions', 'operadoras_permitidas')
 
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_groups_display', 'perfil', 'canal')
-    list_filter = ('is_staff', 'is_superuser', 'is_active', 'groups', 'perfil', 'canal')
+    list_filter = ('is_staff', 'is_superuser', 'is_active', 'groups', 'perfil', 'canal', 'operadoras_permitidas')
     
     def get_groups_display(self, obj):
         """Mostra os grupos do usuário na listagem"""

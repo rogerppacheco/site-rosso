@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
 import pandas as pd
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -129,6 +130,16 @@ def _log_vigente_id() -> Optional[int]:
     return log
 
 
+def get_log_vigente_id() -> Optional[int]:
+    """ID da importação GDP vigente (SUCESSO)."""
+    return (
+        LogImportacaoGdpPreco.objects.filter(status='SUCESSO', vigente=True)
+        .order_by('-finalizado_em', '-id')
+        .values_list('id', flat=True)
+        .first()
+    )
+
+
 def buscar_preco_gdp(
     *,
     cidade: str,
@@ -228,20 +239,22 @@ def resolver_valor_plano_venda(
     forma = venda.forma_pagamento
     nome_fp = (forma.nome or '') if forma else ''
 
-    preco_gdp = buscar_preco_gdp(
-        cidade=venda.cidade or '',
-        uf=venda.estado or '',
-        cod_ibge='',
-        plano=venda.plano,
-        meio_pagamento=nome_fp,
-        log_id=log_id,
-    )
+    preco_gdp = None
+    if not venda.plano.ignorar_preco_gdp:
+        preco_gdp = buscar_preco_gdp(
+            cidade=venda.cidade or '',
+            uf=venda.estado or '',
+            cod_ibge='',
+            plano=venda.plano,
+            meio_pagamento=nome_fp,
+            log_id=log_id,
+        )
     if preco_gdp is not None:
         return preco_gdp, {'origem': 'gdp', 'meio_pagamento': mapear_forma_pagamento_gdp(nome_fp)}
 
     valor_legado = calcular_valor_plano_legado(venda.plano, forma)
     return valor_legado, {
-        'origem': 'legado',
+        'origem': 'preco_fixo' if venda.plano.ignorar_preco_gdp else 'legado',
         'desconto_cartao': desconto_cartao_legado_plano(venda.plano),
     }
 
@@ -264,13 +277,15 @@ def resolver_valor_plano_params(
         forma = FormaPagamento.objects.filter(id=forma_pagamento_id, ativo=True).first()
 
     nome_fp = (forma.nome or '') if forma else ''
-    preco_gdp = buscar_preco_gdp(
-        cidade=cidade,
-        uf=uf,
-        cod_ibge=cod_ibge,
-        plano=plano,
-        meio_pagamento=nome_fp,
-    )
+    preco_gdp = None
+    if not plano.ignorar_preco_gdp:
+        preco_gdp = buscar_preco_gdp(
+            cidade=cidade,
+            uf=uf,
+            cod_ibge=cod_ibge,
+            plano=plano,
+            meio_pagamento=nome_fp,
+        )
 
     velocidade, indice = resolver_chave_gdp_plano(plano)
     if preco_gdp is not None:
@@ -278,7 +293,7 @@ def resolver_valor_plano_params(
         origem = 'gdp'
     else:
         valor = calcular_valor_plano_legado(plano, forma)
-        origem = 'legado'
+        origem = 'preco_fixo' if plano.ignorar_preco_gdp else 'legado'
 
     return {
         'encontrado': True,
@@ -410,3 +425,179 @@ class GdpPrecoImportService:
         log.save(update_fields=['status', 'vigente', 'finalizado_em', 'mensagem_erro'])
         log.calcular_duracao()
         logger.error('[GDP] Importação %s falhou: %s', log.id, mensagem)
+
+
+# --- Landing pública (index) -------------------------------------------------
+
+_BENEFICIOS_POR_VELOCIDADE: dict[int, dict[str, Any]] = {
+    500: {
+        'titulo': 'Essencial',
+        'subtitulo': 'Streaming e home office sem engasgos',
+        'beneficios': [
+            {'icone': 'wifi', 'texto': 'Wi‑Fi estável para vários dispositivos'},
+            {'icone': 'tv', 'texto': 'Streaming em Full HD / 4K'},
+            {'icone': 'briefcase', 'texto': 'Ideal para trabalho remoto'},
+        ],
+    },
+    600: {
+        'titulo': 'Plus',
+        'subtitulo': 'Mais margem para a família toda online',
+        'beneficios': [
+            {'icone': 'people', 'texto': 'Vários usuários simultâneos'},
+            {'icone': 'controller', 'texto': 'Jogos online com baixa latência'},
+            {'icone': 'cloud', 'texto': 'Uploads e cloud mais rápidos'},
+        ],
+    },
+    700: {
+        'titulo': 'Avançado',
+        'subtitulo': 'Performance para uso intenso',
+        'beneficios': [
+            {'icone': 'lightning', 'texto': 'Alta velocidade constante'},
+            {'icone': 'camera', 'texto': 'Calls e lives sem queda'},
+            {'icone': 'house', 'texto': 'Casa inteligente sem limite'},
+        ],
+    },
+    800: {
+        'titulo': 'Pro',
+        'subtitulo': 'Para quem exige velocidade de verdade',
+        'beneficios': [
+            {'icone': 'rocket', 'texto': 'Resposta imediata em apps pesados'},
+            {'icone': 'display', 'texto': 'Multi‑telas em 4K'},
+            {'icone': 'building', 'texto': 'Home office profissional'},
+        ],
+    },
+    1000: {
+        'titulo': 'Ultra 1 Gbps',
+        'subtitulo': 'Potência máxima sem limites',
+        'beneficios': [
+            {'icone': 'speedometer', 'texto': 'Até 1 Gbps de fibra'},
+            {'icone': 'briefcase', 'texto': 'Empresas e creators'},
+            {'icone': 'shield', 'texto': 'Conexão premium estável'},
+        ],
+    },
+}
+
+
+def formatar_velocidade_label(mbps: int) -> str:
+    if mbps >= 1000:
+        gb = mbps / 1000
+        if gb == int(gb):
+            return f'{int(gb)} Gbps'
+        return f'{gb:.1f} Gbps'.replace('.', ',')
+    return f'{mbps} Mbps'
+
+
+def _meta_plano_landing(velocidade: int) -> dict[str, Any]:
+    meta = _BENEFICIOS_POR_VELOCIDADE.get(velocidade)
+    if meta:
+        return meta
+    return {
+        'titulo': formatar_velocidade_label(velocidade),
+        'subtitulo': f'Fibra óptica {settings.SITE_BRAND_NAME}',
+        'beneficios': [
+            {'icone': 'wifi', 'texto': 'Fibra óptica ponta a ponta'},
+            {'icone': 'lightning', 'texto': 'Alta estabilidade'},
+            {'icone': 'headset', 'texto': 'Suporte especializado'},
+        ],
+    }
+
+
+def listar_planos_landing(
+    *,
+    cidade: str = '',
+    uf: str = '',
+    cod_ibge: str = '',
+    meio_pagamento: str = 'CARTAO',
+    limite: int = 6,
+) -> dict[str, Any]:
+    """
+    Monta planos da landing a partir da importação GDP vigente.
+
+    - Com cidade/UF/IBGE: preços daquele município.
+    - Sem cidade: preço mínimo nacional por velocidade (rótulo "a partir de").
+    Preferência: meio CARTAO (oferta promocional); fallback para o menor valor.
+    """
+    meio = (meio_pagamento or 'CARTAO').strip().upper()
+    if meio not in {'CARTAO', 'DACC', 'BOLETO'}:
+        meio = 'CARTAO'
+
+    base = GdpPrecoMunicipio.objects.da_importacao_vigente().ofertas_principais()
+    if not base.exists():
+        return {
+            'planos': [],
+            'origem': 'vazio',
+            'escopo': 'indisponivel',
+            'cidade': cidade,
+            'uf': uf,
+            'gdp_disponivel': False,
+        }
+
+    municipio_qs = base.para_municipio(cidade=cidade, uf=uf, cod_ibge=cod_ibge)
+    if municipio_qs.exists():
+        qs = municipio_qs
+        escopo = 'municipio'
+        prefixo_preco = ''
+    else:
+        qs = base
+        escopo = 'nacional'
+        prefixo_preco = 'a partir de '
+
+    # Melhor preço por velocidade: tenta o meio preferido; senão MIN geral.
+    from django.db.models import Min
+
+    por_meio = (
+        qs.filter(meio_pagamento=meio)
+        .values('velocidade_mbps')
+        .annotate(valor_min=Min('valor'))
+        .order_by('velocidade_mbps')
+    )
+    mapa: dict[int, Decimal] = {
+        int(row['velocidade_mbps']): Decimal(row['valor_min']) for row in por_meio
+    }
+
+    if not mapa:
+        por_qualquer = (
+            qs.values('velocidade_mbps')
+            .annotate(valor_min=Min('valor'))
+            .order_by('velocidade_mbps')
+        )
+        mapa = {
+            int(row['velocidade_mbps']): Decimal(row['valor_min']) for row in por_qualquer
+        }
+        meio = 'MELHOR'
+
+    planos: list[dict[str, Any]] = []
+    for velocidade, valor in list(mapa.items())[: max(1, limite)]:
+        meta = _meta_plano_landing(velocidade)
+        label = formatar_velocidade_label(velocidade)
+        planos.append(
+            {
+                'velocidade_mbps': velocidade,
+                'velocidade_label': label,
+                'titulo': meta['titulo'],
+                'subtitulo': meta['subtitulo'],
+                'beneficios': meta['beneficios'],
+                'valor': valor,
+                'valor_formatado': formatar_moeda_br(valor),
+                'prefixo_preco': prefixo_preco,
+                'destaque': velocidade >= 1000,
+                'whatsapp_texto': (
+                    f'Quero o plano {settings.SITE_BRAND_NAME} de {label} '
+                    f'({prefixo_preco}{formatar_moeda_br(valor)}/mês)'
+                ),
+            }
+        )
+
+    # Garante um destaque comercial na pricing table
+    if planos and not any(p['destaque'] for p in planos):
+        planos[len(planos) // 2]['destaque'] = True
+
+    return {
+        'planos': planos,
+        'origem': 'gdp',
+        'escopo': escopo,
+        'cidade': cidade,
+        'uf': (uf or '').upper(),
+        'meio_pagamento': meio,
+        'gdp_disponivel': True,
+    }

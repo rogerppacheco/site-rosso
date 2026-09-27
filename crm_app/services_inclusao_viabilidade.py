@@ -31,7 +31,7 @@ FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScnXtSMB3EMutB88IfAg3ihGxUj
 CODIGO_SAP = "1068561"
 EXECUTIVO = "ROGERIO PEREIRA PACHECO"
 TIPO_CANAL = "PAP"
-EMPRESA_VENDAS = "RECORD"
+EMPRESA_VENDAS = "CLICKUP"
 
 # Mapeamento UF (sigla ViaCEP) -> nome completo (Google Forms)
 UF_SIGLA_PARA_NOME = {
@@ -75,7 +75,7 @@ def _env_ou_decouple(chave: str, default: str = "") -> str:
 
 def _email_formulario() -> str:
     """E-mail preenchido no *campo* do Google Forms (não é a conta de login)."""
-    return _env_ou_decouple("GOOGLE_FORM_EMAIL", "")
+    return _env_ou_decouple("GOOGLE_FORM_EMAIL", "comunicacao@futuratelecom.com.br")
 
 
 def _email_login_google() -> str:
@@ -265,7 +265,7 @@ def buscar_coordenadas(endereco_completo: str) -> Optional[dict]:
     endereco_completo: ex "Rua X, 123, Cidade - UF, Brasil"
     """
     try:
-        headers = {'User-Agent': 'RossoCRM_Inclusao/1.0'}
+        headers = {'User-Agent': 'ClickUpCRM_Inclusao/1.0'}
         params = {'q': endereco_completo, 'format': 'json', 'limit': 1}
         resp = requests.get(
             "https://nominatim.openstreetmap.org/search",
@@ -1530,3 +1530,4 @@ def preencher_formulario_inclusao(
         if od_pasta_used:
             msg += f"\n\n📁 Arquivos salvos no R2: {od_pasta_used}\nVocê pode anexá-los manualmente."
         return False, msg
+

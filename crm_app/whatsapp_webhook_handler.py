@@ -335,6 +335,16 @@ def _consultar_status_e_disparar_online(
     resposta = f'🔎 Buscando pedido por {label}...\n\n{resultado_status}'
     os_filtro = valor if tipo == 'OS' else None
 
+    from crm_app.services.pap_operadora_guard import bloqueio_por_documento
+
+    bloqueio_pap = bloqueio_por_documento(
+        cpf_para_consulta or (valor if tipo == 'CPF' else ''),
+        os_filtro,
+    )
+    if bloqueio_pap:
+        fazer_consulta_online = False
+        resposta += f"\n\n{bloqueio_pap}"
+
     if fazer_consulta_online and cpf_para_consulta:
         run_id = str(int(time.time() * 1000))
         dados: dict[str, Any] = {
@@ -710,6 +720,12 @@ def _iniciar_fluxo_credito(telefone: str, sessao) -> str:
     Inicia o fluxo de análise de crédito via WhatsApp.
     Valida autorizar_analise_credito_wpp e limites (1 min, 15/dia).
     """
+    from crm_app.services.pap_operadora_guard import MSG_PAP_DESATIVADO, pap_nio_habilitado
+
+    # A análise roda dentro do PAP Nio e ainda não há pedido para inferir a operadora.
+    if not pap_nio_habilitado():
+        return MSG_PAP_DESATIVADO
+
     usuario = _buscar_usuario_por_telefone(telefone)
     if not usuario:
         return (
@@ -2086,7 +2102,12 @@ def _iniciar_fluxo_venda(telefone: str, sessao) -> str:
     """
     from usuarios.models import Usuario
     from django.db.models import Q
-    
+    from crm_app.services.pap_operadora_guard import MSG_PAP_DESATIVADO, pap_nio_habilitado
+
+    # A venda é cadastrada dentro do PAP Nio; sem o PAP liberado não há o que fazer aqui.
+    if not pap_nio_habilitado():
+        return MSG_PAP_DESATIVADO
+
     # Limpar telefone - remover tudo que não for número
     telefone_limpo = re.sub(r'\D', '', telefone)
     logger.info(f"[VENDA] Buscando usuário para telefone: {telefone} -> limpo: {telefone_limpo}")
@@ -6957,7 +6978,7 @@ def _verificar_biometria_venda(telefone: str, sessao, dados: dict) -> str:
 
 def _buscar_record_apoia_por_texto(busca_texto, sessao):
     """
-    Busca no Record Apoia por tag/título/descrição/categoria.
+    Busca no {_site_brand_apoia()} por tag/título/descrição/categoria.
     - 0 resultados: retorna None.
     - 1 resultado: prepara material_para_envio na sessão e retorna mensagem de envio.
     - 2+ resultados: seta etapa material_selecionar e retorna lista numerada.
@@ -6995,10 +7016,10 @@ def _buscar_record_apoia_por_texto(busca_texto, sessao):
                 arquivo_bytes = record_apoia_ler_bytes(arquivo)
                 arquivo_b64 = base64.b64encode(arquivo_bytes).decode('utf-8')
             except (FileNotFoundError, IOError, OSError) as e:
-                logger.error(f"[Webhook] Erro ao ler arquivo Record Apoia id={arquivo.id}: {e}")
+                logger.error(f"[Webhook] Erro ao ler arquivo {_site_brand_apoia()} id={arquivo.id}: {e}")
                 return (
                     f"❌ Arquivo \"{arquivo.titulo}\" não está disponível no servidor.\n\n"
-                    "Peça ao administrador para reenviar o material no módulo Apoia "
+                    f"Peça ao administrador para reenviar o material no {_site_brand_apoia()} "
                     "(Administração → Limpar registro órfão e fazer upload novamente)."
                 )
 
@@ -7046,7 +7067,7 @@ def _buscar_record_apoia_por_texto(busca_texto, sessao):
             sessao.save()
             return resposta
         except Exception as e:
-            logger.exception("[Webhook] Erro ao preparar arquivo Record Apoia: %s", e)
+            logger.exception(f"[Webhook] Erro ao preparar arquivo {_site_brand_apoia()}: %s", e)
             return f"❌ Erro ao processar arquivo: {str(e)}"
 
     arquivos_lista = list(arquivos)
@@ -7093,7 +7114,7 @@ def _caption_padrao_material(material_para_envio):
 
 def _enviar_material_record_apoia_whatsapp(whatsapp_service, telefone, material_para_envio, caption=None):
     """
-    Envia material Record Apoia (imagem ou documento) com legenda no mesmo envio.
+    Envia material {_site_brand_apoia()} (imagem ou documento) com legenda no mesmo envio.
     Retorna True se a mídia foi enviada com sucesso.
     """
     if not material_para_envio:
@@ -11388,3 +11409,11 @@ def processar_webhook_whatsapp(data, request=None):
     except Exception as e:
         logger.exception(f"[Webhook] Erro ao processar mensagem: {e}")
         return {'status': 'erro', 'mensagem': str(e)}
+
+# Injetado de nova-velox
+def _site_brand() -> str:
+    return getattr(settings, "SITE_BRAND_NAME", "Futura Telecom")
+
+# Injetado de nova-velox
+def _site_brand_apoia() -> str:
+    return f"{_site_brand()} Apoia"

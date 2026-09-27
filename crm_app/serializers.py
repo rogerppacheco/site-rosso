@@ -165,6 +165,25 @@ class CampanhaSerializer(serializers.ModelSerializer):
                   'regras', 'ativo', 'data_criacao', 
                   'regras_meta')
 
+    def validate_planos_elegiveis(self, planos: list[Plano]) -> list[Plano]:
+        from crm_app.services.escopo_operadora import operadora_ids_permitidas
+
+        request = self.context.get('request')
+        if not request:
+            return planos
+        permitidas = operadora_ids_permitidas(request.user)
+        if permitidas is None:
+            return planos
+        if not planos:
+            raise serializers.ValidationError(
+                'Selecione ao menos um plano; campanha sem planos vale para todas as operadoras.'
+            )
+        if any(plano.operadora_id not in permitidas for plano in planos):
+            raise serializers.ValidationError(
+                'A campanha contém plano de uma operadora fora do seu acesso.'
+            )
+        return planos
+
     def create(self, validated_data):
         # 1. Pop a lista de faixas do dicionário principal
         regras_data = validated_data.pop('regras_meta', [])
@@ -741,6 +760,20 @@ class VendaCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
+        from crm_app.services.escopo_operadora import validar_plano_para_usuario
+
+        request = self.context.get('request')
+        plano = data.get('plano')
+        # Via APP o plano é preenchido depois; Sem APP exige plano no cadastro.
+        forma_entrada = str(data.get('forma_entrada') or 'APP').upper()
+        if request:
+            erro_plano = validar_plano_para_usuario(
+                request.user,
+                plano,
+                exigir_plano=(forma_entrada != 'APP'),
+            )
+            if erro_plano:
+                raise serializers.ValidationError({'plano': erro_plano})
         for key, value in data.items():
             if isinstance(value, str) and key not in ['cliente_email', 'observacoes', 'nome_mae']:
                 data[key] = value.upper()
@@ -789,7 +822,20 @@ class VendaUpdateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # data_instalacao_fisica: somente BackOffice/Diretoria/Admin podem alterar
         from crm_app.utils import is_member
+        from crm_app.services.escopo_operadora import validar_plano_para_usuario
         request = self.context.get('request')
+        plano = data.get('plano', getattr(self.instance, 'plano', None))
+        forma_entrada = str(
+            data.get('forma_entrada', getattr(self.instance, 'forma_entrada', None)) or 'APP'
+        ).upper()
+        if request:
+            erro_plano = validar_plano_para_usuario(
+                request.user,
+                plano,
+                exigir_plano=(forma_entrada != 'APP'),
+            )
+            if erro_plano:
+                raise serializers.ValidationError({'plano': erro_plano})
         if request and 'data_criacao' in data:
             if not is_member(request.user, ['Diretoria', 'Admin']):
                 data.pop('data_criacao', None)

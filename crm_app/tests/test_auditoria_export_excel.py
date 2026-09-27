@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from crm_app.models import Cliente, StatusCRM, Venda
+from crm_app.models import Cliente, Operadora, Plano, StatusCRM, Venda
 from crm_app.services.auditoria_export_service import HEADERS
 from usuarios.models import Perfil, Usuario
 
@@ -37,6 +37,12 @@ class ExportarAuditoriaExcelTests(APITestCase):
             cpf_cnpj='12345678901',
             nome_razao_social='CLIENTE EXPORT AUDITORIA',
         )
+        cls.operadora = Operadora.objects.create(nome='NIO EXPORT')
+        cls.plano = Plano.objects.create(
+            nome='NIO 600',
+            valor=99.90,
+            operadora=cls.operadora,
+        )
         cls.st_aberto = StatusCRM.objects.create(
             nome='SEM TRATAMENTO', tipo='Tratamento', estado='ABERTO',
         )
@@ -55,6 +61,7 @@ class ExportarAuditoriaExcelTests(APITestCase):
             'vendedor': self.vendedor,
             'cliente': self.cliente,
             'status_tratamento': self.st_aberto,
+            'plano': self.plano,
             'ativo': True,
             'telefone1': '21988887777',
             'cidade': 'Rio de Janeiro',
@@ -111,6 +118,7 @@ class ExportarAuditoriaExcelTests(APITestCase):
         self.assertEqual(linha_v1[3], 'CLIENTE EXPORT AUDITORIA')
         self.assertEqual(linha_v1[4], '12345678901')
         self.assertEqual(linha_v1[5], 'Carlos Vendedor')
+        self.assertEqual(linha_v1[6], 'NIO 600')
         self.assertEqual(linha_v1[7], 'SEM TRATAMENTO')
         self.assertEqual(linha_v1[11], 'Pendente')
         self.assertEqual(linha_v1[12], '21988887777')

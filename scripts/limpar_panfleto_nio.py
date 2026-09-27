@@ -1,5 +1,5 @@
 """
-Script para encontrar e remover arquivo PANFLETO_NIO.pdf do Record Apoia.
+Script para encontrar e remover arquivo PANFLETO_NIO.pdf do BN Apoia.
 Use com cuidado - remove definitivamente do banco de dados.
 """
 import os
@@ -101,3 +101,4 @@ if __name__ == "__main__":
             print("=" * 60)
         else:
             print("\n✅ Nenhum arquivo para remover.")
+

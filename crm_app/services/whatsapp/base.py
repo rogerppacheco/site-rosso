@@ -1,4 +1,4 @@
-"""Contrato dos providers WhatsApp (Z-API / Evolution / WhatsAtende)."""
+"""Contrato dos providers WhatsApp (Z-API / Evolution)."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -67,6 +67,10 @@ class WhatsAppProvider(ABC):
     @abstractmethod
     def listar_grupos(self) -> List[Dict[str, str]]:
         ...
+
+    def pode_verificar_numero(self) -> bool:
+        """True se o provider consegue consultar se o número existe no WhatsApp."""
+        return False
 
     def resposta_indica_sucesso(self, resp: Any) -> bool:
         if not resp or not isinstance(resp, dict):

@@ -1,5 +1,5 @@
 """
-Publica .playwright_google_form_state.json no Railway (site-record-webhook)
+Publica .playwright_google_form_state.json no Railway (site-bn-webhook)
 como GOOGLE_FORM_STORAGE_STATE_B64.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ def main() -> None:
     # Usar PowerShell garante o mesmo PATH do seu terminal.
     ps_cmd = (
         "railway variables set "
-        "--service site-record-webhook "
+        "--service site-clickup-webhook "
         "--environment production "
         "'GOOGLE_FORM_STORAGE_STATE=/app/.playwright_google_form_state.json' "
         f"'GOOGLE_FORM_STORAGE_STATE_B64={b64}' "
@@ -51,7 +51,7 @@ def main() -> None:
                 "variables",
                 "set",
                 "--service",
-                "site-record-webhook",
+                "site-clickup-webhook",
                 "--environment",
                 "production",
                 "GOOGLE_FORM_STORAGE_STATE=/app/.playwright_google_form_state.json",
@@ -66,3 +66,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

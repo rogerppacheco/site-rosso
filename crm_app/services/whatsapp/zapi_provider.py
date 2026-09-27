@@ -155,6 +155,9 @@ class ZapiProvider(WhatsAppProvider):
             return None
         return bool(info.get("exists", False))
 
+    def pode_verificar_numero(self) -> bool:
+        return bool(self.instance_id and self.token)
+
     def enviar_mensagem_texto_raw(
         self, telefone: str, mensagem: str
     ) -> Tuple[bool, Any]:

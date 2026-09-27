@@ -19,7 +19,7 @@ FORM = (
 
 def main() -> None:
     b64 = os.environ.get("GOOGLE_FORM_STORAGE_STATE_B64", "")
-    email = os.environ.get("GOOGLE_FORM_EMAIL", "comunicacao@recordpap.com.br")
+    email = os.environ.get("GOOGLE_FORM_EMAIL", "comunicacao@site-clickup-production.up.railway.app")
     assert b64, "Sem B64"
     state = ROOT / ".playwright_google_form_state.json"
     state.write_bytes(base64.b64decode(b64.strip()))
@@ -69,3 +69,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

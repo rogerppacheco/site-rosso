@@ -4,7 +4,7 @@ e exibe todos os elementos disponíveis para você clicar
 """
 import os
 import sys
-sys.path.insert(0, 'C:/site-record')
+sys.path.insert(0, 'C:/site-bn')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gestao_equipes.settings')
 
 import django
@@ -236,3 +236,4 @@ except Exception as e:
     print(f'\n\n❌ ERRO: {e}')
     import traceback
     traceback.print_exc()
+

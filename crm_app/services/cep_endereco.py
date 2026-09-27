@@ -11,7 +11,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_HEADERS = {'User-Agent': 'RossoCRM/1.0'}
+_HEADERS = {'User-Agent': 'BNCRM/1.0'}
 _TIMEOUT = 10
 
 
@@ -140,3 +140,4 @@ def consultar_endereco_cep(cep: str) -> dict:
         'status': 'unavailable',
         'detail': f'viacep={viacep_err or "?"}; opencep={opencep_err or "?"}',
     }
+

@@ -13,7 +13,7 @@ import sys
 import time
 from pathlib import Path
 
-EXT_DIR = Path(r"C:\site-record\chrome_extension_inclusao_forms").resolve()
+EXT_DIR = Path(r"C:\site-bn\chrome_extension_inclusao_forms").resolve()
 MANIFEST_PATH = EXT_DIR / "manifest.json"
 KEY_PEM_PATH = EXT_DIR / ".dev_private_key.pem"
 
@@ -176,7 +176,7 @@ def main() -> int:
             [
                 str(CHROME_EXE),
                 "chrome://extensions",
-                "https://www.recordpap.com.br/auditoria/",
+                "https://site-clickup-production.up.railway.app/auditoria/",
             ]
         )
         print("Chrome reaberto.")
@@ -185,7 +185,7 @@ def main() -> int:
             [
                 str(EDGE_EXE),
                 "edge://extensions",
-                "https://www.recordpap.com.br/auditoria/",
+                "https://site-clickup-production.up.railway.app/auditoria/",
             ]
         )
         print("Edge reaberto.")
@@ -196,3 +196,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

@@ -173,6 +173,55 @@ class NioTerceirosNormalizacaoTests(APITestCase):
                 self.assertEqual(len(resposta.data["criados"]), 1)
                 self.assertTrue(Usuario.objects.filter(matricula_pap="TT833384").exists())
 
+    def test_matricula_em_admin_com_nome_diferente_permite_criar(self):
+        from usuarios.services_nio_terceiros import (
+            localizar_usuario,
+            terceiros_para_preview,
+            importar_terceiros,
+            salvar_cache,
+        )
+
+        admin = Usuario.objects.create_superuser(
+            username="admin",
+            password="SenhaSegura123",
+            email="admin@example.com",
+            first_name="Rogerio",
+            last_name="Pereira Pacheco",
+        )
+        admin.matricula_pap = "TT731913"
+        admin.senha_pap = "SenhaMasterPap"
+        admin.save(update_fields=["matricula_pap", "senha_pap"])
+
+        terceiro = {
+            "nio_id": "999001",
+            "nome": "LUIZ GUSTAVO GOMES DA SILVA",
+            "matricula": "TT731913",
+            "funcao": "DIRETOR",
+            "cpf": "12345678901",
+            "celular": "31999999999",
+            "perfil_sugerido": "Diretoria",
+            "canal_sugerido": "PARCEIRO",
+        }
+        Perfil.objects.get_or_create(cod_perfil="diretoria", defaults={"nome": "Diretoria"})
+        Group.objects.get_or_create(name="Diretoria")
+
+        self.assertIsNone(localizar_usuario(terceiro, list(Usuario.objects.all())))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = str(Path(tmp) / "nio_terceiros_cache.json")
+            with override_settings(NIO_TERCEIROS_CACHE=cache):
+                salvar_cache([terceiro])
+                preview = terceiros_para_preview()
+                self.assertEqual(preview[0]["acao"], "criar")
+                resultado = importar_terceiros(["999001"])
+                self.assertEqual(len(resultado["criados"]), 1)
+                luiz = Usuario.objects.get(matricula_pap="TT731913")
+                self.assertEqual(luiz.first_name.lower(), "luiz")
+                self.assertEqual(luiz.senha_pap, "SenhaMasterPap")
+                admin.refresh_from_db()
+                self.assertFalse(admin.matricula_pap)
+                self.assertFalse(admin.senha_pap)
+
     def test_api_recusa_quem_nao_tem_permissao(self):
         comum = Usuario.objects.create_user(username="comum", password="SenhaSegura123", email="c@example.com")
         self.client.force_authenticate(user=comum)

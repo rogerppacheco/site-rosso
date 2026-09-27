@@ -117,6 +117,7 @@ PARCEIRO_DEFAULT_POR_MARCA = {
     "CLICKUP": ("IGOR CRISTIANO", "1069321"),
     "CLICK": ("IGOR CRISTIANO", "1069321"),
     "ROSSO": ("ROSSO TELECOM", "1009270"),
+    "GM": ("GM TELECOM", "1069074"),
     "RECORD": ("RECORD", "1068561"),
     "VELOX": ("NOVA VELOX", "1069324"),
     "FUTURA": ("NOVA VELOX", "1069324"),
@@ -208,9 +209,13 @@ def smart_datetime(val):
             return dt.to_pydatetime()
     except Exception:
         pass
-    dt = pd.to_datetime(s, errors="coerce")
-    if pd.isna(dt):
+    # Datas BR (dd/mm/aaaa): dayfirst antes do parser US, senão 04/05 vira 5/abr.
+    if "/" in s:
         dt = pd.to_datetime(s, dayfirst=True, errors="coerce")
+    else:
+        dt = pd.to_datetime(s, errors="coerce")
+        if pd.isna(dt):
+            dt = pd.to_datetime(s, dayfirst=True, errors="coerce")
     if pd.isna(dt):
         return None
     return dt.to_pydatetime()

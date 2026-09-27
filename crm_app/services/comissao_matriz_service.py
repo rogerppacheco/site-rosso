@@ -332,3 +332,8 @@ def salvar_valores_manuais_vendedor(
         vp.save(update_fields=['valor_pap', 'valor_cnpj'])
         count += 1
     return count
+
+# Injetado de nova-velox
+def _pk_int(obj: Any) -> int | None:
+    pk = getattr(obj, 'id', None) or getattr(obj, 'pk', None)
+    return pk if isinstance(pk, int) else None

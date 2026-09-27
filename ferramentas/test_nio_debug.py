@@ -6,7 +6,7 @@ import django
 import json
 
 # Setup Django
-sys.path.insert(0, 'c:/site-record')
+sys.path.insert(0, 'c:/site-bn')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gestao_equipes.settings')
 django.setup()
 
@@ -59,3 +59,4 @@ except Exception as e:
 print(f'\n{"="*80}')
 print('✅ Consulta finalizada')
 print('='*80)
+

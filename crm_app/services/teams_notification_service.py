@@ -47,7 +47,7 @@ class TeamsNotificationService:
         if not self.webhook_url:
             return False, "N8N_TEAMS_WEBHOOK_URL não configurada"
 
-        titulo_limpo = (titulo or "").strip() or getattr(settings, "SITE_BRAND", "Rosso")
+        titulo_limpo = (titulo or "").strip() or getattr(settings, "SITE_BRAND", "ClickUp")
         texto_limpo = (texto or "").strip()
         if not texto_limpo:
             return False, "texto vazio"
@@ -55,7 +55,7 @@ class TeamsNotificationService:
         payload: dict[str, Any] = {
             "title": titulo_limpo,
             "text": texto_limpo,
-            "source": (source or "site-rosso").strip(),
+            "source": (source or "site-clickup").strip(),
         }
         img = (image_url or "").strip()
         if img:
@@ -130,3 +130,4 @@ def enviar_teams_operacional(
     if not ok:
         logger.warning("[Teams] Falha (%s): %s", source, detalhe)
     return ok, detalhe
+

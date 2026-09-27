@@ -132,9 +132,16 @@ class ConsultaStatusEsteiraStatusView(APIView):
 
 
 def _serializar_consulta_execucao(execucao, *, em_andamento: bool) -> dict:
+    from crm_app.esteira_consulta_status_pap_service import (
+        mensagem_erro_consulta_pap_para_usuario,
+    )
     from crm_app.esteira_sync_status_pap_api import _serializar_execucao
 
     data = _serializar_execucao(execucao, em_andamento=em_andamento)
+    if data.get('mensagem_erro'):
+        data['mensagem_erro'] = mensagem_erro_consulta_pap_para_usuario(
+            data['mensagem_erro']
+        )
     rj = execucao.relatorio_json or {}
     data['progresso'] = {
         'atual_venda_id': rj.get('atual_venda_id'),

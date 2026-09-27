@@ -26,7 +26,7 @@ def record_apoia_arquivo_existe_local(arquivo_record):
             return os.path.exists(os.path.join(media_root, arquivo_record.arquivo.name))
         return default_storage.exists(arquivo_record.arquivo.name)
     except Exception as e:
-        logger.warning("Erro ao verificar arquivo local Record Apoia %s: %s", arquivo_record.id, e)
+        logger.warning("Erro ao verificar arquivo local Futura Telecom Apoia %s: %s", arquivo_record.id, e)
         return False
 
 
@@ -83,11 +83,11 @@ def espelhar_record_apoia_r2(arquivo_record, conteudo_bytes):
         if url:
             arquivo_record.url_externa = url
             arquivo_record.save(update_fields=['url_externa'])
-            logger.info("[Record Apoia] Backup R2 salvo: %s (id=%s)", nome, arquivo_record.id)
+            logger.info("[Futura Telecom Apoia] Backup R2 salvo: %s (id=%s)", nome, arquivo_record.id)
         return url
     except Exception as e:
         logger.warning(
-            "[Record Apoia] Falha ao espelhar no R2 (id=%s): %s",
+            "[Futura Telecom Apoia] Falha ao espelhar no R2 (id=%s): %s",
             arquivo_record.id,
             e,
         )
@@ -97,7 +97,7 @@ class RecordApoiaUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        # Record Apoia é acessível a todos os usuários autenticados
+        # Futura Telecom Apoia é acessível a todos os usuários autenticados
         try:
             arquivos = request.FILES.getlist('arquivo')
             if not arquivos:
@@ -214,7 +214,7 @@ class RecordApoiaListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Record Apoia é acessível a todos os usuários autenticados
+        # Futura Telecom Apoia é acessível a todos os usuários autenticados
         try:
             busca = request.query_params.get('busca', '').strip()
             categoria_filtro = request.query_params.get('categoria', '').strip()
@@ -334,7 +334,7 @@ class RecordApoiaEditView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, arquivo_id):
-        # Record Apoia é acessível a todos os usuários autenticados
+        # Futura Telecom Apoia é acessível a todos os usuários autenticados
         try:
             arquivo = RecordApoia.objects.get(id=arquivo_id)
             
@@ -404,7 +404,7 @@ class RecordApoiaDeleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, arquivo_id):
-        # Record Apoia é acessível a todos os usuários autenticados
+        # Futura Telecom Apoia é acessível a todos os usuários autenticados
         try:
             arquivo = RecordApoia.objects.get(id=arquivo_id)
             
@@ -433,13 +433,13 @@ class RecordApoiaDeleteView(APIView):
 
 class RecordApoiaDiagnosticoView(APIView):
     """
-    View para diagnosticar problemas com arquivos do Record Apoia.
+    View para diagnosticar problemas com arquivos do Futura Telecom Apoia.
     Verifica se os arquivos físicos existem no servidor.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Record Apoia é acessível a todos os usuários autenticados
+        # Futura Telecom Apoia é acessível a todos os usuários autenticados
         try:
             from django.conf import settings
             import os
@@ -514,13 +514,13 @@ class RecordApoiaDiagnosticoView(APIView):
 
 class RecordApoiaBuscarView(APIView):
     """
-    View para buscar arquivos específicos no Record Apoia (incluindo inativos).
+    View para buscar arquivos específicos no Futura Telecom Apoia (incluindo inativos).
     Útil para encontrar e limpar arquivos problemáticos.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Record Apoia é acessível a todos os usuários autenticados
+        # Futura Telecom Apoia é acessível a todos os usuários autenticados
         try:
             busca = request.query_params.get('busca', '').strip()
             incluir_inativos = request.query_params.get('incluir_inativos', 'false').lower() == 'true'
@@ -747,7 +747,7 @@ class RecordApoiaDownloadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, arquivo_id):
-        # Record Apoia é acessível a todos os usuários autenticados
+        # Futura Telecom Apoia é acessível a todos os usuários autenticados
         try:
             arquivo = RecordApoia.objects.get(id=arquivo_id, ativo=True)
             
@@ -806,3 +806,4 @@ class RecordApoiaDownloadView(APIView):
         except Exception as e:
             logger.error(f"Erro ao fazer download: {e}")
             return Response({'error': str(e)}, status=500)
+

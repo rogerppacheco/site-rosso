@@ -1,47 +1,60 @@
-"""Factory do provider WhatsApp (zapi | evolution | whatsatende | hybrid)."""
+"""Factory do provider WhatsApp (zapi | evolution | whatsatende | hybrid | meta)."""
 from __future__ import annotations
 
 from typing import Dict, Tuple
 
 from crm_app.services.whatsapp.base import WhatsAppProvider
-from crm_app.services.whatsapp.blocked_cliente_provider import ClienteCanalBloqueadoProvider
+from crm_app.services.whatsapp.meta_cloud_provider import MetaCloudProvider
 from crm_app.services.whatsapp.n8n_outbound_provider import N8nOutboundProvider
 from crm_app.services.whatsapp.whatsatende_provider import WhatsAtendeProvider
 from crm_app.services.whatsapp.zapi_provider import ZapiProvider
 
 PURPOSE_INTERNO = "interno"
 PURPOSE_CLIENTE = "cliente"
-BACKEND_CLIENTE_BLOQUEADO = "blocked_cliente"
 
 _cached_providers: Dict[Tuple[str, str, str], WhatsAppProvider] = {}
 
 
 def clear_whatsapp_provider_cache() -> None:
     """Invalida cache in-process (ex.: após salvar provedor na mesma réplica)."""
-    _cached_providers.clear()
+    global _cached_provider_name, _cached_provider
+    _cached_provider_name = None
+    _cached_provider = None
 
 
 def resolve_backend_for_purpose(provider_name: str, purpose: str) -> Tuple[str, str]:
     """
     Mapeia (provedor global, purpose) → (backend efetivo, role WhatsAtende).
 
-    Cliente final nunca usa Z-API/Evolution (número comercial): sempre WhatsAtende B.
-    hybrid: interno → Z-API; cliente → WhatsAtende Número B.
+    hybrid: interno → Z-API; cliente → Meta Cloud se credenciais ok, senão WhatsAtende B.
+    meta: interno → Z-API se configurada, senão Meta; cliente → Meta Cloud.
     whatsatende: dual A/B na mesma plataforma.
-    zapi/evolution: interno no backend legado; cliente permanece Cloud API (B).
+    zapi/evolution: um backend só (ignoram purpose).
     """
+    from crm_app.services.whatsapp_config_service import credenciais_meta_cloud_ok
+
     name = (provider_name or "").strip().lower()
     role = (
         PURPOSE_CLIENTE
         if (purpose or "").strip().lower() == PURPOSE_CLIENTE
         else PURPOSE_INTERNO
     )
-    if role == PURPOSE_CLIENTE:
-        return "whatsatende", PURPOSE_CLIENTE
     if name == "hybrid":
+        if role == PURPOSE_CLIENTE:
+            if credenciais_meta_cloud_ok():
+                return "meta", PURPOSE_CLIENTE
+            return "whatsatende", PURPOSE_CLIENTE
         return "zapi", PURPOSE_INTERNO
+    if name == "meta":
+        if role == PURPOSE_CLIENTE:
+            return "meta", PURPOSE_CLIENTE
+        from crm_app.services.whatsapp_config_service import _credenciais_zapi_ok
+
+        if _credenciais_zapi_ok():
+            return "zapi", PURPOSE_INTERNO
+        return "meta", PURPOSE_INTERNO
     if name == "whatsatende":
-        return "whatsatende", PURPOSE_INTERNO
+        return "whatsatende", role
     if name == "evolution":
         return "evolution", PURPOSE_INTERNO
     return "zapi", PURPOSE_INTERNO

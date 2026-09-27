@@ -18,6 +18,7 @@ from crm_app.db_resilience import (
         (InterfaceError("connection already closed"), True),
         (OperationalError("server closed the connection unexpectedly"), True),
         (OperationalError("SSL SYSCALL error: EOF detected"), True),
+        (OperationalError("FATAL:  sorry, too many clients already"), True),
         (ValueError("outro erro"), False),
         (RuntimeError("connection already closed"), True),
     ],

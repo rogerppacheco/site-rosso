@@ -19,8 +19,8 @@ class TeamsNotificationServiceTest(SimpleTestCase):
         self.assertIn("N8N_TEAMS_WEBHOOK_URL", str(err))
 
     @override_settings(
-        N8N_TEAMS_WEBHOOK_URL="https://n8n.example/webhook/site-record-teams-notificar",
-        SITE_URL="https://www.recordpap.com.br",
+        N8N_TEAMS_WEBHOOK_URL="https://n8n.example/webhook/site-clickup-teams-notificar",
+        SITE_URL="https://site-clickup-production.up.railway.app",
         MEDIA_URL="/media/",
     )
     @patch("crm_app.services.teams_notification_service.requests.post")
@@ -40,12 +40,13 @@ class TeamsNotificationServiceTest(SimpleTestCase):
         self.assertEqual(payload["image_url"], "https://example.com/img.jpg")
 
     @override_settings(
-        SITE_URL="https://www.recordpap.com.br",
+        SITE_URL="https://site-clickup-production.up.railway.app",
         MEDIA_URL="/media/",
     )
     def test_media_url_absoluta(self) -> None:
         url = media_url_absoluta("auditoria_sem_slot/2026/07/print.jpg")
         self.assertEqual(
             url,
-            "https://www.recordpap.com.br/media/auditoria_sem_slot/2026/07/print.jpg",
+            "https://site-clickup-production.up.railway.app/media/auditoria_sem_slot/2026/07/print.jpg",
         )
+

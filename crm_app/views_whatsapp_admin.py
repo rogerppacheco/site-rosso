@@ -50,7 +50,7 @@ def _backend_conexao(request) -> str:
     Em hybrid o QR do Número A fica na Z-API (painel externo).
     """
     q = (request.query_params.get("backend") or "").strip().lower()
-    if q in ("evolution", "whatsatende", "zapi"):
+    if q in ("evolution", "whatsatende"):
         return q
     provider = build_whatsapp_config_payload().get("provider") or "zapi"
     if provider == WhatsAppIntegracaoConfig.PROVIDER_WHATSATENDE:
@@ -59,6 +59,8 @@ def _backend_conexao(request) -> str:
         return "evolution"
     if provider == WhatsAppIntegracaoConfig.PROVIDER_HYBRID:
         # Número A = Z-API (sem QR aqui); QR WhatsAtende A não é necessário.
+        return "evolution"
+    if provider == WhatsAppIntegracaoConfig.PROVIDER_META:
         return "evolution"
     # Z-API ativo: preferir WhatsAtende se já tiver ID+token (setup paralelo)
     if _whatsatende_conexao_disponivel():

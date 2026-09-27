@@ -36,8 +36,58 @@ class RegraAutomacaoViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminDiretoria]
 
 # --- SUAS VIEWS DE TEMPLATE ---
+class HomeView(TemplateView):
+    """
+    Landing pública Futura Telecom.
+
+    Planos vêm do context processor planos_landing (GDP vigente).
+    Aceita ?cidade=&uf=&ibge= para segmentação regional.
+    """
+
+    template_name = "index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Garante meta disponível mesmo se o processor for desativado
+        if "PLANOS_LANDING" not in context:
+            from crm_app.services.gdp_preco_service import listar_planos_landing
+            from django.conf import settings
+            from urllib.parse import quote
+
+            cidade = (
+                self.request.GET.get("cidade")
+                or getattr(settings, "SITE_LANDING_CIDADE", "")
+                or ""
+            ).strip()
+            uf = (
+                self.request.GET.get("uf")
+                or getattr(settings, "SITE_LANDING_UF", "")
+                or ""
+            ).strip()
+            payload = listar_planos_landing(
+                cidade=cidade,
+                uf=uf,
+                cod_ibge=(self.request.GET.get("ibge") or "").strip(),
+            )
+            digits = getattr(settings, "SITE_WHATSAPP_DIGITS", "319XXXXXXXX")
+            for plano in payload.get("planos", []):
+                plano["whatsapp_url"] = (
+                    f"https://wa.me/{digits}?text={quote(plano.get('whatsapp_texto', ''))}"
+                )
+            context["PLANOS_LANDING"] = payload.get("planos", [])
+            context["PLANOS_LANDING_META"] = {
+                "origem": payload.get("origem"),
+                "escopo": payload.get("escopo"),
+                "cidade": payload.get("cidade"),
+                "uf": payload.get("uf"),
+                "gdp_disponivel": payload.get("gdp_disponivel", False),
+            }
+        return context
+
+
 class IndexView(TemplateView):
     template_name = "frontend/public/index.html"
+
 
 class AreaInternaView(TemplateView):
     template_name = "frontend/public/area-interna.html"

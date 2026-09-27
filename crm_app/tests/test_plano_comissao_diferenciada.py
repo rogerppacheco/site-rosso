@@ -226,3 +226,34 @@ class ComissaoCidadeEspecialServiceTest(SimpleTestCase):
         self.assertEqual(len(CIDADES_OFERTA_ESPECIAL), 161)
         self.assertIn(('SP', 'CAMPINAS'), CIDADES_OFERTA_ESPECIAL)
         self.assertIn(('PR', 'LONDRINA'), CIDADES_OFERTA_ESPECIAL)
+
+# Injetado de nova-velox
+class AgrupamentoPlanoCadastradoTest(SimpleTestCase):
+    def test_plano_fora_da_grade_excel_ainda_agrupa(self) -> None:
+        plano = MagicMock()
+        plano.id = 18
+        plano.nome = 'BLINK 800MB'
+        venda = MagicMock(plano=plano, plano_id=18)
+        self.assertIsNone(plano_tipo_to_chave('BLINK 800MB', 'CPF'))
+        self.assertEqual(chave_agrupamento_folha(venda, 'CPF'), 'plano_18_PAP')
+        self.assertEqual(label_plano_folha(venda, 'CPF'), 'BLINK 800MB PAP')
+
+    def test_venda_sem_plano_aparece_como_sem_plano(self) -> None:
+        venda = MagicMock(plano=None, plano_id=None)
+        self.assertEqual(chave_agrupamento_folha(venda, 'CPF'), 'sem_plano_PAP')
+        self.assertEqual(label_plano_folha(venda, 'CPF'), 'SEM PLANO PAP')
+
+    def test_resolver_paga_plano_pela_matriz_sem_chave_excel(self) -> None:
+        plano = MagicMock()
+        plano.id = 6
+        faixa = MagicMock()
+        with patch('crm_app.services.comissao_matriz_service.get_valor_faixa_plano', return_value=45.0):
+            valor = resolver_valor_comissao_venda(
+                plano,
+                'CPF',
+                faixa_regra=faixa,
+                config=None,
+                usar_manual=False,
+                chave=None,
+            )
+        self.assertEqual(valor, 45.0)

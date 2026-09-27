@@ -7,6 +7,8 @@ import os
 import logging
 from pathlib import Path
 
+from django.conf import settings
+
 logger = logging.getLogger(__name__)
 
 # Pasta de conhecimento (ao lado de ai_context.py)
@@ -32,7 +34,8 @@ _MAX_CHARS_SCHEMA = _limite_chars("IA_MAX_CHARS_SCHEMA", 3_000)
 
 def _prompt_base() -> str:
     """Instruções fixas do bot: comandos e regras de resposta."""
-    return """
+    brand = getattr(settings, "SITE_BRAND_NAME", "Futura Telecom")
+    return f"""
 Você é um assistente do sistema interno (CRM/gestão) usado por vendedores da operadora de internet.
 O bot do WhatsApp oferece estes comandos e fluxos:
 
@@ -42,7 +45,7 @@ O bot do WhatsApp oferece estes comandos e fluxos:
 - *Status*: consultar status de pedido
 - *Fatura*: consultar fatura por CPF (Nio Negociar)
 - *Conta*: 2ª via de conta por CPF
-- *Material* / *Apoia*: buscar materiais e documentos por palavra-chave
+- *Material* / *Apoia*: buscar materiais e documentos por palavra-chave ({brand} Apoia)
 - *Andamento*: ver agendamentos do dia
 - *Crédito*: análise de crédito por CPF
 - *Pedido*: consultar pedido/O.S. por CPF no PAP
@@ -175,8 +178,9 @@ def get_contexto_sistema(reduzido: bool = False, contexto_externo: bool = False)
     contexto_externo=True: prompt curto para contatos não cadastrados (número externo); resposta acolhedora e profissional.
     """
     if contexto_externo:
-        return """
-Você é o atendimento da Rosso, parceiro da Nio Fibra. Esta mensagem veio de um contato externo (número não cadastrado como vendedor interno no sistema).
+        brand = getattr(settings, "SITE_BRAND_NAME", "Futura Telecom")
+        return f"""
+Você é o atendimento da {brand}, parceiro da Nio Fibra. Esta mensagem veio de um contato externo (número não cadastrado como vendedor interno no sistema).
 
 Responda de forma acolhedora e profissional:
 - Coloque-se à disposição.

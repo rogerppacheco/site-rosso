@@ -10,16 +10,22 @@ from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-fallback-secret-key-12345')
+SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     'testserver',
-    'site-rosso-production.up.railway.app',
+    'www.recordpap.com.br',
+    'recordpap.com.br',
+    'site-record-production.up.railway.app',
+    'site-record.up.railway.app',
+    'pleasing-recreation.up.railway.app',
     'healthcheck.railway.app',
+    # Permite qualquer subdomínio do Railway
     '.up.railway.app',
+    # Teste local: ngrok (ex.: d021-177-137-82-21.ngrok-free.app)
     '.ngrok-free.app',
     '.ngrok.io',
 ]
@@ -143,7 +149,7 @@ if database_url:
     _h = DATABASES['default'].get('HOST') or 'localhost'
     _n = DATABASES['default'].get('NAME')
     _pool_label = "PgBouncer" if _pgbouncer_active else "direct"
-    _schema = (os.environ.get("POSTGRES_SCHEMA") or "rosso").strip() or "rosso"
+    _schema = (os.environ.get("POSTGRES_SCHEMA") or "public").strip() or "public"
     print(f"OK - PostgreSQL ({_pool_label}): host={_h!r} db={_n!r} schema={_schema!r}")
 
 else:
@@ -225,13 +231,15 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'https://site-rosso-production.up.railway.app',
+    'https://www.recordpap.com.br',
+    'https://recordpap.com.br',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'https://site-rosso-production.up.railway.app',
+    'https://www.recordpap.com.br',
+    'https://recordpap.com.br',
 ]
 
 SESSION_COOKIE_SECURE = not DEBUG
@@ -240,15 +248,16 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
-# E-mail da Rosso: console até existir SMTP próprio (não usar o da Record).
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='localhost')
-EMAIL_PORT = config('EMAIL_PORT', default=25, cast=int)
+# --- CONFIGURAÇÕES DE E-MAIL (UOL Host — bo@recordpap.com.br) ---
+# SMTP: smtps.uhserver.com:465 SSL. Credenciais vêm do .env (não versionar senha).
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtps.uhserver.com')
+EMAIL_PORT = config('EMAIL_PORT', default=465, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=False, cast=bool)
-EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='noreply@localhost')
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='bo@recordpap.com.br')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Rosso <noreply@localhost>')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Record PAP <bo@recordpap.com.br>')
 
 # --- CLOUDFLARE R2 (armazenamento de arquivos) ---
 CLOUDFLARE_R2_ACCOUNT_ID = config('CLOUDFLARE_R2_ACCOUNT_ID', default='')
@@ -257,10 +266,10 @@ CLOUDFLARE_R2_SECRET_ACCESS_KEY = config('CLOUDFLARE_R2_SECRET_ACCESS_KEY', defa
 CLOUDFLARE_R2_BUCKET_NAME = config('CLOUDFLARE_R2_BUCKET_NAME', default='site-record-midia')
 CLOUDFLARE_R2_PUBLIC_URL = config('CLOUDFLARE_R2_PUBLIC_URL', default='')
 # Prefixo raiz no bucket; cada funcionalidade usa subpasta própria (Record_Apoia, CDOI, etc.)
-R2_FOLDER_ROOT = config('R2_FOLDER_ROOT', default='Rosso')
+R2_FOLDER_ROOT = config('R2_FOLDER_ROOT', default='CDOI_Record_Vertical')
 
 # --- WHATSAPP: Z-API (legado), Evolution API ou WhatsAtende ---
-WHATSAPP_PROVIDER = config('WHATSAPP_PROVIDER', default='evolution').strip().lower()
+WHATSAPP_PROVIDER = config('WHATSAPP_PROVIDER', default='zapi').strip().lower()
 ZAPI_INSTANCE_ID = config('ZAPI_INSTANCE_ID', default='')
 ZAPI_TOKEN = config('ZAPI_TOKEN', default='')
 ZAPI_CLIENT_TOKEN = config('ZAPI_CLIENT_TOKEN', default='')
@@ -269,7 +278,7 @@ EVOLUTION_API_URL = config(
     default='https://evolution-api-production-8bbb.up.railway.app',
 )
 EVOLUTION_API_KEY = config('EVOLUTION_API_KEY', default='')
-EVOLUTION_INSTANCE_NAME = config('EVOLUTION_INSTANCE_NAME', default='site_rosso_zap')
+EVOLUTION_INSTANCE_NAME = config('EVOLUTION_INSTANCE_NAME', default='site_record_zap')
 # WhatsAtende (SouChat): token da conexão + ID em Conexões
 WHATSATENDE_API_URL = config(
     'WHATSATENDE_API_URL',
@@ -302,12 +311,14 @@ N8N_WEBHOOK_URL = config('N8N_WEBHOOK_URL', default='')
 OUTBOUND_WEBHOOK_URL = config('OUTBOUND_WEBHOOK_URL', default='')
 # Teams: Django → n8n → Incoming Webhook do canal Teams
 N8N_TEAMS_WEBHOOK_URL = config('N8N_TEAMS_WEBHOOK_URL', default='')
-SITE_URL = config('SITE_URL', default='https://site-rosso-production.up.railway.app')
-SITE_BRAND = config('SITE_BRAND', default='Rosso')
-SITE_MODULE_PREFIX = config('SITE_MODULE_PREFIX', default='Rosso')
-SITE_TEXT_LOGO = config('SITE_TEXT_LOGO', default=True, cast=bool)
-SITE_CONTACT_PHONE = config('SITE_CONTACT_PHONE', default='')
-SITE_CONTACT_EMAIL = config('SITE_CONTACT_EMAIL', default='')
+SITE_URL = config('SITE_URL', default='https://www.recordpap.com.br')
+SITE_BRAND = config('SITE_BRAND', default='Record PAP')
+# Prefixo dos módulos (Record Vendas, Record Apoia…). Default preserva a Record.
+SITE_MODULE_PREFIX = config('SITE_MODULE_PREFIX', default='Record')
+# True = mostra o nome da marca no header em vez do logo.png da Record.
+SITE_TEXT_LOGO = config('SITE_TEXT_LOGO', default=False, cast=bool)
+SITE_CONTACT_PHONE = config('SITE_CONTACT_PHONE', default='(31) 99458-8810')
+SITE_CONTACT_EMAIL = config('SITE_CONTACT_EMAIL', default='suporte@recordpap.com.br')
 _site_origin = str(SITE_URL).rstrip('/')
 if _site_origin.startswith('http://') or _site_origin.startswith('https://'):
     if _site_origin not in CSRF_TRUSTED_ORIGINS:
@@ -495,7 +506,7 @@ GOOGLE_FORM_STORAGE_STATE = config(
 # (gerar localmente com scripts/salvar_sessao_google_form.py e colar no Railway).
 GOOGLE_FORM_STORAGE_STATE_B64 = config('GOOGLE_FORM_STORAGE_STATE_B64', default='')
 GOOGLE_FORM_LOGIN_EMAIL = config('GOOGLE_FORM_LOGIN_EMAIL', default='roggerio@gmail.com')
-GOOGLE_FORM_EMAIL = config('GOOGLE_FORM_EMAIL', default='')
+GOOGLE_FORM_EMAIL = config('GOOGLE_FORM_EMAIL', default='comunicacao@recordpap.com.br')
 
 # --- CONFIGURAÇÕES DE ARQUIVOS ESTÁTICOS E MÍDIA ---
 # Para upload de PDFs das faturas M-10
@@ -646,7 +657,7 @@ PRESENCA_LEMBRETES_ATIVOS = config(
 PRESENCA_FALTA_AUTOMATICA_12H_ATIVA = config(
     'PRESENCA_FALTA_AUTOMATICA_12H_ATIVA', default=True, cast=lambda v: str(v).lower() in ('true', '1', 'yes')
 )
-PRESENCA_URL_SITE = config('PRESENCA_URL_SITE', default='https://site-rosso-production.up.railway.app/presenca/')
+PRESENCA_URL_SITE = config('PRESENCA_URL_SITE', default='https://www.recordpap.com.br/presenca/')
 PRESENCA_IMAGEM_ALERTA_SUPERVISOR = config(
     'PRESENCA_IMAGEM_ALERTA_SUPERVISOR', default='presenca/assets/alerta_supervisor.png'
 )

@@ -193,6 +193,9 @@ class WhatsAtendeProvider(WhatsAppProvider):
         )
         return None
 
+    def pode_verificar_numero(self) -> bool:
+        return bool(self.token)
+
     def enviar_mensagem_texto_raw(
         self, telefone: str, mensagem: str
     ) -> Tuple[bool, Any]:

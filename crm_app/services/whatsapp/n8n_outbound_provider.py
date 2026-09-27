@@ -24,10 +24,17 @@ class N8nOutboundProvider(WhatsAppProvider):
     def __init__(self) -> None:
         self.webhook_url = self._resolve_webhook_url()
         self._evolution = EvolutionProvider()
+        self.fallback_direto = bool(
+            getattr(settings, "N8N_OUTBOUND_DIRECT_FALLBACK", True)
+        )
         if not self.webhook_url:
             logger.warning(
                 "N8N_OUTBOUND_WEBHOOK_URL não configurada — outbound texto/mídia URL falhará"
             )
+
+    def is_configured(self) -> bool:
+        # Validação de número usa Evolution direto; n8n só afeta envios.
+        return self._evolution.is_configured()
 
     @staticmethod
     def _resolve_webhook_url() -> str:
@@ -41,7 +48,36 @@ class N8nOutboundProvider(WhatsAppProvider):
                 return str(val).strip()
         return ""
 
-    def _dispatch_n8n(self, payload: Dict[str, Any], timeout: int = 15) -> Tuple[bool, Any]:
+    def _resposta_confirma_entrega(
+        self,
+        resposta: Any,
+        profundidade: int = 0,
+    ) -> bool:
+        if profundidade > 3:
+            return False
+        if isinstance(resposta, dict):
+            if self.resposta_indica_sucesso(resposta):
+                return True
+            return any(
+                self._resposta_confirma_entrega(
+                    resposta.get(chave),
+                    profundidade + 1,
+                )
+                for chave in ("body", "data", "response", "json")
+                if chave in resposta
+            )
+        if isinstance(resposta, list):
+            return any(
+                self._resposta_confirma_entrega(item, profundidade + 1)
+                for item in resposta
+            )
+        return False
+
+    def _dispatch_n8n(
+        self,
+        payload: Dict[str, Any],
+        timeout: int = 15,
+    ) -> Tuple[bool, Any]:
         if not self.webhook_url:
             return False, "N8N_OUTBOUND_WEBHOOK_URL não configurada"
         try:
@@ -56,7 +92,17 @@ class N8nOutboundProvider(WhatsAppProvider):
                     body = resp.json() if resp.content else {}
                 except ValueError:
                     body = {"status": resp.status_code}
-                return True, body
+                if self._resposta_confirma_entrega(body):
+                    return True, body
+                logger.error(
+                    "[n8n outbound] HTTP %s sem confirmação de entrega: %s",
+                    resp.status_code,
+                    str(body)[:500],
+                )
+                return False, {
+                    "error": "n8n não confirmou a entrega na Evolution",
+                    "response": body,
+                }
             logger.error(
                 "[n8n outbound] HTTP %s: %s",
                 resp.status_code,
@@ -70,6 +116,37 @@ class N8nOutboundProvider(WhatsAppProvider):
     def verificar_numero_existe(self, telefone: str) -> Optional[bool]:
         return self._evolution.verificar_numero_existe(telefone)
 
+    def _fallback_texto(
+        self,
+        telefone: str,
+        mensagem: str,
+        erro_n8n: Any,
+    ) -> Tuple[bool, Any]:
+        if not self.fallback_direto:
+            return False, erro_n8n
+        logger.warning(
+            "[n8n outbound] Acionando fallback direto Evolution para texto: %s",
+            str(erro_n8n)[:300],
+        )
+        ok, resposta = self._evolution.enviar_mensagem_texto_raw(
+            telefone,
+            mensagem,
+        )
+        if ok:
+            return True, {
+                "fallback": "evolution-direto",
+                "n8n_error": erro_n8n,
+                "response": resposta,
+            }
+        logger.error(
+            "[n8n outbound] Fallback direto Evolution falhou: %s",
+            str(resposta)[:500],
+        )
+        return False, {
+            "n8n_error": erro_n8n,
+            "fallback_error": resposta,
+        }
+
     def enviar_mensagem_texto_raw(
         self, telefone: str, mensagem: str
     ) -> Tuple[bool, Any]:
@@ -77,12 +154,12 @@ class N8nOutboundProvider(WhatsAppProvider):
         payload = {
             "phone_number": phone,
             "message_body": mensagem or "",
-            "source": "site-record",
+            "source": "nova-velox",
         }
         ok, resp = self._dispatch_n8n(payload, timeout=10)
         if ok:
             return True, resp if isinstance(resp, dict) else {"raw": resp}
-        return False, resp
+        return self._fallback_texto(telefone, mensagem, resp)
 
     def enviar_mensagem_com_botoes_reply(
         self,
@@ -116,10 +193,23 @@ class N8nOutboundProvider(WhatsAppProvider):
             "media_url": pdf_url,
             "media_mimetype": "application/pdf",
             "media_file_name": nome_arquivo,
-            "source": "site-record",
+            "source": "nova-velox",
         }
-        ok, _ = self._dispatch_n8n(payload, timeout=30)
-        return ok
+        ok, resposta = self._dispatch_n8n(payload, timeout=30)
+        if ok:
+            return True
+        if not self.fallback_direto:
+            return False
+        logger.warning(
+            "[n8n outbound] Acionando fallback direto Evolution para documento: %s",
+            str(resposta)[:300],
+        )
+        return self._evolution.enviar_pdf_url(
+            telefone,
+            pdf_url,
+            nome_arquivo,
+            caption=caption,
+        )
 
     def enviar_pdf_b64(
         self,

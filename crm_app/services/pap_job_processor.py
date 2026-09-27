@@ -18,6 +18,27 @@ from crm_app.pap_job_fila import PapJobFila
 logger = logging.getLogger(__name__)
 
 
+def _bloqueio_operadora(job: PapJobFila) -> str:
+    """
+    Última barreira antes de abrir o navegador: confirma que o job pertence à
+    operadora que usa o PAP Nio. Protege jobs enfileirados fora do webhook.
+    """
+    from crm_app.services.pap_operadora_guard import (
+        MSG_PAP_DESATIVADO,
+        bloqueio_por_documento,
+        pap_nio_habilitado,
+    )
+
+    payload = job.payload or {}
+    if job.tipo == "analise_credito":
+        return "" if pap_nio_habilitado() else MSG_PAP_DESATIVADO
+    if job.tipo in ("status_online", "consulta_pedido"):
+        return bloqueio_por_documento(
+            payload.get("cpf") or "", payload.get("os_filtro") or ""
+        )
+    return ""
+
+
 def _notificar_falha_definitiva(job: PapJobFila) -> None:
     """Evita deixar o usuário aguardando quando o handler nem consegue iniciar."""
     payload = job.payload or {}
@@ -65,6 +86,18 @@ def _executar_handler(job: PapJobFila) -> None:
         _executar_consulta_pedido_background,
         _executar_consulta_status_online_background,
     )
+
+    bloqueio = _bloqueio_operadora(job)
+    if bloqueio:
+        logger.warning(
+            "[PAP_WORKER] Job %s tipo=%s bloqueado: operadora não usa PAP Nio.",
+            job.id,
+            job.tipo,
+        )
+        from crm_app.whatsapp_service import WhatsAppService
+
+        WhatsAppService().enviar_mensagem_texto(job.telefone, bloqueio)
+        return
 
     handlers = {
         "status_online": lambda p: _executar_consulta_status_online_background(

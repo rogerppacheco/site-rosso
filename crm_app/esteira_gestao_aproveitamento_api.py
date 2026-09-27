@@ -11,10 +11,9 @@ from rest_framework.views import APIView
 
 from crm_app.esteira_eventos_utils import TIPO_AGENDAMENTO, TIPO_MOTIVO_PENDENCIA, TIPO_STATUS_ESTEIRA
 from crm_app.models import LembreteInstalacaoEnviado, PendenciaIndevidaRegistro, Venda, VendaEsteiraEvento
-from crm_app.perfis_acesso import GRUPOS_ESTEIRA_GESTAO_APROVEITAMENTO
 from crm_app.utils import is_member
 
-GRUPOS_GESTAO_APROVEITAMENTO_ESTEIRA = list(GRUPOS_ESTEIRA_GESTAO_APROVEITAMENTO)
+GRUPOS_GESTAO_APROVEITAMENTO_ESTEIRA = ['Diretoria', 'BackOffice', 'Admin']
 
 
 def _montar_resumo_mes(vendas_qs, inicio_mes, fim_mes):
@@ -265,6 +264,12 @@ class GestaoAproveitamentoEsteiraView(APIView):
             vendedor_id__in=user_ids,
         ).exclude(ordem_servico__isnull=True).exclude(ordem_servico='').filter(
             status_tratamento__nome__iexact='CADASTRADA',
+        )
+        from crm_app.services.escopo_operadora import filtrar_vendas_por_operadora
+
+        vendas_base = filtrar_vendas_por_operadora(
+            vendas_base,
+            request.user,
         )
 
         resumo = _montar_resumo_mes(vendas_base, inicio_mes, fim_mes)

@@ -30,6 +30,7 @@ def duplicar(
     nova_data: Any,
     novo_turno: str,
     enviar_whatsapp: bool = True,
+    usuario: Any = None,
 ) -> Venda:
     """
     Cria uma nova venda (reemissão) a partir da venda original.
@@ -45,15 +46,24 @@ def duplicar(
         nova_data: Data do novo agendamento (date ou string ISO).
         novo_turno: Período do agendamento (ex.: MANHA, TARDE).
         enviar_whatsapp: Se True, envia mensagem de aprovação ao tel_whatsapp do vendedor.
+        usuario: Usuário que solicita a reemissão; valida escopo de operadora do plano.
 
     Returns:
         Instância da nova Venda já persistida (com data_criacao preservada).
 
     Raises:
         Venda.DoesNotExist: Quando id_venda não existe.
-        ReemissaoVendaError: Quando o status "AGENDADO" (Esteira) não existe no cadastro.
+        ReemissaoVendaError: Quando o status "AGENDADO" (Esteira) não existe no cadastro
+            ou o plano da venda original está fora do escopo do usuário.
     """
-    venda_original = Venda.objects.get(id=id_venda)
+    venda_original = Venda.objects.select_related('plano').get(id=id_venda)
+
+    if usuario is not None:
+        from crm_app.services.escopo_operadora import validar_plano_para_usuario
+
+        erro_plano = validar_plano_para_usuario(usuario, venda_original.plano)
+        if erro_plano:
+            raise ReemissaoVendaError(erro_plano)
 
     venda_nova = Venda()
     data_criacao_original = venda_original.data_criacao
