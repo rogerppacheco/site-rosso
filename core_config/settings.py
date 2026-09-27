@@ -796,3 +796,100 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
+
+# CELERY BEAT SCHEDULE (Substituindo o antigo APScheduler)
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'buscar_faturas_diario': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/20', hour='22-23,0-6'),
+        'args': ('buscar_faturas_automatico',)
+    },
+    'finalizar_match_nio_noturno': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='7'),
+        'args': ('finalizar_match_nio_noturno',)
+    },
+    'processar_envio_performance': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/1'),
+        'args': ('processar_envio_performance_agendado',)
+    },
+    'processar_relatorio_esteira_gc': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/1'),
+        'args': ('processar_relatorio_esteira_gc_agendado',)
+    },
+    'processar_relatorio_pendencia_cliente': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/1'),
+        'args': ('processar_relatorio_pendencia_cliente_agendado',)
+    },
+    'processar_fila_boas_vindas': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/5'),
+        'args': ('processar_fila_boas_vindas',)
+    },
+    'enviar_templates_cobranca_nio': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='9'),
+        'args': ('enviar_templates_cobranca_nio',)
+    },
+    'processar_relatorio_tratamento': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/1'),
+        'args': ('processar_relatorio_tratamento_agendado',)
+    },
+    'encerrar_sessoes_tratamento_ociosas': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/3'),
+        'args': ('encerrar_sessoes_tratamento_ociosas',)
+    },
+    'processar_fallback_sonax_auditoria': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='*/2'),
+        'args': ('_processar_fallback_sonax_auditoria',)
+    },
+    'sync_status_esteira_pap_noturno': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='22'),
+        'args': ('sync_status_esteira_pap_automatico',)
+    },
+    'preaquecer_cache_folha_6h': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='6'),
+        'args': ('preaquecer_cache_folha_comissionamento',)
+    },
+    'preaquecer_cache_folha_12h': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='12'),
+        'args': ('preaquecer_cache_folha_comissionamento',)
+    },
+    'lembrete_presenca_supervisor_10h': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='10', day_of_week='1-5'),
+        'args': ('lembrete_presenca_supervisor_10h',)
+    },
+    'lembrete_presenca_supervisor_11h': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='11', day_of_week='1-5'),
+        'args': ('lembrete_presenca_supervisor_11h',)
+    },
+    'aplicar_faltas_presenca_12h': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='0', hour='12', day_of_week='1-5'),
+        'args': ('aplicar_faltas_presenca_12h',)
+    },
+    'lista_agendamento_vendedor_manha': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='30', hour='7'),
+        'args': ('lista_agendamento_vendedor_manha',)
+    },
+    'lista_agendamento_vendedor_tarde': {
+        'task': 'crm_app.tasks_celery.run_legacy_scheduler_job',
+        'schedule': crontab(minute='30', hour='12'),
+        'args': ('lista_agendamento_vendedor_tarde',)
+    }
+}
+

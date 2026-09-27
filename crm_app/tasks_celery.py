@@ -29,3 +29,13 @@ def processar_job_pap_celery(self, job_id):
     except Exception as exc:
         logger.exception(f"Erro ao processar Job PAP {job_id}")
         self.retry(exc=exc, countdown=60)  # Tenta novamente em 60s
+
+@shared_task(bind=True, max_retries=1)
+def run_legacy_scheduler_job(self, job_func_name):
+    from crm_app import scheduler
+    func = getattr(scheduler, job_func_name, None)
+    if func:
+        func()
+    else:
+        logger.error(f'Função {job_func_name} não encontrada no scheduler.py')
+
