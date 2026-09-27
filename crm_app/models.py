@@ -301,6 +301,14 @@ class Venda(models.Model):
     data_ultima_alteracao = models.DateTimeField(auto_now=True, verbose_name="Data da Última Alteração")
     # --------------------------------------------
     
+    codigo_sa_ba = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Código SA/BA",
+        help_text="Código identificador do contrato na Operadora (ex: SA-41538304, BA-...).",
+    )
     pedido_pap = models.CharField(max_length=50, null=True, blank=True, unique=True, db_index=True, verbose_name="Pedido PAP")
     valor_plano_pap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name="Valor Mensal PAP")
     vendedor_matricula_pap = models.CharField(max_length=50, null=True, blank=True, verbose_name="Matrícula Vendedor PAP")

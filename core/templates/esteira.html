@@ -4027,7 +4027,7 @@ min-width: 100%;
         }
 
         function montarCelulaOsComStatusAgendamento(v) {
-            const osAtual = v.ordem_servico || '-';
+            const osAtual = v.codigo_sa_ba ? `${v.ordem_servico || '-'} - ${v.codigo_sa_ba}` : (v.ordem_servico || '-');
             const statusId = v.status_agendamento
                 ? (typeof v.status_agendamento === 'object' ? v.status_agendamento.id : v.status_agendamento)
                 : null;

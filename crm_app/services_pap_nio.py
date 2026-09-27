@@ -2837,7 +2837,7 @@ class PAPNioAutomation:
                 num_os = (row.get("numero_os") or "").strip()
                 if not num_os:
                     continue
-                st_ag, ag_texto, pendencia, detail_screenshot_path = self.abrir_detalhe_os_e_extrair(
+                st_ag, ag_texto, pendencia, sa_ba_code, detail_screenshot_path = self.abrir_detalhe_os_e_extrair(
                     num_os, detalhe_href=row.get("detalhe_href")
                 )
                 if st_ag is not None:
@@ -2846,6 +2846,8 @@ class PAPNioAutomation:
                     row["agendamento"] = ag_texto
                 if pendencia is not None:
                     row["pendencia"] = pendencia
+                if sa_ba_code is not None:
+                    row["sa_ba_code"] = sa_ba_code
                 if detail_screenshot_path:
                     row["detail_screenshot_path"] = detail_screenshot_path
 
@@ -2923,7 +2925,7 @@ class PAPNioAutomation:
 
     def abrir_detalhe_os_e_extrair(
         self, numero_os: str, detalhe_href: Optional[str] = None
-    ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
         """
         Na tela de Consulta OS (após filtrar), abre o link Detalhar da OS e extrai na página de detalhe:
         - Status agendamento: valor ao lado do rótulo "Status agendamento"
@@ -2996,8 +2998,19 @@ class PAPNioAutomation:
                 pass
             # Pendência (ex.: "7029 - AGENDAMENTO DO PEDIDO") — rótulo exato, não "Pendência Cliente"
             pendencia_texto = self._buscar_pendencia_codigo_detalhe_pap()
+            # SA/BA
+            sa_ba_code = None
+            try:
+                spans_sa_ba = self.page.locator('span.sc-jrOYZv.ldMRLh, span.ldMRLh, span.sc-gOhSNZ.fLfXPS').all()
+                for s in spans_sa_ba:
+                    t = (s.inner_text() or "").strip()
+                    if t and re.match(r"^(SA|BA)-\d+$", t, re.I):
+                        sa_ba_code = t
+                        break
+            except Exception:
+                pass
             # Fallback: outros spans do detalhe
-            if not status_agendamento or not agendamento_texto or not pendencia_texto:
+            if not status_agendamento or not agendamento_texto or not pendencia_texto or not sa_ba_code:
                 spans = self.page.locator(
                     'span.sc-jrOYZv.ldMRLh, span.ldMRLh, span.sc-gOhSNZ.fLfXPS'
                 ).all()
@@ -3011,6 +3024,8 @@ class PAPNioAutomation:
                         status_agendamento = t
                     if self._RE_PENDENCIA_CODIGO_PAP.match(t) and not pendencia_texto:
                         pendencia_texto = t
+                    if re.match(r"^(SA|BA)-\d+$", t, re.I) and not sa_ba_code:
+                        sa_ba_code = t
             if pendencia_texto and not self._RE_PENDENCIA_CODIGO_PAP.match(pendencia_texto):
                 codigo_ok = self._buscar_pendencia_codigo_detalhe_pap()
                 if codigo_ok:
@@ -3044,6 +3059,7 @@ class PAPNioAutomation:
                 status_agendamento or None,
                 agendamento_texto or None,
                 pendencia_texto or None,
+                sa_ba_code or None,
                 detail_screenshot_path,
             )
         except Exception as e:
@@ -3052,7 +3068,7 @@ class PAPNioAutomation:
                 self.page.go_back()
             except Exception:
                 pass
-            return None, None, None, None
+            return None, None, None, None, None
 
     def _variantes_busca_matricula_vendedor(self, matricula: str) -> List[str]:
         """Gera termos de busca para o autocomplete de vendedor (formato do PAP varia)."""

@@ -900,8 +900,6 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 15.0,  # A cada 15 segundos
     },
 }
-}
-
 
 CELERY_BROKER_TRANSPORT_OPTIONS = {'global_keyprefix': 'site-rosso'}
 

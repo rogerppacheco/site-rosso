@@ -802,7 +802,10 @@ def montar_legenda_pedido_status_pap(d, tempo_decorrido=None):
     partes.append(f"• *Status:* {st_exibir}\n")
     partes.append(f"• *Data:* {d.get('data_hora', '')}\n")
     partes.append(f"• *Plano:* {d.get('plano', '')}\n")
-    partes.append(f"• *Nº OS:* {d.get('numero_os', '')}\n")
+    if d.get("sa_ba_code"):
+        partes.append(f"• *Nº OS:* {d.get('numero_os', '')} - {d.get('sa_ba_code')}\n")
+    else:
+        partes.append(f"• *Nº OS:* {d.get('numero_os', '')}\n")
     if not d.get("nao_pertence_pdv"):
         if d.get("status_agendamento"):
             partes.append(f"• *Status agendamento:* {d.get('status_agendamento')}\n")
@@ -1102,6 +1105,12 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
         status_anterior = antes["status_esteira_nome"]
         sa_info = aplicar_status_agendamento_pap_na_venda(venda, d.get("status_agendamento"))
         sa_nao_mapeado = sa_info.get("nao_mapeado")
+        
+        sa_ba_code = d.get("sa_ba_code")
+        if sa_ba_code and venda.codigo_sa_ba != sa_ba_code:
+            venda.codigo_sa_ba = sa_ba_code
+            venda.save(update_fields=['codigo_sa_ba'])
+
         salvou = False
 
         def _registrar_alteracao_se_houve():

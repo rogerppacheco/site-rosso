@@ -517,7 +517,7 @@ class VendaSerializer(serializers.ModelSerializer):
             'nio_reagendamento_status', 'nio_reagendamento_em', 'nio_reagendamento_msg',
             'data_criacao', 'forma_entrada', 'cpf_representante_legal', 'nome_representante_legal',
             'nome_mae', 'data_nascimento', 'mes_nascimento_pap', 'telefone1', 'telefone2', 'cep', 'logradouro', 'numero_residencia',
-            'complemento', 'bairro', 'cidade', 'estado',             'data_abertura', 'ordem_servico', 'data_agendamento',
+            'complemento', 'bairro', 'cidade', 'estado',             'data_abertura', 'ordem_servico', 'codigo_sa_ba', 'data_agendamento',
             'periodo_agendamento', 'data_instalacao', 'data_instalacao_fisica', 'antecipou_instalacao', 'antecipacao_comissao',
             'flag_adiant_cnpj', 'adiantamento_cnpj_realizado_em', 'adiantamento_cnpj_realizado_por',
             'ponto_referencia', 'observacoes', 'data_pagamento', 'valor_pago',
