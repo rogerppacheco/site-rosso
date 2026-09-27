@@ -136,53 +136,7 @@ def queryset_vendas_consulta_aba(filtros: Dict[str, Any]):
     elif aba_u != 'TODOS':
         qs = qs.none()
 
-    # Turno: aba Agendados ou data específica
-    if turno in ('MANHA', 'TARDE') and (
-        aba_u == 'AGENDADO' or re.match(r'^\d{4}-\d{2}-\d{2}$', aba)
-    ):
-        qs = qs.filter(periodo_agendamento=turno)
-
-    # Status do agendamento: Agendados ou data
-    if status_ag and (aba_u == 'AGENDADO' or re.match(r'^\d{4}-\d{2}-\d{2}$', aba)):
-        sa_u = status_ag.upper()
-        if sa_u in ('SEM', 'NULL', 'NONE', '0'):
-            qs = qs.filter(status_agendamento__isnull=True)
-        elif status_ag.isdigit():
-            qs = qs.filter(status_agendamento_id=int(status_ag))
-
-    if tipo_pend in ('CLIENTE', 'TECNICA') and (aba_u in ('PENDEN', 'TODOS') or 'PENDEN' in aba_u):
-        if tipo_pend == 'CLIENTE':
-            qs = qs.filter(
-                motivo_pendencia__isnull=False,
-                motivo_pendencia__tipo_pendencia__icontains='CLIENTE',
-            )
-        else:
-            qs = qs.filter(motivo_pendencia__isnull=False).filter(
-                Q(motivo_pendencia__tipo_pendencia__icontains='TÉCNICA')
-                | Q(motivo_pendencia__tipo_pendencia__icontains='TECNICA')
-            )
-
-    if motivo_pend and (aba_u in ('PENDEN', 'TODOS') or 'PENDEN' in aba_u):
-        mp_u = motivo_pend.upper()
-        if mp_u in ('SEM', 'NULL', 'NONE', '0'):
-            qs = qs.filter(motivo_pendencia__isnull=True)
-        elif motivo_pend.isdigit():
-            qs = qs.filter(motivo_pendencia_id=int(motivo_pend))
-
-    if busca:
-        search_clean = re.sub(r'\D', '', busca)
-        filters = (
-            Q(ordem_servico__icontains=busca)
-            | Q(cliente__nome_razao_social__icontains=busca)
-            | Q(cliente__cpf_cnpj__icontains=busca)
-        )
-        if search_clean:
-            filters |= Q(cliente__cpf_cnpj__icontains=search_clean) | Q(
-                ordem_servico__icontains=search_clean
-            )
-        qs = qs.filter(filters)
-
-    qs = _aplicar_filtros_colunas_esteira(qs, colunas)
+    # REMOVIDO: Filtros complexos (turno, tipo_pend, motivo_pend, busca, colunas) conforme regra de "consulta PAP na aba atual" simplificada.
 
     # Mesma ordem da listagem da Esteira (1º da tabela = 1º consultado)
     return qs.order_by('-data_criacao', '-id')
@@ -462,6 +416,17 @@ def _enviar_relatorio_operador(execucao, detalhes: List[dict]) -> None:
         f'Sem alteração: {execucao.sem_alteracao}',
         f'Erros: {execucao.erros}',
     ]
+    atualizados = [d for d in detalhes if d.get('alterou')]
+    if atualizados:
+        linhas.append('')
+        linhas.append('*Atualizações:*')
+        for item in atualizados[:25]:
+            linhas.append(
+                f"• OS {item.get('os', '?')} — {item.get('status_anterior', '?')} → {item.get('status_novo', '?')}"
+            )
+        if len(atualizados) > 25:
+            linhas.append(f'… e mais {len(atualizados) - 25}.')
+
     errs = [d for d in detalhes if d.get('erro')]
     if errs:
         linhas.append('')

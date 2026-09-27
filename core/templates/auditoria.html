@@ -2,7 +2,7 @@
 
 {% load static %}
 
-{% block title %}Auditoria de Vendas - {{ SITE_BRAND }}{% endblock %}
+{% block title %}Auditoria de Vendas - {{ SITE_BRAND_NAME }}{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
@@ -11,7 +11,7 @@
 {% block extra_css %}
 <style>
 /* ==========================================================================
-   Auditoria — estilos theme-aware ({{ SITE_BRAND }} Design System v17)
+   Auditoria — estilos theme-aware (Nova Velox Design System v17)
    ========================================================================== */
 .auditoria-shell { max-width: 1600px; width: 100%; }
 .auditoria-page-title { font-size: 1.05rem; margin: 0; color: var(--text-primary); line-height: 1.2; font-weight: 700; }
@@ -849,6 +849,17 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
+                                <button type="button" class="dropdown-item" onclick="iniciarBuscaPapOnline()" title="Sincronizar Lote PAP">
+                                    <i class="bi bi-cloud-download"></i> Sincronizar Lote PAP
+                                </button>
+                            </li>
+                            <li>
+                                <div class="dropdown-item form-check form-switch ps-4 ms-2">
+                                    <input class="form-check-input" type="checkbox" id="toggle-auto-buscar-pap" onchange="toggleAutoBuscarPap(this.checked)">
+                                    <label class="form-check-label" style="cursor: pointer;" for="toggle-auto-buscar-pap">Auto Buscar PAP (5 min)</label>
+                                </div>
+                            </li>
+                            <li>
                                 <button type="button" class="dropdown-item" onclick="exportarListaAuditoriaExcel()" title="Exportar todos os registros da lista em Excel">
                                     <i class="bi bi-file-earmark-excel"></i> Exportar Excel
                                 </button>
@@ -1578,7 +1589,7 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
                     <label class="form-check-label fw-bold" for="agenda-sem-slot-check">Agenda disponível não atende o cliente</label>
                 </div>
                 <div id="campos-sem-slot" style="display:none;">
-                    <p class="small text-muted mb-2">A máscara também é enviada ao <strong>e-mail do GC</strong> cadastrado em Antecipar Instalação (com o print em anexo). Use <strong>Tela inteira</strong> no diálogo do Edge. Após Compartilhar, você terá <strong>5 segundos</strong> para ir à aba do PAP (Alt+Tab). O relógio do Windows deve aparecer na captura.</p>
+                    <p class="small text-muted mb-2">Use <strong>Tela inteira</strong> no diálogo do Edge. Após Compartilhar, você terá <strong>5 segundos</strong> para ir à aba do PAP (Alt+Tab). O relógio do Windows deve aparecer na captura.</p>
                     <div class="row g-2 mb-2">
                         <div class="col-md-6">
                             <label class="form-label fw-bold small">Data desejada pelo cliente <span class="text-danger">*</span></label>
@@ -1710,34 +1721,6 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
     </div>
 </div>
 
-<!-- Modal Editar Vendedor -->
-<div class="modal fade" id="modal-editar-vendedor" tabindex="-1" aria-labelledby="modalEditarVendedorLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalEditarVendedorLabel">Editar Vendedor</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="edit-vendedor-venda-id">
-                <div class="mb-3">
-                    <label class="form-label">Vendedor Atual:</label>
-                    <input type="text" class="form-control" id="edit-vendedor-atual" readonly>
-                </div>
-                <div class="mb-3">
-                    <label for="edit-vendedor-select" class="form-label">Novo Vendedor:</label>
-                    <select class="form-select" id="edit-vendedor-select">
-                        <option value="">Carregando...</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="salvarNovoVendedor()">Salvar</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1918,12 +1901,6 @@ async function iniciarBuscaPapOnline() {
         });
         let auditoriaVoiceConfig = { voice_provider: 'sonax', sonax_ramais: [] };
         let opcoesLigacaoCarregadas = false;
-        let perfilSomenteLeitura = false;
-
-        function aplicarModoSomenteLeituraAuditoria() {
-            document.querySelectorAll('#modalAuditoria .btn-success, #modalAuditoria .btn-primary, #modalAuditoria .btn-outline-success, #modalAuditoria .btn-outline-primary')
-                .forEach((btn) => { if (!btn.classList.contains('btn-secondary')) btn.classList.add('d-none'); });
-        }
 
         // =========================================================================
         // FUNÇÃO FETCH PADRONIZADA (SUBSTITUI API CLIENT EXTERNO)
@@ -2142,10 +2119,8 @@ async function iniciarBuscaPapOnline() {
                 try {
                     const tok = jwt_decode(localStorage.getItem('accessToken') || '');
                     const role = tok.user_role || tok.perfil || '';
-                    perfilSomenteLeitura = role === 'Gerente de Contas';
-                    podeZap = !perfilSomenteLeitura && ['Diretoria', 'Admin', 'Supervisor'].includes(role);
+                    podeZap = ['Diretoria', 'Admin', 'Supervisor'].includes(role);
                 } catch (e) {}
-                if (perfilSomenteLeitura) aplicarModoSomenteLeituraAuditoria();
                 if (window.PainelTempoTratamento) {
                     PainelTempoTratamento.init({
                         modulo: 'AUDITORIA',
@@ -2607,9 +2582,7 @@ async function iniciarBuscaPapOnline() {
                 var produto = v.plano_nome || '—';
                 var dataStr = formatarDataResumo(v.data_criacao);
                 var statusNome = v.status_tratamento_nome || '—';
-                var acao = perfilSomenteLeitura
-                    ? '<span class="text-muted small">Somente leitura</span>'
-                    : '<button class="btn btn-sm btn-auditar" onclick="retomarAuditoria(' + v.id + ')"><i class="bi bi-headset"></i> Auditar</button>';
+                var acao = '<button class="btn btn-sm btn-auditar" onclick="retomarAuditoria(' + v.id + ')"><i class="bi bi-headset"></i> Auditar</button>';
                 var row = '<tr><td class="fw-bold text-primary">#' + v.id + '</td><td>' + dataStr + '</td><td>' + nome + '</td><td class="small">' + cpf + '</td><td>' + vendedor + '</td><td>' + produto + '</td>';
                 if (comStatus) row += '<td><span class="badge bg-secondary">' + statusNome + '</span></td>';
                 row += '<td class="text-end">' + acao + '</td></tr>';
@@ -2631,9 +2604,7 @@ async function iniciarBuscaPapOnline() {
                 var vendedor = v.vendedor_nome || '—';
                 var produto = v.plano_nome || '—';
                 var dataConf = formatarDataResumo(v.data_confirmacao_auditoria);
-                var acao = perfilSomenteLeitura
-                    ? '<span class="text-muted small">Somente leitura</span>'
-                    : '<button class="btn btn-sm btn-auditar" onclick="retomarAuditoria(' + v.id + ')"><i class="bi bi-headset"></i> Auditar</button>';
+                var acao = '<button class="btn btn-sm btn-auditar" onclick="retomarAuditoria(' + v.id + ')"><i class="bi bi-headset"></i> Auditar</button>';
                 var row = '<tr><td class="fw-bold text-primary">#' + v.id + '</td><td>' + dataConf + '</td><td>' + nome + '</td><td class="small">' + cpf + '</td><td>' + vendedor + '</td><td>' + produto + '</td><td class="text-end">' + acao + '</td></tr>';
                 tbody.insertAdjacentHTML('beforeend', row);
             });
@@ -2801,7 +2772,6 @@ async function iniciarBuscaPapOnline() {
             const query = params.toString();
             apiFetch(`${API_BASE}/pendentes_auditoria/?${query}`)
             .then(data => {
-                if (!data) { throw new Error('Sessão expirada. Faça login novamente.'); }
                 const tbody = $('#listaVendasBody'); tbody.empty();
                 // Normalização (resposta pode ser paginada ou lista direta)
                 const lista = Array.isArray(data) ? data : (data.results || []);
@@ -2875,9 +2845,7 @@ async function iniciarBuscaPapOnline() {
                     
                     let auditorInfo = '-'; let btnHtml = ''; let classeLinha = '';
                     
-                    if (perfilSomenteLeitura) {
-                        btnHtml = '<span class="text-muted small">Somente leitura</span>';
-                    } else if (v.auditor_atual && v.auditor_atual !== myId) {
+                    if (v.auditor_atual && v.auditor_atual !== myId) {
                         classeLinha = 'locked-row';
                         auditorInfo = `<div class="d-flex align-items-center gap-2"><span class="auditor-badge text-truncate" style="max-width: 100px;" title="${nomeAuditor}"><i class="bi bi-lock-fill"></i> ${nomeAuditor}</span><button class="btn btn-icon btn-icon-danger" onclick="forcarLiberacao(${v.id})" title="Desbloquear" aria-label="Desbloquear auditoria"><i class="bi bi-unlock" aria-hidden="true"></i></button></div>`;
                         btnHtml = `<span class="badge bg-secondary">Em uso</span>`;
@@ -2888,9 +2856,6 @@ async function iniciarBuscaPapOnline() {
                         btnHtml = `<button class="btn btn-auditar" onclick="tentarAuditoria(${v.id})"><i class="bi bi-headset"></i> Auditar</button>`;
                     }
                     btnHtml += ` <button type="button" class="btn btn-icon btn-icon-sm btn-icon-danger ms-1" onclick="abrirPedidoAjudaGc(${v.id}, 'auditoria')" title="Pedido de ajuda ao GC (TI)" aria-label="Pedido de ajuda ao GC"><i class="bi bi-life-preserver" aria-hidden="true"></i></button>`;
-                    if (!perfilSomenteLeitura) {
-                        btnHtml += ` <button type="button" class="btn btn-icon btn-icon-sm btn-outline-secondary ms-1" onclick="abrirModalEditarVendedor(${v.id}, '${nomeVendedor.replace(/'/g, "\\'")}')" title="Editar vendedor"><i class="bi bi-person-gear" aria-hidden="true"></i></button>`;
-                    }
 
                     const bioHtml = renderBotaoBiometriaLista(v.id, v.biometria_aprovada, v.biometria_data_apta);
                     
@@ -2898,16 +2863,7 @@ async function iniciarBuscaPapOnline() {
                     tbody.append(`<tr class="${classeLinha}" data-venda-id="${v.id}"><td class="fw-bold text-primary">#${v.id}${pedidoPapHtml}</td><td>${dataFormatada}</td><td><div class="fw-bold text-dark">${nomeCliente}</div><div class="small text-muted" style="font-size: 0.8rem;">${cpfCliente}</div></td><td>${nomeVendedor}</td><td>${produto}</td><td><span class="badge bg-warning text-dark">${statusNome}</span></td><td>${infoEdicao}</td><td>${auditorInfo}</td><td class="text-center" id="bio-cell-${v.id}">${bioHtml}</td><td class="text-end">${btnHtml}</td></tr>`);
                 });
             })
-            .catch(e => {
-                console.error(e);
-                const msg = mensagemErroAmigavel(e, '');
-                const low = String(msg).toLowerCase();
-                if (!msg || msg.length > 180 || msg.includes('<') || low.includes('internal server error')) {
-                    alert('Erro ao carregar vendas. Tente atualizar a lista.');
-                } else {
-                    alert('Erro ao carregar vendas: ' + msg);
-                }
-            })
+            .catch(e => { console.error(e); alert('Erro ao carregar vendas.'); })
             .finally(() => $('#loadingOverlay').hide());
         }
 
@@ -2970,15 +2926,7 @@ async function iniciarBuscaPapOnline() {
             .then(() => { TratamentoTempo.monitorar(id, 'AUDITORIA'); return carregarDadosNoScript(id); })
             .catch(err => { 
                 $('#loadingOverlay').hide(); 
-                const msg = mensagemErroAmigavel(err, '');
-                const low = String(msg).toLowerCase();
-                if (low.includes('já está sendo auditada') || low.includes('permissão')) {
-                    alert(msg);
-                } else if (!msg || msg.length > 180 || msg.includes('<') || low.includes('internal server error')) {
-                    alert('Erro ao alocar venda. Tente novamente.');
-                } else {
-                    alert(msg);
-                }
+                alert('Erro ao alocar venda (talvez já esteja em uso).'); 
                 carregarVendasPendentes(); 
             }); 
         }
@@ -3967,7 +3915,7 @@ async function iniciarBuscaPapOnline() {
             if (semSlotPayload) {
                 setBotoesAgendamentoTravados(
                     true,
-                    'Enviando comunicação Sem SLOT aos destinos configurados... Aguarde.'
+                    'Enviando comunicação Sem SLOT ao GC e Diretoria... Aguarde.'
                 );
             }
             return apiFetch(`${API_BASE}/${vendaEmAuditoria.id}/finalizar_auditoria/`, { method: 'POST', body: JSON.stringify({ status: st, observacoes: obs, dados_atualizados: dados }) })
@@ -3976,7 +3924,7 @@ async function iniciarBuscaPapOnline() {
                 if (semSlotPayload) {
                     try {
                         const r = await enviarSemSlotGC(semSlotPayload);
-                        msg += ' ' + (r.detail || 'Comunicação enviada aos destinos configurados.');
+                        msg += ' ' + (r.detail || 'Comunicação enviada ao GC e Diretoria.');
                         if (r.success === false) msg = 'Salvo, porém: ' + (r.detail || 'verifique o envio ao GC.');
                         if (r.duplicado) msg = 'Salvo! ' + (r.detail || 'Comunicação Sem SLOT já havia sido enviada.');
                     } catch (e) {
@@ -4444,28 +4392,27 @@ async function iniciarBuscaPapOnline() {
         
         function gerarAprovacaoMsg(d) {
             $('#loadingOverlay').hide();
-            const planoTexto = $('#audit-plano option:selected').text();
+            const planoTexto = ($('#audit-plano option:selected').text() || '').toUpperCase();
             const dataAgendamento = d.data_agendamento ? d.data_agendamento.split('-').reverse().join('/') : '';
+            const nomeCliente = (d.cliente_nome || '').toUpperCase();
+            const vendedorNome = ($('#script-vendedor-nome').text() || '').toUpperCase();
             
             let txt = `APROVADO!✅✅\n`;
             txt += `PLANO ADQUIRIDO: ${planoTexto}\n`;
-            txt += `NOME DO CLIENTE: ${d.cliente_nome}\n`;
+            txt += `NOME DO CLIENTE: ${nomeCliente}\n`;
             txt += `CPF/CNPJ: ${d.cliente_cpf}\n`;
             if($('#agenda-os').val()) txt += `OS: ${$('#agenda-os').val()}\n`;
             const formaPagtoTexto = $('#audit-pagamento option:selected').text().toUpperCase();
             const isDacc = formaPagtoTexto.includes('DÉBITO') || formaPagtoTexto.includes('DEBITO') || formaPagtoTexto.includes('DACC') ? 'SIM' : 'NÃO';
             txt += `DACC: ${isDacc}\n`;
             if(dataAgendamento) {
-                let turnoFmt = d.periodo_agendamento;
-                if(turnoFmt === 'MANHA') turnoFmt = 'na parte da manhã';
-                else if(turnoFmt === 'TARDE') turnoFmt = 'na parte da tarde';
-                txt += `AGENDAMENTO: Agendamento confirmado para o dia ${dataAgendamento} ${turnoFmt}\n`;
+                let horario = d.periodo_agendamento || '';
+                if(horario === 'MANHA') horario = '08:00 às 12:00';
+                else if(horario === 'TARDE') horario = '13:00 às 18:00';
+                txt += `AGENDAMENTO: Agendamento confirmado para o dia ${dataAgendamento} ${horario}\n`;
             }
-            txt += `VENDEDOR: ${$('#script-vendedor-nome').text()}\n`;
-            txt += `⚠FATURA, SEGUNDA VIA OU DÚVIDAS\n`;
-            txt += `https://www.niointernet.com.br/\n`;
-            txt += `\nLembrete importante: Peça seu cliente para salvar o telefone 21 4040-1810 na sua agenda, isso evita pendências indevidas.\n`;
-            txt += `Para que sua instalação seja concluída favor salvar esse contato, Técnico Nio 21 4040-1810, para receber informações da Visita.`;
+            txt += `VENDEDOR: ${vendedorNome}\n`;
+            txt += `⚠FATURA, SEGUNDA VIA OU DÚVIDAS`;
 
             $('#aprovacao-mensagem').val(txt); 
             modalAprovacao.show();
@@ -4508,59 +4455,40 @@ async function iniciarBuscaPapOnline() {
         if (ref) enderecoCompleto += `, ${ref}`;
         navigator.clipboard.writeText(enderecoCompleto);
     }
-        let modalEditarVendedorObj = null;
-        function abrirModalEditarVendedor(vendaId, vendedorNome) {
-            if (!modalEditarVendedorObj) {
-                modalEditarVendedorObj = new bootstrap.Modal(document.getElementById('modal-editar-vendedor'));
+        let autoBuscarPapInterval = null;
+        function toggleAutoBuscarPap(ativo) {
+            localStorage.setItem('auto_buscar_pap_ativo', ativo ? '1' : '0');
+            if (ativo) {
+                if (!autoBuscarPapInterval) {
+                    autoBuscarPapInterval = setInterval(() => {
+                        const btn = document.getElementById('btn-sync-pap');
+                        if (btn && !btn.disabled) {
+                            iniciarBuscaPapOnline();
+                        }
+                    }, 5 * 60 * 1000);
+                }
+            } else {
+                if (autoBuscarPapInterval) {
+                    clearInterval(autoBuscarPapInterval);
+                    autoBuscarPapInterval = null;
+                }
             }
-            document.getElementById('edit-vendedor-venda-id').value = vendaId;
-            document.getElementById('edit-vendedor-atual').value = vendedorNome;
-            
-            const sel = document.getElementById('edit-vendedor-select');
-            if (sel.options.length <= 1) {
-                sel.innerHTML = '<option value="">Carregando...</option>';
-                apiFetch(`${API_BASE}/usuarios/?page_size=1000`)
-                    .then(data => {
-                        const lista = data.results || data;
-                        sel.innerHTML = '<option value="">Selecione...</option>';
-                        lista.forEach(u => {
-                            if (u.is_active) {
-                                sel.innerHTML += `<option value="${u.id}">${u.username}</option>`;
-                            }
-                        });
-                    })
-                    .catch(e => {
-                        console.error(e);
-                        sel.innerHTML = '<option value="">Erro ao carregar</option>';
-                    });
-            }
-            modalEditarVendedorObj.show();
         }
-
-        function salvarNovoVendedor() {
-            const vendaId = document.getElementById('edit-vendedor-venda-id').value;
-            const vendedorId = document.getElementById('edit-vendedor-select').value;
-            if (!vendedorId) {
-                alert('Selecione um vendedor.');
-                return;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnToggle = document.getElementById('toggle-auto-buscar-pap');
+            if (btnToggle) {
+                const ativo = localStorage.getItem('auto_buscar_pap_ativo') === '1';
+                btnToggle.checked = ativo;
+                if (ativo) {
+                    autoBuscarPapInterval = setInterval(() => {
+                        const btn = document.getElementById('btn-sync-pap');
+                        if (btn && !btn.disabled) {
+                            iniciarBuscaPapOnline();
+                        }
+                    }, 5 * 60 * 1000);
+                }
             }
-            $('#loadingOverlay').show();
-            apiFetch(`${API_BASE}/vendas/${vendaId}/`, {
-                method: 'PATCH',
-                body: JSON.stringify({ vendedor: parseInt(vendedorId) })
-            })
-            .then(() => {
-                alert('Vendedor atualizado com sucesso!');
-                modalEditarVendedorObj.hide();
-                carregarVendasPendentes(); // atualiza a lista
-            })
-            .catch(e => {
-                console.error(e);
-                alert('Erro ao atualizar vendedor: ' + mensagemErroAmigavel(e, 'Falha desconhecida'));
-            })
-            .finally(() => {
-                $('#loadingOverlay').hide();
-            });
-        }
+        });
     </script>
 {% endblock %}

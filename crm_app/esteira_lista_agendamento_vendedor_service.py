@@ -187,7 +187,6 @@ def consultar_vendas_do_turno(
     qs = (
         Venda.objects.filter(
             data_agendamento=data_ref,
-            periodo_agendamento=periodo,
             vendedor_id__isnull=False,
         )
         .select_related('cliente', 'vendedor', 'status_agendamento')
@@ -213,9 +212,6 @@ def gerar_imagem_lista_agendamento_b64(
 
     from crm_app.whatsapp_service import WhatsAppService
 
-    turno_txt = 'MANHÃ' if periodo == SLOT_MANHA else 'TARDE'
-    data_turno = f'{data_ref.strftime("%d/%m")} - {turno_txt}'
-
     linhas: list[dict[str, str]] = []
     for v in vendas:
         nome = ''
@@ -225,10 +221,15 @@ def gerar_imagem_lista_agendamento_b64(
         status_nome = ''
         if getattr(v, 'status_agendamento', None):
             status_nome = (v.status_agendamento.nome or '').strip()
+        
+        v_turno = getattr(v, 'periodo_agendamento', '') or ''
+        v_turno_txt = 'MANHÃ' if v_turno == 'MANHA' else ('TARDE' if v_turno == 'TARDE' else v_turno)
+        row_data_turno = f'{data_ref.strftime("%d/%m")} - {v_turno_txt}' if v_turno_txt else data_ref.strftime("%d/%m")
+
         linhas.append({
             'cliente': (nome or '—').upper(),
             'pedido': os_txt.upper(),
-            'data_turno': data_turno,
+            'data_turno': row_data_turno.upper(),
             'status': (status_nome or '—').upper(),
         })
 
@@ -415,9 +416,8 @@ def enviar_lista_para_vendedor(
         resultado['detail'] = 'Falha ao gerar imagem.'
         return resultado
 
-    turno_txt = 'manhã' if periodo == SLOT_MANHA else 'tarde'
     caption = (
-        f'Seus agendamentos de *{data_ref.strftime("%d/%m/%Y")}* ({turno_txt}) — '
+        f'Seus agendamentos de *{data_ref.strftime("%d/%m/%Y")}* — '
         f'{len(vendas)} pedido(s).'
     )
     if not _enviar_imagem(telefone, img_b64, caption=caption):
@@ -441,7 +441,7 @@ def enviar_lista_para_vendedor(
         telefone,
         msg_botoes,
         montar_botoes_iniciais(envio.id),
-        footer=f'{data_ref.strftime("%d/%m")} {turno_txt}',
+        footer=f'{data_ref.strftime("%d/%m")} - Agenda diária',
     )
     if not ok_btn:
         resultado['detail'] = 'Imagem enviada, mas falha nos botões.'
@@ -486,8 +486,6 @@ def enviar_lista_para_vendedor(
 def processar_disparo_lista_agendamento(periodo: str) -> dict[str, Any]:
     """Job do scheduler: agrupa por vendedor e dispara."""
     periodo = (periodo or '').upper()
-    if periodo not in (SLOT_MANHA, SLOT_TARDE):
-        return {'ok': False, 'detail': 'Período inválido.', 'enviados': 0}
 
     data_ref = timezone.localdate()
     vendas = list(consultar_vendas_do_turno(data_ref=data_ref, periodo=periodo))

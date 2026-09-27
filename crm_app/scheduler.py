@@ -158,13 +158,13 @@ def aplicar_faltas_presenca_12h():
         logger.error("❌ Erro na falta automática presença 12h: %s", e)
 
 
-def lista_agendamento_vendedor_manha():
+def lista_agendamento_vendedor_diario():
     try:
         from crm_app.esteira_lista_agendamento_vendedor_service import (
             processar_disparo_lista_agendamento,
-            SLOT_MANHA,
+            'DIARIO',
         )
-        resultado = processar_disparo_lista_agendamento(SLOT_MANHA)
+        resultado = processar_disparo_lista_agendamento('DIARIO')
         logger.info("[ListaAgendamento] Manhã: %s", resultado)
     except Exception as e:
         logger.error("❌ Erro lista agendamento vendedor (manhã): %s", e)
@@ -172,18 +172,6 @@ def lista_agendamento_vendedor_manha():
         logger.error(traceback.format_exc())
 
 
-def lista_agendamento_vendedor_tarde():
-    try:
-        from crm_app.esteira_lista_agendamento_vendedor_service import (
-            processar_disparo_lista_agendamento,
-            SLOT_TARDE,
-        )
-        resultado = processar_disparo_lista_agendamento(SLOT_TARDE)
-        logger.info("[ListaAgendamento] Tarde: %s", resultado)
-    except Exception as e:
-        logger.error("❌ Erro lista agendamento vendedor (tarde): %s", e)
-        import traceback
-        logger.error(traceback.format_exc())
 
 
 def processar_relatorio_esteira_gc_agendado():
@@ -364,9 +352,9 @@ def _registrar_jobs(scheduler):
         max_instances=1,
     )
     scheduler.add_job(
-        _wrap_scheduler_job(lista_agendamento_vendedor_manha),
+        _wrap_scheduler_job(lista_agendamento_vendedor_diario),
         trigger=CronTrigger.from_crontab('30 7 * * *', timezone=tz_sp),
-        id='lista_agendamento_vendedor_manha',
+        id='lista_agendamento_vendedor_diario',
         name='Lista agendamentos vendedor — manhã (07:30)',
         replace_existing=True,
         max_instances=1,

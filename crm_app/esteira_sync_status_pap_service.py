@@ -102,7 +102,7 @@ def _hora_fim() -> int:
 
 
 def _max_por_hora() -> int:
-    return int(_cfg('SYNC_ESTEIRA_MAX_POR_HORA', 40))
+    return int(_cfg('SYNC_ESTEIRA_MAX_POR_HORA', 1000))
 
 
 def _dentro_janela_horario(agora=None) -> bool:
@@ -198,14 +198,8 @@ def _cpf_cnpj_venda(venda) -> str:
 
 
 def _pausa_aleatoria_entre_pedidos():
-    if random.random() < 0.45:
-        lo = int(_cfg('SYNC_ESTEIRA_INTERVALO_CURTO_MIN_SEG', 120))
-        hi = int(_cfg('SYNC_ESTEIRA_INTERVALO_CURTO_MAX_SEG', 300))
-    else:
-        lo = int(_cfg('SYNC_ESTEIRA_INTERVALO_LONGO_MIN_SEG', 300))
-        hi = int(_cfg('SYNC_ESTEIRA_INTERVALO_LONGO_MAX_SEG', 600))
-    seg = random.randint(lo, max(lo + 1, hi))
-    logger.info('[SYNC ESTEIRA] Pausa %ss antes do próximo pedido.', seg)
+    seg = random.randint(15, 30)
+    logger.info('[SYNC ESTEIRA] Pausa %ss antes do proximo pedido.', seg)
     time.sleep(seg)
 
 
@@ -345,72 +339,39 @@ def _msg_indica_sessao_invalida(msg: str) -> bool:
 
 
 class _SessaoPapSyncHolder:
-    """
-    Reutiliza o mesmo browser/BO entre pedidos do sync.
-
-    Antes cada venda fazia login completo no PAP (N logins = timeouts em Filtros / V.tal).
-    """
-
     def __init__(self) -> None:
+        from usuarios.models import CredencialRoboPAP
+        robo = CredencialRoboPAP.objects.filter(funcao='CONSULTA_ESTEIRA', ativo=True).first()
+        self.matricula = robo.matricula if robo else ''
+        self.senha = robo.senha if robo else ''
         self.automacao = None
-        self.bo_usuario = None
         self.consultas = 0
-
-    @property
-    def max_consultas_por_sessao(self) -> int:
-        return int(_cfg('SYNC_ESTEIRA_MAX_CONSULTAS_POR_SESSAO', 20))
+        self.telefone_job = TELEFONE_JOB
 
     def fechar(self) -> None:
-        from crm_app.pool_bo_pap import liberar_bo
-
         if self.automacao is not None:
             try:
                 self.automacao._fechar_sessao()
             except Exception:
                 pass
             self.automacao = None
-        if self.bo_usuario is not None:
-            bo_id = self.bo_usuario.id
-            try:
-                _run_django_sync(lambda: liberar_bo(bo_id, TELEFONE_JOB))
-            except Exception as e:
-                logger.warning('[SYNC ESTEIRA] Falha ao liberar BO %s: %s', bo_id, e)
-            self.bo_usuario = None
         self.consultas = 0
 
-    def _garantir_sessao(self, contador_uso_bo: Dict[int, int]) -> Tuple[bool, str]:
+    def _garantir_sessao(self, contador_uso_bo=None) -> tuple[bool, str]:
         from crm_app.services_pap_nio import PAPNioAutomation
-
-        if (
-            self.automacao is not None
-            and self.bo_usuario is not None
-            and getattr(self.automacao, 'logado', False)
-            and self.consultas < self.max_consultas_por_sessao
-        ):
+        if self.automacao is not None and getattr(self.automacao, 'logado', False):
             return True, ''
 
         self.fechar()
-
-        # ORM em thread limpa: após a 1ª consulta Playwright este thread fica "async".
-        bo_usuario, msg_erro = _aguardar_login_bo_safe(
-            contador_uso_bo,
-            timeout_seg=900,
-            intervalo_seg=45,
-        )
-        if not bo_usuario:
-            return False, msg_erro or 'login_indisponivel'
-
-        contador_uso_bo[bo_usuario.id] = contador_uso_bo.get(bo_usuario.id, 0) + 1
         headless = getattr(settings, 'PAP_HEADLESS', True)
         capture_screenshots = getattr(settings, 'PAP_CAPTURE_SCREENSHOTS', False)
-        optimize_fast = getattr(settings, 'PAP_STATUS_FAST_MODE', True)
         automacao = PAPNioAutomation(
-            matricula_pap=bo_usuario.matricula_pap,
-            senha_pap=bo_usuario.senha_pap,
+            matricula_pap=self.matricula,
+            senha_pap=self.senha,
             vendedor_nome='Sync-Esteira',
             headless=headless,
             capture_screenshots=capture_screenshots,
-            optimize_for_credit=optimize_fast,
+            optimize_for_credit=True,
         )
         sucesso, msg = automacao.iniciar_sessao()
         if not sucesso:
@@ -418,93 +379,42 @@ class _SessaoPapSyncHolder:
                 automacao._fechar_sessao()
             except Exception:
                 pass
-            from crm_app.pool_bo_pap import liberar_bo
-
-            _run_django_sync(lambda: liberar_bo(bo_usuario.id, TELEFONE_JOB))
-            return False, msg
+            return False, msg or 'Falha ao logar no PAP.'
 
         self.automacao = automacao
-        self.bo_usuario = bo_usuario
         self.consultas = 0
-        logger.info(
-            '[SYNC ESTEIRA] Sessão PAP aberta (BO=%s, máx=%s consultas).',
-            getattr(bo_usuario, 'username', bo_usuario.id),
-            self.max_consultas_por_sessao,
-        )
+        logger.info('[SYNC ESTEIRA] Sessao PAP aberta (matricula=%s).', self.matricula)
         return True, ''
 
-    def consultar(
-        self,
-        venda,
-        *,
-        contador_uso_bo: Dict[int, int],
-    ) -> Tuple[bool, str, list, Optional[str]]:
-        from crm_app.pool_bo_pap import (
-            TIPO_AUTOMACAO_STATUS,
-            atualizar_historico_consulta_pap_resultado,
-        )
+    def consultar(self, venda, *, contador_uso_bo=None) -> tuple[bool, str, list, str]:
         from crm_app.services_pap_nio import PAPNioAutomation
         from crm_app.utils import obter_os_prioridade_crm_por_cpf
 
         cpf = _cpf_cnpj_venda(venda)
         if len(cpf) not in (11, 14):
-            return False, 'sem_cpf', [], None
+            return False, 'sem_cpf', [], ''
 
         os_num = (venda.ordem_servico or '').strip()
-        os_prioridade = obter_os_prioridade_crm_por_cpf(cpf)
+        os_prioridade = _run_django_sync(lambda: obter_os_prioridade_crm_por_cpf(cpf), timeout_seconds=60)
 
-        ok_sessao, msg_sessao = self._garantir_sessao(contador_uso_bo)
+        ok_sessao, msg_sessao = self._garantir_sessao()
         if not ok_sessao:
-            return False, msg_sessao, [], None
+            return False, msg_sessao, [], ''
 
-        bo_usuario = self.bo_usuario
-        automacao = self.automacao
-        tempo_inicio = time.time()
         try:
-            sucesso, msg, detalhes, _ = automacao.consulta_os_por_cpf_com_resultado(
-                cpf,
-                numero_os_filtro=os_num,
-                os_prioridade_crm=os_prioridade,
+            sucesso, msg, detalhes, _ = self.automacao.consulta_os_por_cpf_com_resultado(
+                cpf, numero_os_filtro=os_num, os_prioridade_crm=os_prioridade
             )
-            tempo = round(time.time() - tempo_inicio, 1)
             self.consultas += 1
-            _run_django_sync(
-                lambda: atualizar_historico_consulta_pap_resultado(
-                    vendedor_telefone=TELEFONE_JOB,
-                    bo_usuario=bo_usuario,
-                    tipo_automacao=TIPO_AUTOMACAO_STATUS,
-                    sucesso=sucesso,
-                    mensagem_resultado=f'{msg} ({tempo}s)',
-                )
-            )
             if not sucesso and _msg_indica_sessao_invalida(msg):
-                logger.warning(
-                    '[SYNC ESTEIRA] Sessão invalidada após venda #%s: %s',
-                    venda.id,
-                    (msg or '')[:160],
-                )
+                logger.warning('[SYNC ESTEIRA] Sessao invalidada apos venda #%s: %s', venda.id, (msg or '')[:160])
                 self.fechar()
-            elif self.consultas >= self.max_consultas_por_sessao:
-                logger.info(
-                    '[SYNC ESTEIRA] Reciclando sessão após %s consultas.',
-                    self.consultas,
-                )
-                self.fechar()
-            return sucesso, msg, detalhes or [], None
+            return sucesso, msg, detalhes or [], ''
         except Exception as e:
             logger.exception('[SYNC ESTEIRA] Erro PAP venda #%s: %s', venda.id, e)
             err_msg = PAPNioAutomation._mensagem_erro_playwright(e)
-            _run_django_sync(
-                lambda: atualizar_historico_consulta_pap_resultado(
-                    vendedor_telefone=TELEFONE_JOB,
-                    bo_usuario=bo_usuario,
-                    tipo_automacao=TIPO_AUTOMACAO_STATUS,
-                    sucesso=False,
-                    mensagem_resultado=err_msg,
-                )
-            )
             self.fechar()
-            return False, err_msg, [], None
+            return False, err_msg, [], '' , None
 
 
 def _consultar_pap_pedido(
