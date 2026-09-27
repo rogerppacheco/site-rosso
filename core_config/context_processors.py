@@ -15,7 +15,7 @@ def site_branding(request: HttpRequest) -> dict[str, Any]:
     brand = getattr(settings, "SITE_BRAND_NAME", "Futura Telecom")
     brand_parts = brand.split(None, 1)
     return {
-        "SITE_BRAND_NAME": brand,`n        "SITE_TEXT_LOGO": getattr(settings, "SITE_TEXT_LOGO", False),
+        "SITE_BRAND_NAME": brand,
         "SITE_BRAND_LINE_1": brand_parts[0] if brand_parts else brand,
         "SITE_BRAND_LINE_2": brand_parts[1] if len(brand_parts) > 1 else "",
         "SITE_PHONE_DISPLAY": phone_display,

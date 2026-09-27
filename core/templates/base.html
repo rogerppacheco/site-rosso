@@ -2,11 +2,17 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    {# Anti-flicker: PRIMEIRO no head ‘«ˆ aplica tema antes de CSS/paint #}
+    {# Anti-flicker: PRIMEIRO no head ‚Äî aplica tema antes de CSS/paint #}
     <script>
         (function () {
             try {
-                var STORAGE_KEY = 'record-pap-theme';
+                var STORAGE_KEY = 'rosso-theme';
+                if (!localStorage.getItem(STORAGE_KEY)) {
+                    var legacy = localStorage.getItem('record-pap-theme');
+                    if (legacy === 'dark' || legacy === 'light') {
+                        localStorage.setItem(STORAGE_KEY, legacy);
+                    }
+                }
                 var stored = localStorage.getItem(STORAGE_KEY);
                 var theme = (stored === 'dark' || stored === 'light')
                     ? stored
@@ -27,8 +33,9 @@
     <meta name="color-scheme" content="light dark">
     <title>{% block title %}{{ SITE_BRAND }}{% endblock %}</title>
 
-    <link rel="shortcut icon" href="{% static 'logo.png' %}" type="image/x-icon">
-    <link rel="icon" type="image/png" href="{% static 'logo.png' %}">
+    <link rel="icon" href="{% static 'favicon.svg' %}?v=rosso-1" type="image/svg+xml">
+    <link rel="shortcut icon" href="{% static 'favicon.svg' %}?v=rosso-1" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="{% static 'favicon.svg' %}?v=rosso-1">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,7 +44,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{% static 'css/custom_styles.css' %}?v=17.2">
-    <link rel="stylesheet" href="{% static 'css/premium_theme.css' %}?v=2.1">
 
     {% block extra_head %}{% endblock %}
     {% block extra_css %}{% endblock %}
@@ -54,15 +60,15 @@
     {% block site_header %}
     <header class="main-header">
         <div class="header-container">
-            <a href="{% block brand_url %}/{% endblock %}" class="brand-link" aria-label="{{ SITE_BRAND }} - In+°cio">
+            <a href="{% block brand_url %}/{% endblock %}" class="brand-link" aria-label="{{ SITE_BRAND }} - In√≠cio">
                 {% include "partials/brand_mark.html" %}
             </a>
 
-            <nav class="main-nav" id="main-nav" aria-label="Navega+∫+˙o principal">
+            <nav class="main-nav" id="main-nav" aria-label="Navega√ß√£o principal">
                 <ul>
                     {% block header_nav %}
                     <li>
-                        <a href="/area-interna/" class="nav-button">+¸rea Interna</a>
+                        <a href="/area-interna/" class="nav-button">√Årea Interna</a>
                     </li>
                     {% endblock %}
                 </ul>
@@ -93,11 +99,10 @@
 
     {% block footer %}{% endblock %}
 
-    <script src="{% static 'js/theme-toggle.js' %}?v=1.6"></script>
+    <script src="{% static 'js/theme-toggle.js' %}?v=1.7"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{% static 'js/menu.js' %}?v=5.1"></script>
 
     {% block extra_js %}{% endblock %}
 </body>
 </html>
-
