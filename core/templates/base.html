@@ -19,7 +19,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ SITE_BRAND_NAME|default:"SYSR" }}{% endblock %}</title>
 
-    <link rel="shortcut icon" href="{% static 'logo.png' %}" type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+    <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
 
     <!-- Premium Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,17 +43,17 @@
 <body {% block body_attrs %}{% endblock %}>
 
     {% block site_header %}
-    <header class="premium-header">
+    <header class="main-header premium-header">
         <div class="header-container">
             <a href="{% block brand_url %}/{% endblock %}" class="brand-link">
                 {% if not SITE_TEXT_LOGO %}<img src="{% static 'logo.png' %}" alt="Logo" width="48" height="48">{% endif %}
                 <span class="brand-wordmark">
-                    <span class="brand-line-1">{{ SITE_BRAND_LINE_1|default:"SYSR" }}</span>
+                    <span class="brand-line-1">{% if SITE_BRAND_LINE_1 %}{{ SITE_BRAND_LINE_1 }}{% elif SITE_BRAND_NAME %}{{ SITE_BRAND_NAME }}{% elif SITE_BRAND %}{{ SITE_BRAND }}{% else %}SYSR{% endif %}</span>
                     {% if SITE_BRAND_LINE_2 %}<span class="brand-line-2">{{ SITE_BRAND_LINE_2 }}</span>{% endif %}
                 </span>
             </a>
 
-            <nav class="premium-nav d-none d-md-block">
+            <nav class="main-nav" id="main-nav">
                 <ul>
                     {% block header_nav %}
                     <li><a href="/area-interna/" class="nav-button">Área Interna</a></li>
