@@ -802,7 +802,7 @@ def _run_orm_returning(callable, timeout_seconds: int = 60):
     return result[0]
 
 
-def _executar_analise_credito_background(telefone: str, usuario_id: int, documento: str, cpf_representante: str = None):
+def _executar_analise_credito_background_impl(telefone: str, usuario_id: int, documento: str, cpf_representante: str = None):
     """
     Thread: executa análise de crédito no PAP (login BO, viabilidade fixa, etapa3 CPF, etapa4 random).
     Envia resultado via WhatsApp e salva em AnaliseCreditoHistorico.
@@ -1457,6 +1457,20 @@ def _resetar_sessao_credito(telefone: str):
         s.save()
     except Exception:
         pass
+
+
+def _executar_analise_credito_background(telefone: str, usuario_id: int, documento: str, cpf_representante: str = None):
+    try:
+        _executar_analise_credito_background_impl(telefone, usuario_id, documento, cpf_representante)
+    except Exception as e:
+        logger.exception("[CRÉDITO] Erro não tratado na thread de análise: %s", e)
+        try:
+            from crm_app.whatsapp_service import WhatsAppService
+            msg_erro = f"❌ Ocorreu um erro interno ao consultar o crédito: {e}\n\nDigite *CRÉDITO* para tentar novamente."
+            WhatsAppService().enviar_mensagem_texto(telefone, msg_erro)
+        except Exception as e2:
+            logger.error("[CRÉDITO] Falha ao enviar erro ao usuário: %s", e2)
+        _run_django_sync(lambda: _resetar_sessao_credito(telefone), timeout_seconds=10)
 
 
 # =============================================================================

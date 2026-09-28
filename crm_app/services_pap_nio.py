@@ -2931,9 +2931,10 @@ class PAPNioAutomation:
         - Status agendamento: valor ao lado do rótulo "Status agendamento"
         - Agendamento: valor ao lado do rótulo "Agendamento"
         - Pendência: valor ao lado do rótulo "Pendência" (ex.: "7029 - AGENDAMENTO DO PEDIDO")
+        - SA/BA: código SA-* ou BA-* no detalhe.
         Tira screenshot da tela de detalhe antes de voltar.
         Returns:
-            (status_agendamento, agendamento, pendencia, screenshot_path)
+            (status_agendamento, agendamento, pendencia, sa_ba_code, screenshot_path)
         """
         num = (numero_os or "").strip()
         num_sem_zero = num.lstrip("0") or num
@@ -2954,7 +2955,7 @@ class PAPNioAutomation:
                 link = self.page.locator(f'a.detalhar-link[href*="detalhe-os/{num_sem_zero}"]').first
             if link.count() == 0:
                 logger.warning("[PAP] Link Detalhar não encontrado para OS %s (href=%s)", num, href or "-")
-                return None, None, None, None
+                return None, None, None, None, None
             rapido = self.optimize_for_credit
             link.click(force=True, timeout=5000)
             if rapido:
