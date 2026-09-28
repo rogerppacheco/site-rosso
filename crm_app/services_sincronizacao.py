@@ -210,6 +210,30 @@ def sincronizar_pedido_pap_para_venda(pedido_id: int) -> dict:
 
         # Status inicial da Esteira/Tratamento
         status_tratamento = StatusCRM.objects.filter(nome="SEM TRATAMENTO", tipo="Tratamento").first()
+        status_esteira = None
+        
+        status_pap = dados_mapeados.get("status", "")
+        
+        if status_pap == "VENDA_NAO_CONFIRMADA":
+            # Pedidos não confirmados devem ser marcados como Desistência Cliente
+            st_desist = StatusCRM.objects.filter(nome__icontains="Desist", tipo="Tratamento").first()
+            if st_desist:
+                status_tratamento = st_desist
+                
+        elif status_pap == "PEDIDO_GERADO":
+            # Pedidos Gerados devem seguir para a esteira, com validação de O.S.
+            pode_seguir = True
+            os_val = dados_mapeados.get("os_instalacao") or ""
+            os_limpa = str(os_val).strip()
+            
+            # Se tiver OS, deve ter exatamente 8 caracteres para ir para a esteira
+            if os_limpa and len(os_limpa) != 8:
+                pode_seguir = False
+                
+            if pode_seguir:
+                st_esteira = StatusCRM.objects.filter(nome__icontains="Pedido Gerado", tipo="Esteira").first()
+                if st_esteira:
+                    status_esteira = st_esteira
 
         # Match de Plano (nome + velocidade + valor mensal) e Forma de Pagamento
         plano_obj = resolver_plano_pap(
@@ -278,6 +302,7 @@ def sincronizar_pedido_pap_para_venda(pedido_id: int) -> dict:
             valor_plano_pap=dados_mapeados.get("valor_mensal") or None,
             forma_pagamento=forma_pgto_obj,
             status_tratamento=status_tratamento,
+            status_esteira=status_esteira,
             observacoes=obs,
             cep=dados_mapeados.get("cep"),
             logradouro=dados_mapeados.get("logradouro"),
