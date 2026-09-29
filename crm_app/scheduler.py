@@ -162,7 +162,6 @@ def lista_agendamento_vendedor_diario():
     try:
         from crm_app.esteira_lista_agendamento_vendedor_service import (
             processar_disparo_lista_agendamento,
-            'DIARIO',
         )
         resultado = processar_disparo_lista_agendamento('DIARIO')
         logger.info("[ListaAgendamento] Manhã: %s", resultado)
