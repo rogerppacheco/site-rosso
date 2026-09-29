@@ -352,17 +352,9 @@ def _registrar_jobs(scheduler):
     )
     scheduler.add_job(
         _wrap_scheduler_job(lista_agendamento_vendedor_diario),
-        trigger=CronTrigger.from_crontab('30 7 * * *', timezone=tz_sp),
+        trigger=CronTrigger.from_crontab('0 8 * * *', timezone=tz_sp),
         id='lista_agendamento_vendedor_diario',
-        name='Lista agendamentos vendedor — manhã (07:30)',
-        replace_existing=True,
-        max_instances=1,
-    )
-    scheduler.add_job(
-        _wrap_scheduler_job(lista_agendamento_vendedor_tarde),
-        trigger=CronTrigger.from_crontab('30 12 * * *', timezone=tz_sp),
-        id='lista_agendamento_vendedor_tarde',
-        name='Lista agendamentos vendedor — tarde (12:30)',
+        name='Lista agendamentos vendedor — diário (08:00)',
         replace_existing=True,
         max_instances=1,
     )
