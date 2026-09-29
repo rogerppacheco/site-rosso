@@ -10437,7 +10437,6 @@ def processar_webhook_whatsapp(data, request=None):
                 resposta = "❌ CPF inválido. Digite o CPF completo (11 dígitos, apenas números):"
             else:
                 try:
-                    from django.conf import settings
                     from crm_app.services_nio import buscar_fatura_segunda_via_site
                     headless_conta = getattr(settings, 'PAP_HEADLESS', True)
                     invoices = buscar_fatura_segunda_via_site(
@@ -10490,7 +10489,6 @@ def processar_webhook_whatsapp(data, request=None):
                         return _enviar_resposta_e_retornar(resposta)
                     logger.info(f"[Webhook] Buscando TODAS as faturas para CPF: {cpf_limpo}")
                     try:
-                        from django.conf import settings
                         headless_fatura = getattr(settings, 'PAP_HEADLESS', True)  # False = ver navegador (igual Vender)
                         todas_invoices = []
                         offset = 0
