@@ -1970,12 +1970,23 @@ def _executar_consulta_status_online_background(
                 )
                 return
             if msg == "no_results" or not detalhes:
-                whatsapp.enviar_mensagem_texto(
-                    telefone,
+                legenda = (
                     "📡 *Status online (PAP)*\n\n"
                     "Não tem pedido com 30 dias para este CPF/CNPJ.\n\n"
-                    f"⏱ _{tempo_decorrido}s_",
+                    f"⏱ _{tempo_decorrido}s_"
                 )
+                enviado_imagem = False
+                if list_screenshot_path and os.path.isfile(list_screenshot_path):
+                    try:
+                        with open(list_screenshot_path, "rb") as f:
+                            import base64
+                            img_b64 = base64.b64encode(f.read()).decode("utf-8")
+                        if whatsapp.enviar_imagem_b64(telefone, img_b64, caption=legenda):
+                            enviado_imagem = True
+                    except Exception as e_img:
+                        logger.warning("[STATUS ONLINE] Erro ao enviar imagem sem resultado: %s", e_img)
+                if not enviado_imagem:
+                    whatsapp.enviar_mensagem_texto(telefone, legenda)
             else:
                 try:
                     sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes, os_filtro=os_filtro)

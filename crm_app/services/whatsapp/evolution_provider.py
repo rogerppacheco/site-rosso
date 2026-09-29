@@ -232,9 +232,11 @@ class EvolutionProvider(WhatsAppProvider):
         }
         resp = self._request("POST", path, payload, timeout=60)
         if isinstance(resp, dict) and resp.get("error"):
+            logger.error("[Evolution] Falha ao enviar imagem. Erro da API: %s", resp)
             return None
         if resp and self.resposta_indica_sucesso(resp if isinstance(resp, dict) else {}):
             return self._normalize_success(resp)
+        logger.error("[Evolution] Falha ao enviar imagem. Resposta nao indica sucesso: %s", resp)
         return None
 
     def enviar_pdf_url(

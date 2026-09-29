@@ -269,11 +269,14 @@ class ZapiProvider(WhatsAppProvider):
         payload = {"phone": telefone_limpo, "image": img_b64, "caption": caption or ""}
         resp = self._send_request(url, payload)
         if not resp or not isinstance(resp, dict):
+            logger.error("[Z-API] Falha ao enviar imagem. Resposta invalida: %s", resp)
             return None
         if resp.get("error"):
+            logger.error("[Z-API] Falha ao enviar imagem. Erro da API: %s", resp)
             return None
         if self.resposta_indica_sucesso(resp):
             return resp
+        logger.error("[Z-API] Falha ao enviar imagem. Nao indica sucesso: %s", resp)
         return None
 
     def enviar_pdf_url(
