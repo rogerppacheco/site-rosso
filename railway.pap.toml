@@ -4,7 +4,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile.pap"
 
 [deploy]
-startCommand = "celery -A core_config worker --beat --loglevel=info --concurrency=2"
+startCommand = "python manage.py run_pap_worker"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 

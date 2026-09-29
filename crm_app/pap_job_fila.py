@@ -69,16 +69,22 @@ def enfileirar_job_pap(
         prioridade=prioridade,
     )
     logger.info("[PAP_FILA] Job %s enfileirado tipo=%s telefone=%s", job.id, tipo, telefone)
-    
-    # [PROFISSIONALIZAÇÃO] Despacha o Job para o Redis (Celery) imediatamente
-    try:
-        from crm_app.tasks_celery import processar_job_pap_celery
-        processar_job_pap_celery.delay(job.id)
-        logger.info("[CELERY] Job %s enviado para o Redis.", job.id)
-    except Exception as e:
-        logger.error("[CELERY] Erro ao despachar job %s para o Redis: %s", job.id, e)
-        
+    if getattr(settings, "PAP_CELERY_DISPATCH", False):
+        transaction.on_commit(lambda: _despachar_celery(job.id))
     return job
+
+
+def _despachar_celery(job_id: int) -> None:
+    """Publica o job no Celery. Se falhar, o job segue pendente no PostgreSQL."""
+    try:
+        # Registra o app Celery configurado; sem ele o shared_task publica no broker padrão (localhost).
+        import core_config.celery  # noqa: F401
+        from crm_app.tasks_celery import processar_job_pap_celery
+
+        processar_job_pap_celery.delay(job_id)
+        logger.info("[CELERY] Job %s enviado para o Redis.", job_id)
+    except Exception:
+        logger.exception("[CELERY] Erro ao despachar job %s; segue pendente no PostgreSQL.", job_id)
 
 
 def reivindicar_proximo_job() -> PapJobFila | None:

@@ -750,6 +750,13 @@ PAP_JOB_STALE_PROCESSANDO_MINUTES = config('PAP_JOB_STALE_PROCESSANDO_MINUTES', 
 PAP_JOB_STALE_PENDENTE_MINUTES = config('PAP_JOB_STALE_PENDENTE_MINUTES', default=10, cast=int)
 # 0 = usa timeout por tipo (status=240s, credito=360s).
 PAP_JOB_TIMEOUT_SECONDS = config('PAP_JOB_TIMEOUT_SECONDS', default=0, cast=int)
+# Publica os jobs PAP também no Celery. Só ative quando o serviço PAP rodar um worker Celery;
+# com run_pap_worker a fila PostgreSQL já é consumida diretamente.
+PAP_CELERY_DISPATCH = config(
+    'PAP_CELERY_DISPATCH',
+    default=False,
+    cast=lambda v: str(v).lower() in ('true', '1', 'yes'),
+)
 
 # Sentry (tier gratuito — definir SENTRY_DSN no Railway)
 SENTRY_DSN = config('SENTRY_DSN', default='')
