@@ -7668,6 +7668,9 @@ def processar_webhook_whatsapp(data, request=None):
         telefone = data['text'].get('participant')
     if not telefone and isinstance(data.get('message'), dict):
         telefone = (data.get('message') or {}).get('participant')
+    if isinstance(telefone, str) and telefone.endswith('@broadcast'):
+        logger.info("[Webhook] Ignorando mensagem de status/broadcast do WhatsApp (%s)", telefone)
+        return {'status': 'ok', 'mensagem': 'Status/broadcast ignorado'}
     is_group = bool(data.get('isGroup') or (isinstance(telefone, str) and '-group' in telefone))
     participant_phone = data.get('participantPhone') or data.get('participant_phone')
     if not participant_phone and isinstance(data.get('text'), dict):
