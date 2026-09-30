@@ -1251,9 +1251,14 @@
                         <h2 class="h6 mb-1"><i class="bi bi-send-check"></i> Gestão de envios automáticos</h2>
                         <p class="small text-muted mb-0">Critérios iguais ao job das <strong>09:00</strong> (D−5 · D+5 · recorrente). Envia o volume completo do dia. Contador: <em>faltam / elegíveis</em>.</p>
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="carregarGestaoEnvios()">
-                        <i class="bi bi-arrow-clockwise"></i> Atualizar
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-secondary" id="btn-toggle-envios" onclick="toggleEnviosAtivos()">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="carregarGestaoEnvios()">
+                            <i class="bi bi-arrow-clockwise"></i> Atualizar
+                        </button>
+                    </div>
                 </div>
                 <div class="gestao-envios-kpis" id="gestao-kpis">
                     <div class="kpi-item"><div class="kpi-val" id="g-kpi-faltam">—</div><div class="kpi-lbl">Faltam enviar</div></div>
@@ -3299,6 +3304,44 @@
         } catch (_) { /* silencioso na toolbar */ }
     };
 
+    window.toggleEnviosAtivos = async function () {
+        const btn = document.getElementById('btn-toggle-envios');
+        if (!btn) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        try {
+            const r = await fetch(`${API}/api/qualidade/cobranca/envios/`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({ acao: 'toggle_envios_cliente_ativos' })
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || 'Falha ao alterar status dos envios');
+            atualizarBotaoEnvios(data.envios_cliente_ativos);
+            showToast('Sucesso', 'Status de envios alterado com sucesso!', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('Erro', e.message, 'danger');
+            carregarGestaoEnvios(); // reload original state
+        } finally {
+            btn.disabled = false;
+        }
+    };
+
+    function atualizarBotaoEnvios(ativos) {
+        const btn = document.getElementById('btn-toggle-envios');
+        if (!btn) return;
+        if (ativos) {
+            btn.className = 'btn btn-sm btn-success';
+            btn.innerHTML = '<i class="bi bi-toggle-on"></i> Envios ON';
+            btn.title = 'Clique para pausar os envios de cobrança';
+        } else {
+            btn.className = 'btn btn-sm btn-danger';
+            btn.innerHTML = '<i class="bi bi-toggle-off"></i> Envios OFF';
+            btn.title = 'Clique para reativar os envios de cobrança';
+        }
+    }
+
     window.carregarGestaoEnvios = async function () {
         const tbody = document.getElementById('tbody-gestao-envios');
         if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Carregando…</td></tr>';
@@ -3325,6 +3368,7 @@
             const data = await r.json();
             if (!r.ok) throw new Error(data.error || 'Falha ao carregar envios');
             if (data.preview) aplicarPreviewCobranca(data.preview);
+            if ('envios_cliente_ativos' in data) atualizarBotaoEnvios(data.envios_cliente_ativos);
             const resumo = data.resumo || {};
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
             set('g-kpi-ok', resumo.whatsapp_sucesso ?? '—');

@@ -3983,7 +3983,15 @@ def listar_gestao_envios_qualidade(
             ),
         })
 
+    try:
+        from crm_app.models import WhatsAppIntegracaoConfig
+        cfg = WhatsAppIntegracaoConfig.load()
+        envios_ativos = bool(getattr(cfg, 'envios_cliente_ativos', False))
+    except Exception:
+        envios_ativos = False
+
     return {
+        'envios_cliente_ativos': envios_ativos,
         'resumo': resumo,
         'itens': itens,
         'page': page,

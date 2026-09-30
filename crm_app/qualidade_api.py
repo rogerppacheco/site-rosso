@@ -675,6 +675,24 @@ class QualidadeGestaoEnviosView(APIView):
             logger.exception('Erro gestão envios Qualidade')
             return Response({'error': str(e)}, status=500)
 
+    def post(self, request):
+        bloqueio = _exige_acesso(request.user)
+        if bloqueio:
+            return bloqueio
+            
+        acao = request.data.get('acao')
+        if acao == 'toggle_envios_cliente_ativos':
+            try:
+                from crm_app.models import WhatsAppIntegracaoConfig
+                cfg = WhatsAppIntegracaoConfig.load()
+                cfg.envios_cliente_ativos = not cfg.envios_cliente_ativos
+                cfg.save()
+                return Response({'status': 'ok', 'envios_cliente_ativos': cfg.envios_cliente_ativos})
+            except Exception as e:
+                return Response({'error': str(e)}, status=500)
+                
+        return Response({'error': 'Ação inválida'}, status=400)
+
 
 class QualidadeEnviarAtrasadosView(APIView):
     """GET preview | POST dispara nio_fatura_reducao_sinal_v1 aos atrasados da aba Tratamento.
