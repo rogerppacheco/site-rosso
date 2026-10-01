@@ -112,6 +112,8 @@ def resolver_chave_gdp_plano(plano: Plano) -> tuple[int, int]:
 
 def desconto_cartao_legado_plano(plano: Plano) -> Decimal:
     """Desconto fixo no cartão quando não há preço GDP para o município."""
+    if plano.valor_cartao is not None:
+        return max(Decimal('0'), Decimal(str(plano.valor)) - Decimal(str(plano.valor_cartao)))
     velocidade, _ = resolver_chave_gdp_plano(plano)
     if velocidade in (800, 1000):
         return DESCONTO_CARTAO_800_1GB
@@ -268,7 +270,7 @@ def resolver_valor_plano_params(
     cod_ibge: str = '',
 ) -> dict[str, Any]:
     """Endpoint helper: resolve valor e retorna payload JSON-friendly."""
-    plano = Plano.objects.filter(id=plano_id, ativo=True).select_related('operadora').first()
+    plano = Plano.objects.filter(id=plano_id).select_related('operadora').first()
     if not plano:
         return {'encontrado': False, 'erro': 'Plano não encontrado'}
 

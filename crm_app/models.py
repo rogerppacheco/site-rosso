@@ -53,6 +53,35 @@ class Plano(models.Model):
             'O valor mensal do cadastro passa a valer, em vez do preço por município.'
         ),
     )
+    SEGMENTO_CHOICES = [
+        ('B2C', 'Residencial (B2C)'),
+        ('B2B', 'Empresarial (B2B)'),
+    ]
+    segmento = models.CharField(
+        max_length=3, choices=SEGMENTO_CHOICES, default='B2C', verbose_name='Segmento',
+    )
+    valor_cartao = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Valor mensal no cartão',
+        help_text='Preço no cartão de crédito. Se vazio, aplica o desconto padrão por velocidade.',
+    )
+    qtd_chips_moveis = models.PositiveSmallIntegerField(
+        default=0, verbose_name='Chips móveis inclusos',
+    )
+    franquia_movel_gb = models.PositiveSmallIntegerField(
+        default=0, verbose_name='Franquia por chip (GB)',
+    )
+    portfolio = models.CharField(
+        max_length=40,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='Portfólio',
+        help_text='Identificador do portfólio comercial (ex.: MVNO_2026).',
+    )
 
     def __str__(self): return f"{self.nome} - {self.operadora.nome}"
     class Meta:

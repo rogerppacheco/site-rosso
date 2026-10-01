@@ -49,7 +49,8 @@ class PlanoSerializer(serializers.ModelSerializer):
         model = Plano
         fields = [
             'id', 'nome', 'valor', 'operadora', 'operadora_nome', 'beneficios', 'ativo',
-            'comissao_base', 'gdp_velocidade_mbps', 'gdp_indice_oferta',
+            'comissao_base', 'gdp_velocidade_mbps', 'gdp_indice_oferta', 'ignorar_preco_gdp',
+            'segmento', 'valor_cartao', 'qtd_chips_moveis', 'franquia_movel_gb', 'portfolio',
             'recebimento_operadora_base', 'comissao_operadora_valor',
             'usa_comissao_cidade_especial', 'valor_pap_cidade_especial',
             'valor_cnpj_cidade_especial',
@@ -764,6 +765,8 @@ class VendaCreateSerializer(serializers.ModelSerializer):
 
         request = self.context.get('request')
         plano = data.get('plano')
+        if plano is not None and not plano.ativo:
+            raise serializers.ValidationError({'plano': 'Plano inativo. Selecione um plano do portfólio atual.'})
         # Via APP o plano é preenchido depois; Sem APP exige plano no cadastro.
         forma_entrada = str(data.get('forma_entrada') or 'APP').upper()
         if request:
@@ -825,6 +828,13 @@ class VendaUpdateSerializer(serializers.ModelSerializer):
         from crm_app.services.escopo_operadora import validar_plano_para_usuario
         request = self.context.get('request')
         plano = data.get('plano', getattr(self.instance, 'plano', None))
+        plano_novo = data.get('plano')
+        if (
+            plano_novo is not None
+            and not plano_novo.ativo
+            and plano_novo.pk != getattr(self.instance, 'plano_id', None)
+        ):
+            raise serializers.ValidationError({'plano': 'Plano inativo. Selecione um plano do portfólio atual.'})
         forma_entrada = str(
             data.get('forma_entrada', getattr(self.instance, 'forma_entrada', None)) or 'APP'
         ).upper()

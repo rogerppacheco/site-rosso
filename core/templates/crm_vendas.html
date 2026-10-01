@@ -2515,12 +2515,18 @@ input[type="text"]:not(#input-email), textarea { text-transform: uppercase; }
 
 
                 // Preenche selects somente após as opções estarem disponíveis
-                function preencherSelectQuandoPronto(selectId, valor) {
+                function preencherSelectQuandoPronto(selectId, valor, rotuloSeAusente) {
                     const tentativasMax = 20;
                     let tentativas = 0;
                     function tentar() {
                         const select = document.getElementById(selectId);
                         if (select && select.options.length > 1) {
+                            select.querySelectorAll('option[data-inativo="1"]').forEach(o => o.remove());
+                            if (valor && rotuloSeAusente && !Array.from(select.options).some(o => o.value == valor)) {
+                                const opt = new Option(rotuloSeAusente, valor);
+                                opt.dataset.inativo = '1';
+                                select.add(opt);
+                            }
                             select.value = valor || '';
                         } else if (tentativas < tentativasMax) {
                             tentativas++;
@@ -2529,7 +2535,11 @@ input[type="text"]:not(#input-email), textarea { text-transform: uppercase; }
                     }
                     tentar();
                 }
-                preencherSelectQuandoPronto('select-plano', venda.plano?.id || venda.plano || '');
+                preencherSelectQuandoPronto(
+                    'select-plano',
+                    venda.plano?.id || venda.plano || '',
+                    venda.plano?.nome ? `${venda.plano.nome} - R$${venda.plano.valor} (inativo)` : null,
+                );
                 preencherSelectQuandoPronto('select-pagamento', venda.forma_pagamento?.id || venda.forma_pagamento || '');
                 preencherSelectQuandoPronto('select-status-esteira', venda.status_esteira?.id || venda.status_esteira || '');
                 preencherSelectQuandoPronto('select-status-tratamento', venda.status_tratamento?.id || venda.status_tratamento || '');

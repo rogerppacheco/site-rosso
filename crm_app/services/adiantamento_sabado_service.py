@@ -415,9 +415,8 @@ def chave_comissao_venda(venda, cidades_especiais_cache=None) -> str | None:
     from crm_app.comissao_folha_service import plano_tipo_to_chave
     from crm_app.services.cnpj_mei_service import tipo_cliente_comissao
 
-    plano_nome = venda.plano.nome if getattr(venda, 'plano', None) else ''
     return plano_tipo_to_chave(
-        plano_nome,
+        getattr(venda, 'plano', None),
         tipo_cliente_comissao(venda),
         venda=venda,
         cidades_especiais_cache=cidades_especiais_cache,

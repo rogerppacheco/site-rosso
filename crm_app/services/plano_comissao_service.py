@@ -27,9 +27,11 @@ def _decimal_or_none(val: Any) -> Decimal | None:
 
 
 def inferir_banda_comissao(plano: Plano) -> str:
-    """Infere banda (500MB/700MB/1GB) pelo nome do plano; senão PERSONALIZADO."""
-    banda = _plano_nome_to_banda(plano.nome)
-    return banda or 'PERSONALIZADO'
+    """Infere banda pelo nome do plano (ou velocidade GDP); senão PERSONALIZADO."""
+    banda = _plano_nome_to_banda(plano)
+    if banda not in dict(PlanoValoresComissao.BANDA_CHOICES):
+        return 'PERSONALIZADO'
+    return banda
 
 
 def plano_comissao_diferenciada(plano: Plano | None) -> bool:

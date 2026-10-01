@@ -44,11 +44,23 @@ _CHAVE_PARA_LEGADO = {
 }
 
 
-# Nomes de plano (normalizado) -> banda para chave
-def _plano_nome_to_banda(nome):
-    if not nome:
+_BANDA_POR_VELOCIDADE_MBPS = {
+    400: '400MB',
+    500: '500MB',
+    600: '600MB',
+    700: '700MB',
+    800: '800MB',
+    900: '900MB',
+    1000: '1GB',
+}
+
+
+def _banda_por_nome(nome) -> str | None:
+    if not nome or not isinstance(nome, str):
         return None
-    n = (nome or '').upper().replace(' ', '')
+    n = nome.upper().replace(' ', '')
+    if '400' in n:
+        return '400MB'
     if '500' in n:
         return '500MB'
     if '600' in n:
@@ -57,21 +69,42 @@ def _plano_nome_to_banda(nome):
         return '700MB'
     if '800' in n:
         return '800MB'
+    if '900' in n:
+        return '900MB'
     if '1GB' in n or '1G' in n:
         return '1GB'
+    return None
+
+
+def _plano_nome_to_banda(plano_ou_nome):
+    """
+    Banda do plano (ex.: 600MB). Aceita o nome ou o objeto Plano.
+
+    Com Plano, o nome tem prioridade (preserva a classificação dos planos já
+    pagos) e `gdp_velocidade_mbps` cobre nomes sem velocidade reconhecível.
+    """
+    if plano_ou_nome is None or isinstance(plano_ou_nome, str):
+        return _banda_por_nome(plano_ou_nome)
+    banda = _banda_por_nome(getattr(plano_ou_nome, 'nome', None))
+    if banda:
+        return banda
+    velocidade = getattr(plano_ou_nome, 'gdp_velocidade_mbps', None)
+    if isinstance(velocidade, int):
+        return _BANDA_POR_VELOCIDADE_MBPS.get(velocidade)
     return None
 
 
 def _banda_legado_comissao(banda: str | None) -> str | None:
     """
     Normaliza banda para colunas legadas das faixas (500/700/1GB).
-    600MB e 800MB são planos de transição: herdam a tabela do degrau anterior.
+    400MB, 600MB, 800MB e 900MB não têm coluna própria: herdam a tabela do
+    degrau equivalente (400/600 → 500, 800/900 → 700).
     """
     if not banda:
         return None
-    if banda == '600MB':
+    if banda in ('400MB', '600MB'):
         return '500MB'
-    if banda == '800MB':
+    if banda in ('800MB', '900MB'):
         return '700MB'
     return banda
 
@@ -84,7 +117,7 @@ def chave_legado_lookup(chave: str | None) -> str | None:
 
 
 def plano_tipo_to_chave(
-    plano_nome,
+    plano_ou_nome,
     tipo_cliente,
     *,
     venda=None,
@@ -95,10 +128,10 @@ def plano_tipo_to_chave(
 
     - 600MB em cidade de oferta especial → 600MB_ESP_*
     - 600MB demais cidades → 600MB_*
-    - 800MB ainda agrega em 700MB_* (legado)
+    - 400MB agrega em 500MB_*; 800MB e 900MB agregam em 700MB_* (legado)
     - Demais bandas → chave própria
     """
-    banda_real = _plano_nome_to_banda(plano_nome)
+    banda_real = _plano_nome_to_banda(plano_ou_nome)
     if not banda_real:
         return None
     sufixo = 'PAP' if tipo_cliente == 'CPF' else 'CNPJ'
@@ -159,7 +192,7 @@ def estimar_comissao_instaladas_vendedor(
             continue
         tipo_cliente = tipo_cliente_comissao(venda)
         chave = plano_tipo_to_chave(
-            getattr(plano, 'nome', None),
+            plano,
             tipo_cliente,
             venda=venda,
             cidades_especiais_cache=cidades_cache,
@@ -619,9 +652,8 @@ def valor_comissao_linha_extrato(
         valor_pago_adiantamento_sabado_venda,
     )
 
-    plano_nome = venda.plano.nome if venda.plano else ''
     chave = plano_tipo_to_chave(
-        plano_nome,
+        venda.plano,
         tipo_cliente_comissao(venda),
         venda=venda,
         cidades_especiais_cache=cidades_especiais_cache,
@@ -1019,9 +1051,8 @@ def calcular_folha_mes(ano, mes, vendedor_id=None, use_effective_date_for_displa
 
         for v in vendas:
             tipo_cliente = tipo_cliente_comissao(v)
-            plano_nome = v.plano.nome if v.plano else ''
             chave = plano_tipo_to_chave(
-                plano_nome,
+                v.plano,
                 tipo_cliente,
                 venda=v,
                 cidades_especiais_cache=cidades_especiais_cache,
@@ -1226,9 +1257,8 @@ def calcular_folha_mes(ano, mes, vendedor_id=None, use_effective_date_for_displa
             from crm_app.services.cnpj_mei_service import tipo_cliente_comissao
 
             tipo_cliente = tipo_cliente_comissao(v)
-            plano_nome = v.plano.nome if v.plano else ''
             chave = plano_tipo_to_chave(
-                plano_nome,
+                v.plano,
                 tipo_cliente,
                 venda=v,
                 cidades_especiais_cache=cidades_especiais_cache,
@@ -1259,9 +1289,8 @@ def calcular_folha_mes(ano, mes, vendedor_id=None, use_effective_date_for_displa
             from crm_app.services.cnpj_mei_service import tipo_cliente_comissao
 
             tipo_cliente = tipo_cliente_comissao(v)
-            plano_nome = v.plano.nome if v.plano else ''
             chave = plano_tipo_to_chave(
-                plano_nome,
+                v.plano,
                 tipo_cliente,
                 venda=v,
                 cidades_especiais_cache=cidades_especiais_cache,
@@ -1413,7 +1442,7 @@ def calcular_folha_mes(ano, mes, vendedor_id=None, use_effective_date_for_displa
             eh_cnpj = len(doc_limpo) == 14
             plano_nome = venda.plano.nome if venda.plano else ''
             chave = plano_tipo_to_chave(
-                plano_nome,
+                venda.plano,
                 tipo_cliente_comissao(venda),
                 venda=venda,
                 cidades_especiais_cache=cidades_especiais_cache,
@@ -1855,7 +1884,7 @@ def estimar_comissao_instaladas(consultor, vendas, contexto: dict | None = None)
     for venda in vendas_list:
         tipo_cliente = tipo_cliente_comissao(venda)
         plano = getattr(venda, 'plano', None)
-        chave = plano_tipo_to_chave(plano.nome if plano else '', tipo_cliente)
+        chave = plano_tipo_to_chave(plano, tipo_cliente)
         valor = resolver_valor_comissao_venda(
             plano,
             tipo_cliente,

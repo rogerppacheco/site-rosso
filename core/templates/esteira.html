@@ -6127,15 +6127,19 @@ min-width: 100%;
             document.getElementById('campos-instalacao-modal').style.display = 'none';
             document.getElementById('campos-datas-agendamento').style.display = 'none';
             try {
-                const [v, pRes, sRes, fRes] = await Promise.all([ apiFetch(`/crm/vendas/${id}/`), apiFetch('/crm/planos/'), apiFetch('/crm/status/?tipo=Esteira'), apiFetch('/crm/formas-pagamento/') ]);
+                const v = await apiFetch(`/crm/vendas/${id}/`);
+                const planoAtualId = v.plano && typeof v.plano === 'object' ? v.plano.id : v.plano;
+                const formaAtualId = v.forma_pagamento && typeof v.forma_pagamento === 'object' ? v.forma_pagamento.id : v.forma_pagamento;
+                const urlPlanos = planoAtualId ? `/crm/planos/?incluir_id=${planoAtualId}` : '/crm/planos/';
+                const [pRes, sRes, fRes] = await Promise.all([ apiFetch(urlPlanos), apiFetch('/crm/status/?tipo=Esteira'), apiFetch('/crm/formas-pagamento/') ]);
                 const planos = Array.isArray(pRes) ? pRes : (pRes.results || []);
                 const statusLista = Array.isArray(sRes) ? sRes : (sRes.results || []);
                 const formas = Array.isArray(fRes) ? fRes : (fRes.results || []);
 
                 const statusId = v.status_esteira && (typeof v.status_esteira === 'object' ? v.status_esteira.id : v.status_esteira);
-                const pSel = document.getElementById('edit-plano'); pSel.innerHTML = ''; planos.forEach(p => pSel.innerHTML += `<option value="${p.id}" ${v.plano==p.id?'selected':''}>${p.nome}</option>`);
+                const pSel = document.getElementById('edit-plano'); pSel.innerHTML = '<option value="">Selecione...</option>'; planos.forEach(p => pSel.innerHTML += `<option value="${p.id}" ${planoAtualId==p.id?'selected':''}>${p.nome}${p.ativo === false ? ' (inativo)' : ''}</option>`);
                 const sSel = document.getElementById('edit-status-esteira'); sSel.innerHTML = ''; statusLista.forEach(s => sSel.innerHTML += `<option value="${s.id}" ${(statusId && (s.id==statusId || s.id==v.status_esteira))?'selected':''}>${s.nome}</option>`);
-                const pgSel = document.getElementById('edit-pagamento'); pgSel.innerHTML = ''; formas.forEach(f => pgSel.innerHTML += `<option value="${f.id}" ${v.forma_pagamento==f.id?'selected':''}>${f.nome}</option>`);
+                const pgSel = document.getElementById('edit-pagamento'); pgSel.innerHTML = '<option value="">Selecione...</option>'; formas.forEach(f => pgSel.innerHTML += `<option value="${f.id}" ${formaAtualId==f.id?'selected':''}>${f.nome}</option>`);
                 
                 setVal('edit-cliente-nome', v.cliente_nome_razao_social); setVal('edit-cliente-cpf', v.cliente_cpf_cnpj);
                 setVal('edit-ordem-servico', v.ordem_servico);
@@ -6195,6 +6199,8 @@ min-width: 100%;
                 estado: getVal('edit-estado'), ponto_referencia: getVal('edit-referencia'), observacoes: getVal('edit-observacoes'),
                 enviar_whatsapp: envioWhatsappAtivo
             };
+            if (!body.plano) delete body.plano;
+            if (!body.forma_pagamento) delete body.forma_pagamento;
             if (podeBloquearOsab) body.bloquear_atualizacao_status_osab = !!document.getElementById('edit-bloquear-osab')?.checked;
             const divAgend = document.getElementById('campos-datas-agendamento');
             if (divAgend && divAgend.style.display !== 'none') {

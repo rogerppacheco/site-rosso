@@ -840,9 +840,18 @@ class PlanoListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         from crm_app.services.escopo_operadora import filtrar_planos_por_operadora
 
-        queryset = Plano.objects.filter(ativo=True).select_related(
+        params = self.request.query_params
+        queryset = Plano.objects.select_related(
             'operadora', 'valores_comissao', 'comissao_operadora',
         )
+        if params.get('incluir_inativos') not in ('1', 'true'):
+            incluir_ids = [
+                int(i) for i in (params.get('incluir_id') or '').split(',') if i.strip().isdigit()
+            ]
+            filtro_ativo = Q(ativo=True)
+            if incluir_ids:
+                filtro_ativo |= Q(id__in=incluir_ids)
+            queryset = queryset.filter(filtro_ativo)
         queryset = filtrar_planos_por_operadora(queryset, self.request.user)
         operadora_id = self.request.query_params.get('operadora')
         if operadora_id:

@@ -517,6 +517,14 @@
                                 <div class="col-md-2"><label class="form-label fw-bold">Receb. operadora</label><input type="number" class="form-control" id="plano_receb_operadora" step="0.01" placeholder="0,00" title="Valor que a operadora paga à empresa"></div>
                                 <div class="col-md-2"><label class="form-label fw-bold">Vel. GDP (Mbps)</label><input type="number" class="form-control" id="plano_gdp_velocidade" min="0" placeholder="Auto" title="Velocidade na planilha GDP (500, 600, 800, 1000). Vazio = infere pelo nome."></div>
                                 <div class="col-md-1"><label class="form-label fw-bold">Índ.</label><input type="number" class="form-control" id="plano_gdp_indice" min="0" max="1" value="0" title="0 = 1º plano da velocidade; 1 = 2º (ex.: 1GB premium)"></div>
+                                <div class="col-md-2"><label class="form-label fw-bold">Segmento</label><select id="plano_segmento" class="form-select"><option value="B2C">Residencial (B2C)</option><option value="B2B">Empresarial (B2B)</option></select></div>
+                                <div class="col-md-2"><label class="form-label fw-bold">Valor no cartão</label><input type="number" class="form-control" id="plano_valor_cartao" step="0.01" placeholder="Auto" title="Preço no cartão de crédito. Vazio = desconto padrão por velocidade."></div>
+                                <div class="col-md-2"><label class="form-label fw-bold">Chips móveis</label><input type="number" class="form-control" id="plano_qtd_chips" min="0" value="0"></div>
+                                <div class="col-md-2"><label class="form-label fw-bold">GB por chip</label><input type="number" class="form-control" id="plano_franquia_gb" min="0" value="0"></div>
+                                <div class="col-md-2"><label class="form-label fw-bold">Status</label><select id="plano_ativo" class="form-select"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
+                                <div class="col-md-2 d-flex align-items-end"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="plano_ignorar_gdp"><label class="form-check-label" for="plano_ignorar_gdp" title="Usa o valor do cadastro em vez da planilha GDP por município">Preço fixo (sem GDP)</label></div></div>
+                                <div class="col-md-6"><label class="form-label fw-bold">Benefícios</label><input type="text" class="form-control" id="plano_beneficios" placeholder="Ex.: Roteador Wi-Fi 6; WhatsApp ilimitado; Maquininha PagBank; McAfee"></div>
+                                <div class="col-md-3"><label class="form-label fw-bold">Portfólio</label><input type="text" class="form-control" id="plano_portfolio" maxlength="40" placeholder="Ex.: MVNO_2026"></div>
                                 <div class="col-12"><hr class="my-1"><h6 class="text-muted mb-0">Comissão em cidade de oferta especial</h6></div>
                                 <div class="col-md-4 d-flex align-items-end">
                                     <div class="form-check mb-2">
@@ -527,9 +535,10 @@
                                 <div class="col-md-2"><label class="form-label fw-bold">PAP especial</label><input type="number" class="form-control" id="plano_valor_pap_especial" step="0.01" placeholder="105,00" title="Ex.: R$105 no 600Mb cidade especial"></div>
                                 <div class="col-md-2"><label class="form-label fw-bold">CNPJ especial</label><input type="number" class="form-control" id="plano_valor_cnpj_especial" step="0.01" placeholder="105,00"></div>
                                 <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100">Salvar plano</button></div>
-                                <div class="col-12"><small class="text-muted">Portfólio atual Nio: <strong>500 / 600 / 800 / 1GB</strong>. Planos inativos (ex.: 700MB) somem da lista, mas permanecem no histórico. Ao salvar, o plano ganha <strong>colunas próprias</strong> em Comissionamento → Regras por Faixa. A lista de municípios fica em <strong>Comissionamento → Cidades Oferta Especial</strong>.</small></div>
+                                <div class="col-12"><small class="text-muted">Planos inativos deixam de aparecer em novas vendas, mas permanecem no histórico e podem ser reativados. Ao salvar, o plano ganha <strong>colunas próprias</strong> em Comissionamento → Regras por Faixa. A lista de municípios fica em <strong>Comissionamento → Cidades Oferta Especial</strong>.</small></div>
                             </form>
-                            <table class="table table-hover align-middle"><thead class="table-light"><tr><th>Nome</th><th>Operadora</th><th>Valor</th><th>Ações</th></tr></thead><tbody id="lista-planos"></tbody></table>
+                            <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="planos-mostrar-inativos" onchange="carregarPlanos()"><label class="form-check-label" for="planos-mostrar-inativos">Mostrar planos inativos</label></div>
+                            <table class="table table-hover align-middle"><thead class="table-light"><tr><th>Nome</th><th>Segmento</th><th>Operadora</th><th>Valor</th><th>Cartão</th><th>Móvel</th><th>Status</th><th>Ações</th></tr></thead><tbody id="lista-planos"></tbody></table>
                         </div>
                         <div id="formasPagamento" class="tab-content" style="display:none;"><div class="input-group mb-3"><input type="text" id="nova-forma-pagamento-nome" placeholder="Nova Forma (Ex: PIX)" class="form-control"><button id="btn-salvar-forma-pagamento" class="btn btn-primary">Adicionar</button></div><ul id="lista-formas-pagamento" class="list-group"></ul></div>
                         <div id="status" class="tab-content" style="display:none;">
@@ -3172,18 +3181,28 @@
 
     async function carregarPlanos() {
         try {
-            const res = await apiFetch('/crm/planos/?page_size=500');
+            const mostrarInativos = !!document.getElementById('planos-mostrar-inativos')?.checked;
+            const res = await apiFetch(`/crm/planos/?page_size=500${mostrarInativos ? '&incluir_inativos=1' : ''}`);
             const lista = Array.isArray(res) ? res : (res?.results || []);
+            lista.sort((a, b) => (b.ativo - a.ativo) || (a.nome || '').localeCompare(b.nome || ''));
             const tbody = document.getElementById('lista-planos'); tbody.innerHTML = '';
             lista.forEach(p => {
-                tbody.innerHTML += `<tr><td>${p.nome}</td><td>${p.operadora_nome || '-'}</td><td>${fmtMoeda(p.valor)}</td><td><button class="btn btn-sm btn-editar me-1" onclick='editarPlano(${JSON.stringify(p)})'>✏️</button><button class="btn btn-sm btn-excluir" onclick="excluirPlano(${p.id})">🗑️</button></td></tr>`;
+                const movel = p.qtd_chips_moveis ? `${p.qtd_chips_moveis} × ${p.franquia_movel_gb} GB` : '-';
+                const status = p.ativo
+                    ? '<span class="badge bg-success">Ativo</span>'
+                    : '<span class="badge bg-secondary">Inativo</span>';
+                const acaoStatus = p.ativo
+                    ? `<button class="btn btn-sm btn-excluir" title="Inativar" onclick="excluirPlano(${p.id})">🗑️</button>`
+                    : `<button class="btn btn-sm btn-outline-success" title="Reativar" onclick="reativarPlano(${p.id})">↺</button>`;
+                tbody.innerHTML += `<tr class="${p.ativo ? '' : 'text-muted'}"><td>${p.nome}${p.portfolio ? ` <span class="badge bg-light text-dark border">${p.portfolio}</span>` : ''}</td><td>${p.segmento || 'B2C'}</td><td>${p.operadora_nome || '-'}</td><td>${fmtMoeda(p.valor)}</td><td>${p.valor_cartao != null ? fmtMoeda(p.valor_cartao) : '-'}</td><td>${movel}</td><td>${status}</td><td><button class="btn btn-sm btn-editar me-1" onclick='editarPlano(${JSON.stringify(p).replace(/'/g, '&#39;')})'>✏️</button>${acaoStatus}</td></tr>`;
             });
         } catch (e) {
             console.error('carregarPlanos:', e);
             const tbody = document.getElementById('lista-planos');
-            if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center">Erro ao carregar planos: ${e.message || e}</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center">Erro ao carregar planos: ${e.message || e}</td></tr>`;
         }
     }
+    window.carregarPlanos = carregarPlanos;
     var formPlano = document.getElementById('form-plano');
     if (formPlano) formPlano.onsubmit = async(e) => {
         e.preventDefault();
@@ -3197,7 +3216,14 @@
             nome: document.getElementById('plano_nome').value.trim(),
             valor: document.getElementById('plano_valor').value,
             operadora: operadoraId,
-            ativo: true,
+            ativo: document.getElementById('plano_ativo').value === '1',
+            segmento: document.getElementById('plano_segmento').value || 'B2C',
+            valor_cartao: document.getElementById('plano_valor_cartao').value !== '' ? document.getElementById('plano_valor_cartao').value : null,
+            qtd_chips_moveis: parseInt(document.getElementById('plano_qtd_chips').value || '0', 10),
+            franquia_movel_gb: parseInt(document.getElementById('plano_franquia_gb').value || '0', 10),
+            ignorar_preco_gdp: !!document.getElementById('plano_ignorar_gdp').checked,
+            beneficios: document.getElementById('plano_beneficios').value.trim() || null,
+            portfolio: document.getElementById('plano_portfolio').value.trim(),
         };
         const recvOp = document.getElementById('plano_receb_operadora').value;
         if (recvOp !== '') body.recebimento_operadora_base = recvOp;
@@ -3236,10 +3262,23 @@
         document.getElementById('plano_usa_cidade_especial').checked = !!p.usa_comissao_cidade_especial;
         document.getElementById('plano_valor_pap_especial').value = p.valor_pap_cidade_especial != null ? p.valor_pap_cidade_especial : '';
         document.getElementById('plano_valor_cnpj_especial').value = p.valor_cnpj_cidade_especial != null ? p.valor_cnpj_cidade_especial : '';
+        document.getElementById('plano_segmento').value = p.segmento || 'B2C';
+        document.getElementById('plano_valor_cartao').value = p.valor_cartao != null ? p.valor_cartao : '';
+        document.getElementById('plano_qtd_chips').value = p.qtd_chips_moveis || 0;
+        document.getElementById('plano_franquia_gb').value = p.franquia_movel_gb || 0;
+        document.getElementById('plano_ativo').value = p.ativo === false ? '0' : '1';
+        document.getElementById('plano_ignorar_gdp').checked = !!p.ignorar_preco_gdp;
+        document.getElementById('plano_beneficios').value = p.beneficios || '';
+        document.getElementById('plano_portfolio').value = p.portfolio || '';
     };
     window.excluirPlano = async (id) => {
         if (!confirm('Inativar este plano? Ele deixa de aparecer em novas vendas, mas vendas antigas são preservadas.')) return;
         await apiFetch(`/crm/planos/${id}/`, { method: 'DELETE' });
+        carregarPlanos();
+    };
+    window.reativarPlano = async (id) => {
+        if (!confirm('Reativar este plano? Ele volta a aparecer para novas vendas.')) return;
+        await apiFetch(`/crm/planos/${id}/`, { method: 'PATCH', body: JSON.stringify({ ativo: true }) });
         carregarPlanos();
     };
 
@@ -3613,7 +3652,12 @@
     };
 
     async function carregarRegrasComissao() {
-        const [resRegras, resPlanos, resUsers] = await Promise.all([apiFetch('/crm/regras-comissao/'), apiFetch('/crm/planos/'), apiFetch('/usuarios/?is_active=true')]);
+        const [resRegras, resPlanosTodos, resUsers] = await Promise.all([apiFetch('/crm/regras-comissao/'), apiFetch('/crm/planos/?incluir_inativos=1'), apiFetch('/usuarios/?is_active=true')]);
+        const planosTodos = Array.isArray(resPlanosTodos) ? resPlanosTodos : (resPlanosTodos?.results || []);
+        const resPlanos = [
+            ...planosTodos.filter(p => p.ativo !== false),
+            ...planosTodos.filter(p => p.ativo === false).map(p => ({ ...p, nome: `${p.nome} (inativo)` })),
+        ];
         const regras = Array.isArray(resRegras) ? resRegras : (resRegras?.results || []);
         const planos = Array.isArray(resPlanos) ? resPlanos : (resPlanos?.results || []);
         const users = Array.isArray(resUsers) ? resUsers : (resUsers?.results || []);
@@ -4117,12 +4161,13 @@
         tbody.insertAdjacentHTML('beforeend', `<tr><td><input type="number" class="form-control form-control-sm input-meta" value="${meta}" placeholder="Ex: 15" required min="1"></td><td><input type="number" class="form-control form-control-sm input-premio" value="${valor}" placeholder="Ex: 150.00" required step="0.01"></td><td class="text-center"><button type="button" class="btn btn-xs btn-outline-danger" onclick="this.closest('tr').remove()"><i class="bi bi-trash"></i></button></td></tr>`);
     }
     async function carregarDadosAuxiliaresCampanha() {
-        const [resPlanos, resPagamentos] = await Promise.all([apiFetch('/crm/planos/'), apiFetch('/crm/formas-pagamento/')]);
+        const [resPlanos, resPagamentos] = await Promise.all([apiFetch('/crm/planos/?incluir_inativos=1'), apiFetch('/crm/formas-pagamento/')]);
         const planos = Array.isArray(resPlanos) ? resPlanos : (resPlanos?.results || []);
         const pagamentos = Array.isArray(resPagamentos) ? resPagamentos : (resPagamentos?.results || []);
         const selPlanos = document.getElementById('campanha_planos'), selPags = document.getElementById('campanha_pagamentos');
         selPlanos.innerHTML = ''; selPags.innerHTML = '';
-        planos.filter(p => p && (p.ativo === undefined || p.ativo)).forEach(p => selPlanos.add(new Option(p.nome || p.id, p.id)));
+        planos.filter(p => p && p.ativo !== false).forEach(p => selPlanos.add(new Option(p.nome || p.id, p.id)));
+        planos.filter(p => p && p.ativo === false).forEach(p => selPlanos.add(new Option(`${p.nome || p.id} (inativo)`, p.id)));
         pagamentos.filter(fp => fp && (fp.ativo === undefined || fp.ativo)).forEach(fp => selPags.add(new Option(fp.nome || fp.id, fp.id)));
     }
     async function carregarCampanhas() {

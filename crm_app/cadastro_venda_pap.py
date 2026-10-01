@@ -95,7 +95,11 @@ def cadastrar_venda_pap_no_crm(dados: dict, numero_os: str, matricula_vendedor: 
             validar_plano_para_usuario,
         )
 
-        plano = filtrar_planos_por_operadora(plano_qs, vendedor).first()
+        plano = (
+            filtrar_planos_por_operadora(plano_qs, vendedor)
+            .order_by('-ativo', '-segmento', 'id')
+            .first()
+        )
         erro_plano = validar_plano_para_usuario(vendedor, plano)
         if erro_plano:
             logger.warning(

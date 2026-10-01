@@ -2734,7 +2734,10 @@ async function iniciarBuscaPapOnline() {
         function atualizarTextoPlano() {
             const planoId = $('#audit-plano').val();
             const pagId = $('#audit-pagamento').val();
-            const plano = planosOptions.find(p => p.id == planoId);
+            const planoDaVenda = vendaEmAuditoria && vendaEmAuditoria.plano && typeof vendaEmAuditoria.plano === 'object'
+                ? vendaEmAuditoria.plano : null;
+            const plano = planosOptions.find(p => p.id == planoId)
+                || (planoDaVenda && planoDaVenda.id == planoId ? planoDaVenda : undefined);
             const pag = formasPagamentoOptions.find(f => f.id == pagId);
             const cidade = ($('#audit-cidade').val() || '').trim();
             const uf = ($('#audit-uf').val() || '').trim();
@@ -2796,6 +2799,9 @@ async function iniciarBuscaPapOnline() {
         }
 
         function descontoLegadoCartaoPlano(plano) {
+            if (plano.valor_cartao !== null && plano.valor_cartao !== undefined && plano.valor_cartao !== '') {
+                return Math.max(0, parseFloat(plano.valor) - parseFloat(plano.valor_cartao));
+            }
             const nome = (plano.nome || '').toUpperCase();
             if (nome.includes('800') || nome.includes('1GB') || nome.includes('ULTRA') || nome.includes('1000')) return 15;
             if (nome.includes('600')) return 10;
@@ -3011,7 +3017,15 @@ async function iniciarBuscaPapOnline() {
                 $('#audit-cep').val(v.cep || ''); $('#audit-logradouro').val(v.logradouro || ''); $('#audit-numero').val(v.numero_residencia || '');
                 $('#audit-complemento').val(v.complemento || ''); $('#audit-bairro').val(v.bairro || ''); $('#audit-cidade').val(v.cidade || '');
                 $('#audit-uf').val(v.estado || ''); $('#audit-ref').val(v.ponto_referencia || '');
-                if(v.plano) $('#audit-plano').val(v.plano.id || v.plano); if(v.forma_pagamento) $('#audit-pagamento').val(v.forma_pagamento.id || v.forma_pagamento);
+                $('#audit-plano option[data-inativo="1"]').remove();
+                if (v.plano) {
+                    const planoAtualId = v.plano.id || v.plano;
+                    if (!$('#audit-plano option').filter((_, o) => o.value == planoAtualId).length && v.plano.nome) {
+                        $('#audit-plano').append($('<option>', { value: planoAtualId, text: `${v.plano.nome} (inativo)`, 'data-inativo': '1' }));
+                    }
+                    $('#audit-plano').val(planoAtualId);
+                }
+                if(v.forma_pagamento) $('#audit-pagamento').val(v.forma_pagamento.id || v.forma_pagamento);
                 $('#audit-data-agendamento').val(v.data_agendamento || ''); $('#audit-turno-agendamento').val(v.periodo_agendamento || ''); $('#script-obs-venda').val(v.observacoes || '');
                 
                 const temFixo = v.tem_fixo === true || v.tem_fixo === 'true' || v.tem_fixo === 1;
@@ -3216,6 +3230,7 @@ async function iniciarBuscaPapOnline() {
             if (t1 !== undefined) rascunho.telefone1 = t1;
             if (t2 !== undefined) rascunho.telefone2 = t2;
             Object.keys(rascunho).forEach(key => { if (rascunho[key] === "") rascunho[key] = null; });
+            if (!rascunho.plano) delete rascunho.plano;
             
             await apiFetch(`${API_BASE}/${vendaEmAuditoria.id}/`, { method: 'PATCH', body: JSON.stringify(rascunho) });
         }

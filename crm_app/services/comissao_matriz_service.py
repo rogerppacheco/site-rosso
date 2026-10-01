@@ -98,7 +98,7 @@ def get_valor_faixa_plano(
             return float(row.valor_pap)
         if tipo_cliente == 'CNPJ' and row.valor_cnpj is not None:
             return float(row.valor_cnpj)
-    banda = _plano_nome_to_banda(plano.nome)
+    banda = _plano_nome_to_banda(plano)
     if not banda:
         return None
     pap, cnpj = _legacy_valores_faixa_banda(faixa, banda)
@@ -141,7 +141,7 @@ def get_valor_manual_vendedor_plano(
 def sincronizar_plano_em_todas_faixas(plano: Plano) -> int:
     """Garante célula (faixa × plano) para cada faixa existente ao cadastrar plano."""
     count = 0
-    banda = _plano_nome_to_banda(plano.nome)
+    banda = _plano_nome_to_banda(plano)
     for faixa in RegraComissaoFaixa.objects.all():
         pap, cnpj = _legacy_valores_faixa_banda(faixa, banda) if banda else (None, None)
         _, created = RegraComissaoFaixaPlano.objects.get_or_create(
@@ -189,7 +189,7 @@ def listar_matriz_comissao() -> dict[str, Any]:
             key = str(plano.id)
             if key not in valores_map:
                 pap, cnpj = _legacy_valores_faixa_banda(
-                    faixa, _plano_nome_to_banda(plano.nome) or '',
+                    faixa, _plano_nome_to_banda(plano) or '',
                 )
                 valores_map[key] = {
                     'valor_pap': float(pap) if pap is not None else None,

@@ -52,6 +52,8 @@ def _familia_plano_pap(nome_plano: str) -> str:
         return "SUPER"
     if "ESSENCIAL" in n:
         return "ESSENCIAL"
+    if "TOTAL" in n:
+        return "TOTAL"
     return ""
 
 
@@ -64,7 +66,7 @@ def _velocidade_mb_pap(velocidade: str, nome_plano: str = "") -> int | None:
         return 1000
     m = re.search(r"(\d+)\s*(GIGA|GB|MEGA|MB)", blob)
     if not m:
-        m = re.search(r"\b(500|600|700|800|1000)\b", blob)
+        m = re.search(r"\b(400|500|600|700|800|900|1000)\b", blob)
         if m:
             return int(m.group(1))
         return None
@@ -146,10 +148,11 @@ def resolver_plano_pap(nome_plano: str, velocidade: str = "", valor_mensal=None)
                 qs.filter(Q(nome__icontains="1GB") | Q(nome__icontains="1 GB") | Q(nome__icontains="1000"))
             )
             return _escolher_plano_1gb(candidatos, nome_plano, valor_mensal)
-        for p in qs:
-            n = _normalizar_texto_plano(p.nome)
-            if re.search(rf"\b{vel_mb}\s*(MB|MEGA)?\b", n) or f"{vel_mb}MB" in n.replace(" ", ""):
-                return p
+        for base in (qs, Plano.objects.filter(ativo=True)) if familia else (qs,):
+            for p in base.order_by("id"):
+                n = _normalizar_texto_plano(p.nome)
+                if re.search(rf"\b{vel_mb}\s*(MB|MEGA)?\b", n) or f"{vel_mb}MB" in n.replace(" ", ""):
+                    return p
 
     # Fallback: familia ativa; evita planos legados inativos (500/700)
     return qs.order_by("id").first() if familia else None
