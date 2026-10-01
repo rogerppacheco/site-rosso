@@ -1704,12 +1704,26 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-bold">Período de busca</label>
-                    <select id="config-pap-periodo" class="form-select">
+                    <select id="config-pap-periodo" class="form-select" onchange="alternarPeriodoEspecificoPap()">
                         <option value="hoje">Hoje</option>
                         <option value="ontem">Ontem e Hoje</option>
                         <option value="semana">Últimos 7 dias</option>
                         <option value="mes">Mês atual</option>
+                        <option value="personalizado">Período específico</option>
                     </select>
+                    <div id="config-pap-periodo-especifico" class="row g-2 mt-2 d-none">
+                        <div class="col-6">
+                            <label for="config-pap-data-inicio" class="form-label small mb-1">De</label>
+                            <input type="date" id="config-pap-data-inicio" class="form-control">
+                        </div>
+                        <div class="col-6">
+                            <label for="config-pap-data-fim" class="form-label small mb-1">Até</label>
+                            <input type="date" id="config-pap-data-fim" class="form-control">
+                        </div>
+                        <div class="col-12 form-text">
+                            Máximo de 93 dias. Vale só para a busca manual; a busca automática continua usando "Hoje".
+                        </div>
+                    </div>
                     <div class="form-text mt-2">Escolha qual intervalo de tempo o robô deve consultar na Vtal. "Hoje" é mais rápido.</div>
                 </div>
             </div>
@@ -1729,14 +1743,57 @@ main.area-interna-section.auditoria-page:not(.auditoria-modo-lista) {
 <script src="{% static 'js/menu.js' %}?v=8.0"></script>
 <script src="{% static 'js/painel_tempo_tratamento.js' %}?v=1.0"></script>
 <script>
+const PAP_MAX_DIAS_PERIODO = 93;
+
+function hojeIsoLocalPap() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function alternarPeriodoEspecificoPap() {
+    const especifico = document.getElementById('config-pap-periodo').value === 'personalizado';
+    document.getElementById('config-pap-periodo-especifico').classList.toggle('d-none', !especifico);
+}
+
 function abrirModalConfigPap() {
     const periodo = localStorage.getItem('pap_busca_periodo') || 'hoje';
+    const hoje = hojeIsoLocalPap();
+    const ini = document.getElementById('config-pap-data-inicio');
+    const fim = document.getElementById('config-pap-data-fim');
     document.getElementById('config-pap-periodo').value = periodo;
+    ini.max = hoje;
+    fim.max = hoje;
+    ini.value = localStorage.getItem('pap_busca_data_inicio') || hoje;
+    fim.value = localStorage.getItem('pap_busca_data_fim') || hoje;
+    alternarPeriodoEspecificoPap();
     new bootstrap.Modal(document.getElementById('modal-config-pap')).show();
 }
 
 function salvarConfigPap() {
     const periodo = document.getElementById('config-pap-periodo').value;
+    if (periodo === 'personalizado') {
+        const ini = document.getElementById('config-pap-data-inicio').value;
+        const fim = document.getElementById('config-pap-data-fim').value;
+        if (!ini || !fim) {
+            alert('Informe a data inicial e a data final.');
+            return;
+        }
+        if (ini > fim) {
+            alert('A data inicial não pode ser depois da data final.');
+            return;
+        }
+        if (fim > hojeIsoLocalPap()) {
+            alert('A data final não pode ser posterior a hoje.');
+            return;
+        }
+        const dias = Math.round((new Date(fim + 'T00:00:00') - new Date(ini + 'T00:00:00')) / 86400000);
+        if (dias > PAP_MAX_DIAS_PERIODO) {
+            alert(`O intervalo máximo é ${PAP_MAX_DIAS_PERIODO} dias.`);
+            return;
+        }
+        localStorage.setItem('pap_busca_data_inicio', ini);
+        localStorage.setItem('pap_busca_data_fim', fim);
+    }
     localStorage.setItem('pap_busca_periodo', periodo);
     bootstrap.Modal.getInstance(document.getElementById('modal-config-pap')).hide();
     alert('Configuração salva! A próxima busca usará este período.');
@@ -1830,14 +1887,22 @@ async function baixarExcelPapOnline(buscaId) {
     }
 }
 
-async function iniciarBuscaPapOnline() {
+async function iniciarBuscaPapOnline(opcoes = {}) {
     const btn = document.getElementById('btn-sync-pap');
     btn.disabled = true;
     const labelPadrao = '<i class="bi bi-cloud-download"></i><span class="d-none d-md-inline ms-1">Buscar do PAP</span>';
     const setBtn = (html) => { btn.innerHTML = html; };
 
     const token = localStorage.getItem('accessToken');
-    const periodo = localStorage.getItem('pap_busca_periodo') || 'hoje';
+    let periodo = localStorage.getItem('pap_busca_periodo') || 'hoje';
+    if (periodo === 'personalizado' && opcoes.automatica) {
+        periodo = 'hoje';
+    }
+    const payloadBusca = { periodo };
+    if (periodo === 'personalizado') {
+        payloadBusca.data_inicio = localStorage.getItem('pap_busca_data_inicio') || '';
+        payloadBusca.data_fim = localStorage.getItem('pap_busca_data_fim') || '';
+    }
     const headers = {
         'X-CSRFToken': getCookie('csrftoken'),
         'Content-Type': 'application/json',
@@ -1851,7 +1916,7 @@ async function iniciarBuscaPapOnline() {
         const resp = await fetch('/api/crm/historico/importar-vendas/', {
             method: 'POST',
             headers,
-            body: JSON.stringify({ periodo })
+            body: JSON.stringify(payloadBusca)
         });
         const data = await resp.json().catch(() => ({}));
 
@@ -1869,7 +1934,7 @@ async function iniciarBuscaPapOnline() {
         }
 
         // Aguarda a coleta real no PAP (thread Playwright)
-        const prazo = Date.now() + 180000; // 3 min
+        const prazo = Date.now() + (periodo === 'personalizado' ? 360000 : 180000);
         let ultimo = null;
         while (Date.now() < prazo) {
             setBtn('<span class="spinner-border spinner-border-sm me-1"></span>Coletando PAP...');
@@ -4532,7 +4597,7 @@ async function iniciarBuscaPapOnline() {
                     autoBuscarPapInterval = setInterval(() => {
                         const btn = document.getElementById('btn-sync-pap');
                         if (btn && !btn.disabled) {
-                            iniciarBuscaPapOnline();
+                            iniciarBuscaPapOnline({ automatica: true });
                         }
                     }, 5 * 60 * 1000);
                 }
@@ -4553,7 +4618,7 @@ async function iniciarBuscaPapOnline() {
                     autoBuscarPapInterval = setInterval(() => {
                         const btn = document.getElementById('btn-sync-pap');
                         if (btn && !btn.disabled) {
-                            iniciarBuscaPapOnline();
+                            iniciarBuscaPapOnline({ automatica: true });
                         }
                     }, 5 * 60 * 1000);
                 }

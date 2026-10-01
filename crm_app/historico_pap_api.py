@@ -353,9 +353,25 @@ class FunilHistoricoPapImportarView(APIView):
                 status=409,
             )
 
+        from django.utils import timezone
+
         periodo = data.get("periodo", "hoje")
-        hoje = date.today()
-        if periodo == "mes":
+        hoje = timezone.localdate()
+        data_fim = hoje
+        if periodo == "personalizado":
+            data_inicio = _parse_date(str(data.get("data_inicio") or ""), None)
+            data_fim = _parse_date(str(data.get("data_fim") or ""), None)
+            if not data_inicio or not data_fim:
+                return Response(
+                    {"error": "Informe data inicial e final válidas para o período específico.", "sucesso": False},
+                    status=400,
+                )
+            if data_fim > hoje:
+                return Response(
+                    {"error": "A data final não pode ser posterior a hoje.", "sucesso": False},
+                    status=400,
+                )
+        elif periodo == "mes":
             data_inicio = date(hoje.year, hoje.month, 1)
         elif periodo == "semana":
             data_inicio = hoje - timedelta(days=7)
@@ -367,7 +383,7 @@ class FunilHistoricoPapImportarView(APIView):
         busca_id_novo, err_busca = criar_e_iniciar_busca(
             request.user,
             data_inicio=data_inicio,
-            data_fim=hoje,
+            data_fim=data_fim,
             pdv="",
             tipos=["VENDA"],
             token_manual="",

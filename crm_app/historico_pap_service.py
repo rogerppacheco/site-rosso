@@ -1259,6 +1259,160 @@ def _navegar_mes_calendario_se_preciso(page, alvo: date) -> None:
         return
 
 
+_SELETOR_INPUTS_DATA_DRAWER = (
+    ".MuiDrawer-root .MuiInputBase-adornedEnd input.MuiInputBase-input, "
+    ".MuiDrawer-root input.MuiOutlinedInput-inputAdornedEnd, "
+    ".drawer .MuiInputBase-adornedEnd input, "
+    ".ant-drawer-open .ant-picker-input input"
+)
+
+
+def _digitar_datas_drawer(page, data_inicio: date, data_fim: date) -> bool:
+    """
+    Preenche De/Até digitando dd/mm/aaaa direto no input, sem depender do popup
+    do calendário. Input somente leitura recebe o valor pelo setter nativo +
+    eventos input/change (é o que o onChange do React escuta).
+    """
+    if not page:
+        return False
+    try:
+        loc = page.locator(_SELETOR_INPUTS_DATA_DRAWER)
+        n = loc.count()
+        if n < 1:
+            return False
+        alvos = [(0, data_inicio)] + ([(1, data_fim)] if n > 1 else [])
+        tudo_ok = True
+        for idx, dia in alvos:
+            txt = dia.strftime("%d/%m/%Y")
+            digitos = re.sub(r"\D", "", txt)
+            item = loc.nth(idx)
+            try:
+                readonly = bool(item.evaluate("(el) => el.readOnly || el.hasAttribute('readonly')"))
+            except Exception:
+                readonly = False
+
+            valor = ""
+            if not readonly:
+                try:
+                    item.click(timeout=2500)
+                    item.press("Control+a")
+                    item.press("Backspace")
+                    item.type(txt, delay=40)
+                    page.wait_for_timeout(250)
+                    valor = item.input_value(timeout=1500) or ""
+                except Exception as exc:
+                    logger.debug("[HISTORICO PAP] digitar data idx=%s: %s", idx, exc)
+
+            if re.sub(r"\D", "", valor) != digitos:
+                try:
+                    valor = item.evaluate(
+                        """(el, v) => {
+                            const setter = Object.getOwnPropertyDescriptor(
+                                HTMLInputElement.prototype, 'value'
+                            ).set;
+                            setter.call(el, v);
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                            return el.value;
+                        }""",
+                        txt,
+                    ) or ""
+                except Exception as exc:
+                    logger.debug("[HISTORICO PAP] setter nativo data idx=%s: %s", idx, exc)
+
+            try:
+                item.evaluate("(el) => el.blur()")
+            except Exception:
+                pass
+            _fechar_apenas_calendario(page)
+
+            ok = re.sub(r"\D", "", valor) == digitos
+            logger.info(
+                "[HISTORICO PAP] Data digitada idx=%s alvo=%s valor=%r readonly=%s ok=%s",
+                idx,
+                txt,
+                valor,
+                readonly,
+                ok,
+            )
+            tudo_ok = tudo_ok and ok
+        return tudo_ok
+    except Exception as exc:
+        logger.warning("[HISTORICO PAP] Digitação De/Até falhou: %s", exc)
+        return False
+
+
+def _diagnosticar_drawer_filtros(page) -> None:
+    """Loga inputs do drawer, overlays que surgem ao clicar na data e salva print/HTML."""
+    if not page:
+        return
+    try:
+        info = page.evaluate(
+            """() => {
+                const paper = document.querySelector(
+                    '.MuiDrawer-paper, .MuiDrawer-root .MuiPaper-root, .ant-drawer-open .ant-drawer-content'
+                );
+                const scope = paper || document;
+                const inputs = [...scope.querySelectorAll('input')].map((i) => ({
+                    type: i.type || '',
+                    ro: !!(i.readOnly || i.hasAttribute('readonly')),
+                    val: i.value || '',
+                    ph: i.placeholder || '',
+                    name: i.name || '',
+                    id: i.id || '',
+                    cls: (i.className || '').toString().slice(0, 80),
+                    pai: ((i.parentElement && i.parentElement.className) || '').toString().slice(0, 80),
+                }));
+                const botoes = [...scope.querySelectorAll('button')].map((b) => ({
+                    t: (b.innerText || b.getAttribute('aria-label') || '').trim().slice(0, 30),
+                    dis: !!(b.disabled || b.classList.contains('Mui-disabled')),
+                    cls: (b.className || '').toString().slice(0, 60),
+                }));
+                return {
+                    temPaper: !!paper,
+                    inputs,
+                    botoes,
+                    html: (paper ? paper.outerHTML : '').slice(0, 4000),
+                };
+            }"""
+        )
+        logger.warning("[HISTORICO PAP][DIAG] Inputs do drawer: %s", info.get("inputs"))
+        logger.warning("[HISTORICO PAP][DIAG] Botões do drawer: %s", info.get("botoes"))
+        logger.warning("[HISTORICO PAP][DIAG] HTML drawer (4k): %s", info.get("html"))
+    except Exception as exc:
+        logger.warning("[HISTORICO PAP][DIAG] leitura do drawer falhou: %s", exc)
+
+    js_overlays = """() => [...document.body.children]
+        .filter((e) => e.offsetParent !== null || getComputedStyle(e).position === 'fixed')
+        .map((e) => (e.tagName + '.' + (e.className || '').toString().trim().replace(/\\s+/g, '.')).slice(0, 120))"""
+    try:
+        antes = set(page.evaluate(js_overlays) or [])
+        loc = page.locator(_SELETOR_INPUTS_DATA_DRAWER)
+        if loc.count():
+            loc.first.click(timeout=2500, force=True)
+            page.wait_for_timeout(900)
+            depois = page.evaluate(js_overlays) or []
+            novos = [x for x in depois if x not in antes]
+            logger.warning("[HISTORICO PAP][DIAG] Overlays novos ao clicar na data De: %s", novos)
+            _fechar_apenas_calendario(page)
+    except Exception as exc:
+        logger.warning("[HISTORICO PAP][DIAG] teste de clique na data falhou: %s", exc)
+
+    try:
+        base = getattr(settings, "MEDIA_ROOT", "") or "/tmp"
+        pasta = os.path.join(str(base), "historico_pap_debug")
+        os.makedirs(pasta, exist_ok=True)
+        carimbo = datetime.now().strftime("%Y%m%d_%H%M%S")
+        png = os.path.join(pasta, f"drawer_{carimbo}.png")
+        html = os.path.join(pasta, f"drawer_{carimbo}.html")
+        page.screenshot(path=png, full_page=True)
+        with open(html, "w", encoding="utf-8") as fh:
+            fh.write(page.content())
+        logger.warning("[HISTORICO PAP][DIAG] Print/HTML salvos: %s | %s", png, html)
+    except Exception as exc:
+        logger.warning("[HISTORICO PAP][DIAG] salvar print/HTML falhou: %s", exc)
+
+
 def _interagir_datas_mui_drawer(page, data_inicio: date, data_fim: date) -> bool:
     """
     Abre o calendário (MUI/Ant) nos campos De/Até e CLICA o dia escolhido.
@@ -1269,12 +1423,7 @@ def _interagir_datas_mui_drawer(page, data_inicio: date, data_fim: date) -> bool
         return False
 
     try:
-        loc = page.locator(
-            ".MuiDrawer-root .MuiInputBase-adornedEnd input.MuiInputBase-input, "
-            ".MuiDrawer-root input.MuiOutlinedInput-inputAdornedEnd, "
-            ".drawer .MuiInputBase-adornedEnd input, "
-            ".ant-drawer-open .ant-picker-input input"
-        )
+        loc = page.locator(_SELETOR_INPUTS_DATA_DRAWER)
         n = loc.count()
         logger.info("[HISTORICO PAP] Campos data no drawer: %d (periodo %s→%s)", n, data_inicio, data_fim)
         if n < 1:
@@ -1373,7 +1522,9 @@ def _preencher_datas_filtro_spa(page, data_inicio: date | None = None, data_fim:
     ini = data_inicio or date.today()
     fim = data_fim or date.today()
 
-    ok = _interagir_datas_mui_drawer(page, ini, fim)
+    ok = _digitar_datas_drawer(page, ini, fim) and _aguardar_filtrar_habilitado(page, timeout_ms=2500)
+    if not ok:
+        ok = _interagir_datas_mui_drawer(page, ini, fim)
     if not ok:
         ok = _interagir_range_picker_ant(page, ini, fim)
     logger.info("[HISTORICO PAP] Interação datas %s→%s ok=%s", ini, fim, ok)
@@ -1445,17 +1596,36 @@ def _disparar_vendas_via_spa_js(
                     );
                     return m ? decodeURIComponent(m[1]) : '';
                 };
-                let token = '';
-                try {
-                    for (const k of Object.keys(localStorage || {})) {
-                        const v = localStorage.getItem(k) || '';
-                        if (v.includes('eyJ') && v.length > 80) { token = v; break; }
-                    }
-                } catch (e) {}
-                if (!token) token = readCookie('token') || readCookie('Token') || '';
+                // Mesma ordem do _getAuthorizationToken da SPA: cookie "token" e,
+                // na falta dele, user.token do localStorage. Varredura genérica por último.
+                let token = readCookie('token') || readCookie('Token') || '';
+                let tokenSrc = token ? 'cookie' : '';
+                if (!token) {
+                    try {
+                        for (const k of Object.keys(localStorage || {})) {
+                            const raw = localStorage.getItem(k) || '';
+                            if (!raw.includes('eyJ')) continue;
+                            try {
+                                const obj = JSON.parse(raw);
+                                const t = obj && obj.user && obj.user.token;
+                                if (typeof t === 'string' && t.includes('eyJ')) {
+                                    token = t; tokenSrc = 'ls:' + k + '.user.token'; break;
+                                }
+                            } catch (e) {}
+                        }
+                    } catch (e) {}
+                }
+                if (!token) {
+                    try {
+                        for (const k of Object.keys(localStorage || {})) {
+                            const v = localStorage.getItem(k) || '';
+                            if (v.includes('eyJ') && v.length > 80) { token = v; tokenSrc = 'ls:' + k; break; }
+                        }
+                    } catch (e) {}
+                }
                 token = (token || '').replace(/^Bearer\\s+/i, '').replace(/^[\"']|[\"']$/g, '').trim();
                 const m = token.match(/eyJ[A-Za-z0-9_\\-+/=]+\\.[A-Za-z0-9_\\-+/=]+\\.[A-Za-z0-9_\\-+/=]+/);
-                if (!m) return { ok: false, error: 'sem_jwt', tokenLen: token.length };
+                if (!m) return { ok: false, error: 'sem_jwt', tokenLen: token.length, tokenSrc };
                 let jwt = m[0];
                 const parts = jwt.split('.');
                 if (parts.length === 3 && parts[2].length >= 43 + 36) {
@@ -1488,16 +1658,18 @@ def _disparar_vendas_via_spa_js(
                     preview: (bodyText.text || '').slice(0, 200),
                     json,
                     authLen: auth.length,
+                    tokenSrc,
                     url,
                 };
             }""",
             url,
         )
         logger.info(
-            "[HISTORICO PAP] Disparo JS /vendas status=%s ok=%s authLen=%s preview=%s",
+            "[HISTORICO PAP] Disparo JS /vendas status=%s ok=%s authLen=%s tokenSrc=%s preview=%s",
             (result or {}).get("status"),
             (result or {}).get("ok"),
             (result or {}).get("authLen"),
+            (result or {}).get("tokenSrc"),
             str((result or {}).get("preview") or "")[:160].replace("\n", " "),
         )
         if result and result.get("ok") and isinstance(result.get("json"), dict):
@@ -1782,6 +1954,8 @@ def _tentar_clicar_filtrar(
     _scroll_drawer_ate_filtrar(page)
     enabled = _aguardar_filtrar_habilitado(page, timeout_ms=10000)
     logger.info("[HISTORICO PAP] Filtrar enabled=%s drawer_open=%s", enabled, _painel_filtros_visivel(page))
+    if not enabled:
+        _diagnosticar_drawer_filtros(page)
 
     if not _painel_filtros_visivel(page):
         logger.warning("[HISTORICO PAP] Drawer fechado antes do Filtrar — abortando clique.")
