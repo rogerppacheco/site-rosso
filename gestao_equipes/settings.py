@@ -291,10 +291,17 @@ WHATSATENDE_TOKEN_B = config('WHATSATENDE_TOKEN_B', default='')
 WHATSATENDE_WHATSAPP_ID_B = config('WHATSATENDE_WHATSAPP_ID_B', default='')
 # Segredo no path/query do webhook inbound (WhatsAtende não tem HMAC nativo)
 WHATSATENDE_WEBHOOK_TOKEN = config('WHATSATENDE_WEBHOOK_TOKEN', default='')
+# Cloud API Meta direta (graph.facebook.com) — token permanente de usuário do sistema
+META_CLOUD_ACCESS_TOKEN = config('META_CLOUD_ACCESS_TOKEN', default='')
+META_CLOUD_PHONE_NUMBER_ID = config('META_CLOUD_PHONE_NUMBER_ID', default='')
+META_CLOUD_WABA_ID = config('META_CLOUD_WABA_ID', default='')
+META_CLOUD_API_VERSION = config('META_CLOUD_API_VERSION', default='v21.0')
+META_CLOUD_VERIFY_TOKEN = config('META_CLOUD_VERIFY_TOKEN', default='')
+META_APP_SECRET = config('META_APP_SECRET', default='')
 # Templates Meta Nio (confirmação/instalação/cobrança). Default: ativo se Cloud API (WA/hybrid)
 _use_nio_tpl = config('WHATSAPP_USE_NIO_TEMPLATES', default='')
 if str(_use_nio_tpl).strip() == '':
-    WHATSAPP_USE_NIO_TEMPLATES = WHATSAPP_PROVIDER in ('whatsatende', 'hybrid')
+    WHATSAPP_USE_NIO_TEMPLATES = WHATSAPP_PROVIDER in ('whatsatende', 'hybrid', 'meta')
 else:
     WHATSAPP_USE_NIO_TEMPLATES = config('WHATSAPP_USE_NIO_TEMPLATES', default=False, cast=bool)
 # Cobrança Nio (job 09:00): 0 = envia todos os elegíveis do dia (D−5 / D+5 / recorrente).

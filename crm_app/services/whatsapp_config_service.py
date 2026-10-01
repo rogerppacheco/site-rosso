@@ -14,6 +14,7 @@ _PROVIDERS_VALIDOS = frozenset(
         WhatsAppIntegracaoConfig.PROVIDER_EVOLUTION,
         WhatsAppIntegracaoConfig.PROVIDER_WHATSATENDE,
         WhatsAppIntegracaoConfig.PROVIDER_HYBRID,
+        WhatsAppIntegracaoConfig.PROVIDER_META,
     }
 )
 
@@ -21,6 +22,7 @@ _PROVIDERS_CLIENTE_CLOUD = frozenset(
     {
         WhatsAppIntegracaoConfig.PROVIDER_WHATSATENDE,
         WhatsAppIntegracaoConfig.PROVIDER_HYBRID,
+        WhatsAppIntegracaoConfig.PROVIDER_META,
     }
 )
 
@@ -33,6 +35,7 @@ def get_active_whatsapp_provider_name() -> str:
         if provider in (
             WhatsAppIntegracaoConfig.PROVIDER_ZAPI,
             WhatsAppIntegracaoConfig.PROVIDER_EVOLUTION,
+            WhatsAppIntegracaoConfig.PROVIDER_META,
         ):
             return provider
     except Exception:
@@ -52,12 +55,13 @@ def cliente_usa_cloud_api() -> bool:
 
 def canal_cliente_pronto() -> bool:
     """
-    Envios a cliente final só saem com número Meta (WhatsAtende B) + interruptor na aba WPP.
+    Envios a cliente final só saem com número oficial (Cloud API Meta ou WhatsAtende B)
+    + interruptor na aba WPP.
 
-    Sem TOKEN_B: sempre False (não cai no número comercial).
-    Sem banco (testes): credenciais B bastam.
+    Sem credenciais do número oficial: sempre False (não cai no número comercial).
+    Sem banco (testes): credenciais do número oficial bastam.
     """
-    if not _credenciais_whatsatende_cliente_ok():
+    if not _credenciais_numero_oficial_ok():
         return False
     try:
         cfg = WhatsAppIntegracaoConfig.load()
@@ -72,10 +76,11 @@ def motivo_canal_cliente_bloqueado() -> str:
 
     if canal_cliente_pronto():
         return ""
-    if not _credenciais_whatsatende_cliente_ok():
+    if not _credenciais_numero_oficial_ok():
         return (
             "Número oficial Meta ainda não configurado no servidor "
-            "(WHATSATENDE_TOKEN_B / WHATSATENDE_WHATSAPP_ID_B). "
+            "(META_CLOUD_ACCESS_TOKEN / META_CLOUD_PHONE_NUMBER_ID ou "
+            "WHATSATENDE_TOKEN_B / WHATSATENDE_WHATSAPP_ID_B). "
             "O WhatsApp do time comercial não envia mensagens a clientes."
         )
     return MSG_CANAL_CLIENTE_BLOQUEADO
@@ -123,6 +128,10 @@ def _credenciais_whatsatende_cliente_ok() -> bool:
     return bool((getattr(settings, "WHATSATENDE_TOKEN_B", "") or "").strip()) and bool(
         (getattr(settings, "WHATSATENDE_WHATSAPP_ID_B", "") or "").strip()
     )
+
+
+def _credenciais_numero_oficial_ok() -> bool:
+    return _credenciais_meta_ok() or _credenciais_whatsatende_cliente_ok()
 
 
 def _credenciais_n8n_ok() -> bool:
@@ -295,10 +304,11 @@ def update_whatsapp_config(
 
     if envios_cliente_ativos is not None:
         ativo = _bool_request(envios_cliente_ativos)
-        if ativo and not _credenciais_whatsatende_cliente_ok():
+        if ativo and not _credenciais_numero_oficial_ok():
             raise ValueError(
                 "Não é possível liberar envios a clientes sem o número Meta "
-                "(WHATSATENDE_TOKEN_B / WHATSATENDE_WHATSAPP_ID_B) no servidor."
+                "(META_CLOUD_ACCESS_TOKEN / META_CLOUD_PHONE_NUMBER_ID ou "
+                "WHATSATENDE_TOKEN_B / WHATSATENDE_WHATSAPP_ID_B) no servidor."
             )
         cfg.envios_cliente_ativos = ativo
         fields.append("envios_cliente_ativos")

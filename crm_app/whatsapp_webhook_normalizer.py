@@ -271,7 +271,7 @@ def detectar_provedor(payload: Any) -> str:
         return _PROVEDOR_ZAPI
 
     if _eh_webhook_cloud_api_meta(payload):
-        return _PROVEDOR_WHATSATENDE
+        return _PROVEDOR_META
 
     source = str(
         payload.get("source")

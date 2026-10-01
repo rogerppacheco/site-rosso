@@ -10,7 +10,7 @@ from crm_app.services.whatsapp.whatsatende_provider import WhatsAtendeProvider
 from crm_app.services.whatsapp.zapi_provider import ZapiProvider
 
 PURPOSE_INTERNO = "interno"
-PURPOSE_CLIENTE = "cliente"
+PURPOSE_CLIENTE = "cliente"
 BACKEND_CLIENTE_BLOQUEADO = "bloqueado"
 
 from crm_app.services.whatsapp.blocked_cliente_provider import ClienteCanalBloqueadoProvider
@@ -92,6 +92,8 @@ def get_whatsapp_provider(purpose: str = PURPOSE_INTERNO) -> WhatsAppProvider:
         inst = N8nOutboundProvider()
     elif backend == "whatsatende":
         inst = WhatsAtendeProvider(role=role)
+    elif backend == "meta":
+        inst = MetaCloudProvider()
     else:
         inst = ZapiProvider()
     _cached_providers[key] = inst
