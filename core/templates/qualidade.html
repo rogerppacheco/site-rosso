@@ -234,11 +234,11 @@
 }
 .qualidade-filas .btn {
     font-size: 0.7rem;
-    font-weight: 600;
-    padding: 0.22rem 0.55rem;
+    font-weight: 650;
+    padding: 0.16rem 0.42rem;
     border: none !important;
-    letter-spacing: 0.01em;
-    text-transform: uppercase;
+    letter-spacing: 0;
+    text-transform: none;
 }
 .qualidade-filas .btn .badge {
     font-size: 0.68rem;
@@ -914,8 +914,122 @@
     border: 1px solid var(--border-color);
     border-top: none;
     border-radius: 0 0 8px 8px;
-    padding: 0.25rem 0.5rem;
+    padding: 0.12rem 0.45rem;
     background: var(--bg-card);
+}
+@media (min-width: 769px) {
+    body:has(#qualidade-page.modo-tratamento) {
+        padding-top: 44px;
+    }
+    body:has(#qualidade-page.modo-tratamento) .main-header {
+        height: 44px;
+        padding: 0 0.7rem;
+    }
+    body:has(#qualidade-page.modo-tratamento) .logo,
+    body:has(#qualidade-page.modo-tratamento) .logo-img {
+        height: 26px;
+    }
+    body:has(#qualidade-page.modo-tratamento) .main-nav .nav-button,
+    body:has(#qualidade-page.modo-tratamento) .main-nav .nav-back-button,
+    body:has(#qualidade-page.modo-tratamento) .logout-button {
+        padding: 0.18rem 0.6rem !important;
+        font-size: 0.74rem !important;
+        box-shadow: none !important;
+    }
+    body:has(#qualidade-page.modo-tratamento) .token-indicator {
+        padding: 0.12rem 0.4rem !important;
+        font-size: 0.72rem;
+    }
+    .qualidade-page.modo-tratamento {
+        height: calc(100dvh - 44px);
+        max-height: calc(100dvh - 44px);
+        padding: 0.12rem 0.3rem !important;
+    }
+    .qualidade-page.modo-tratamento .qualidade-shell {
+        padding: 0.15rem 0.3rem !important;
+        border-radius: 8px;
+    }
+}
+.qualidade-page.modo-tratamento .qualidade-tabs .nav-link {
+    font-size: 0.72rem;
+    padding: 0.08rem 0.38rem;
+}
+.qualidade-page.modo-tratamento .qualidade-tabs .nav-link i { display: none; }
+.qualidade-page.modo-tratamento .qualidade-lente .btn {
+    padding: 0.1rem 0.42rem;
+    font-size: 0.72rem;
+}
+.qualidade-page.modo-tratamento .q-chip-cobranca,
+.qualidade-page.modo-tratamento .q-chip-promessa {
+    padding: 0.08rem 0.4rem;
+    font-size: 0.68rem;
+}
+.qualidade-page.modo-tratamento .qualidade-toolbar {
+    gap: 0.18rem;
+    padding: 0.02rem 0 0.12rem;
+}
+.qualidade-page.modo-tratamento .qualidade-toolbar .q-busca {
+    flex: 1 1 14rem;
+    max-width: none;
+    min-width: 12rem;
+}
+.qualidade-page.modo-tratamento .btn-enviar-atrasados {
+    width: 1.7rem;
+    height: 1.7rem;
+    padding: 0;
+    box-shadow: none;
+}
+.qualidade-page.modo-tratamento .qualidade-pct-fpd {
+    padding: 0.08rem 0.4rem;
+}
+.qualidade-page.modo-tratamento .qualidade-pct-fpd .q-pct-val { font-size: 0.82rem; }
+.qualidade-page.modo-tratamento .table-qualidade th,
+.qualidade-page.modo-tratamento .table-qualidade td {
+    padding: 0.12rem 0.32rem !important;
+    font-size: 0.74rem;
+}
+.qualidade-page.modo-tratamento .table-qualidade .col-cliente {
+    white-space: nowrap;
+    max-width: 18rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.qualidade-page.modo-tratamento .table-qualidade .cliente-nome,
+.qualidade-page.modo-tratamento .table-qualidade .cliente-cpf {
+    display: inline;
+}
+.qualidade-page.modo-tratamento .table-qualidade .cliente-cpf {
+    margin-left: 0.35rem;
+    font-size: 0.66rem;
+}
+.qualidade-page.modo-tratamento .table-qualidade .acoes-btns {
+    display: flex;
+    gap: 0.12rem;
+}
+.qualidade-page.modo-tratamento .table-qualidade .acoes-btns .btn {
+    width: 1.4rem;
+    height: 1.4rem;
+    padding: 0 !important;
+    box-shadow: none;
+    font-size: 0.7rem;
+    line-height: 1;
+    border-radius: 0.28rem;
+}
+.qualidade-page.modo-tratamento .contato-badges {
+    gap: 0.1rem;
+    max-width: none;
+}
+.qualidade-page.modo-tratamento .contato-badges .badge-contato {
+    padding: 0.02rem 0.2rem;
+    font-size: 0.62rem;
+}
+#cnt-mais-filtros:empty { display: none; }
+.qualidade-page.modo-tratamento .qualidade-toolbar-row > .btn,
+.qualidade-page.modo-tratamento .qualidade-toolbar-acoes .btn {
+    padding: 0.12rem 0.42rem !important;
+    font-size: 0.72rem !important;
+    box-shadow: none;
+    line-height: 1.2;
 }
 @media (max-width: 768px) {
     .qualidade-page.modo-tratamento {
@@ -981,7 +1095,7 @@
             <div class="d-flex flex-wrap gap-1 qualidade-toolbar-acoes align-items-center">
                 <button type="button" class="q-chip-cobranca" id="chip-cobranca-hoje" onclick="setAbaPrincipal('envios')" title="Clique para abrir gestão de envios">
                     <i class="bi bi-whatsapp"></i>
-                    <span>Cobrança hoje:</span>
+                    <span>Cobrança</span>
                     <span class="q-chip-num" id="chip-cobranca-txt">— / —</span>
                 </button>
                 <button type="button" class="q-chip-promessa d-none" id="chip-promessas"
@@ -1042,19 +1156,19 @@
                 <select id="sel-mes-tratamento" class="form-select form-select-sm q-sel-mes" title="Mês" onchange="selecionarMes(this.value)"></select>
                 <div class="qualidade-filas btn-group" role="group" aria-label="Fila de tratamento" id="filas-tratamento">
                     <input type="radio" class="btn-check" name="fila-trat" id="fila-atrasados-lt60" autocomplete="off" checked>
-                    <label class="btn btn-outline-atrasado-lt60" for="fila-atrasados-lt60" onclick="setFila('atrasados_lt60')" title="Atraso da 1ª fatura com menos de 60 dias — ainda dá para recuperar o FPD">
-                        Atrasados (−60d) <span class="badge" id="cnt-atrasados-lt60">0</span>
+                    <label class="btn btn-outline-atrasado-lt60" for="fila-atrasados-lt60" onclick="setFila('atrasados_lt60')" title="Atraso com menos de 60 dias — ainda dá para recuperar">
+                        −60d <span class="badge" id="cnt-atrasados-lt60">0</span>
                     </label>
                     <input type="radio" class="btn-check" name="fila-trat" id="fila-atrasados-gte60" autocomplete="off">
-                    <label class="btn btn-outline-danger" for="fila-atrasados-gte60" onclick="setFila('atrasados_gte60')" title="Atraso de 60 dias ou mais — FPD já consolidado para a empresa">
-                        Atrasados (+60d) <span class="badge" id="cnt-atrasados-gte60">0</span>
+                    <label class="btn btn-outline-danger" for="fila-atrasados-gte60" onclick="setFila('atrasados_gte60')" title="Atraso de 60 dias ou mais — indicador já consolidado">
+                        +60d <span class="badge" id="cnt-atrasados-gte60">0</span>
                     </label>
                     <input type="radio" class="btn-check" name="fila-trat" id="fila-abertos" autocomplete="off">
-                    <label class="btn btn-outline-warning" for="fila-abertos" onclick="setFila('abertos')">
-                        Em aberto <span class="badge" id="cnt-abertos">0</span>
+                    <label class="btn btn-outline-warning" for="fila-abertos" onclick="setFila('abertos')" title="Em aberto">
+                        Aberto <span class="badge" id="cnt-abertos">0</span>
                     </label>
                     <input type="radio" class="btn-check" name="fila-trat" id="fila-pagas" autocomplete="off">
-                    <label class="btn btn-outline-success" for="fila-pagas" onclick="setFila('pagas')">
+                    <label class="btn btn-outline-success" for="fila-pagas" onclick="setFila('pagas')" title="Pagas">
                         Pagas <span class="badge" id="cnt-pagas">0</span>
                     </label>
                     <input type="radio" class="btn-check" name="fila-trat" id="fila-todos" autocomplete="off">
@@ -1063,8 +1177,8 @@
                     </label>
                 </div>
                 <button type="button" class="btn btn-success btn-sm btn-enviar-atrasados" id="btn-enviar-atrasados"
-                    onclick="enviarWhatsappAtrasados()" title="Envia o template nio_fatura_reducao_sinal_v1 aos atrasados da fila selecionada. Quem já recebeu hoje é pulado.">
-                    <i class="bi bi-whatsapp"></i> Reenviar atrasados
+                    onclick="enviarWhatsappAtrasados()" title="Reenviar WhatsApp aos atrasados da fila. Quem já recebeu hoje é pulado.">
+                    <i class="bi bi-whatsapp"></i>
                 </button>
                 <span class="qualidade-pct-fpd d-none" id="pct-fpd" title="(Atrasados + Em aberto) ÷ Total">
                     <span class="q-pct-val" id="pct-fpd-val">—</span>
@@ -1083,8 +1197,18 @@
                 <span class="qualidade-kpi-mini q-painel-only" id="kpi-mini"></span>
             </div>
             <div class="qualidade-toolbar-row">
-                <input type="search" id="filtro-q" class="form-control form-control-sm q-busca" placeholder="Buscar em toda a base (O.S., contrato, cliente, CPF ou telefone)" title="Busca em todas as safras — O.S., contrato FPD, cliente, CPF e celulares 1/2 do cadastro" onkeydown="if(event.key==='Enter'){page=1;carregarDashboard()}">
+                <input type="search" id="filtro-q" class="form-control form-control-sm q-busca" placeholder="Buscar O.S., contrato, cliente, CPF ou telefone" title="Busca em todas as safras — O.S., contrato FPD, cliente, CPF e celulares 1/2 do cadastro" onkeydown="if(event.key==='Enter'){page=1;carregarDashboard()}">
                 <span id="busca-geral-hint" class="badge text-bg-info d-none" title="Resultados de todas as safras">Busca geral</span>
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="btn-mais-filtros" onclick="toggleMaisFiltrosQualidade()" title="Filtros da lista">
+                    <i class="bi bi-sliders"></i> Filtros <span class="badge text-bg-secondary" id="cnt-mais-filtros"></span>
+                </button>
+                <button class="btn btn-primary btn-sm" type="button" onclick="page=1;carregarDashboard()" title="Buscar"><i class="bi bi-search"></i></button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limparFiltrosQualidade()" title="Limpar filtros">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+                <span class="qualidade-chip-ativos" id="filtros-ativos-resumo"></span>
+            </div>
+            <div class="qualidade-mais-filtros" id="qualidade-mais-filtros">
                 <select id="filtro-faixa-atraso" class="form-select form-select-sm q-sel-filtro" onchange="page=1;carregarDashboard()" title="Faixa de atraso da 1ª fatura">
                     <option value="">Atraso (dias)</option>
                     <option value="d10_15">10 a 15 dias</option>
@@ -1121,16 +1245,6 @@
                 <select id="filtro-vendedor" class="form-select form-select-sm q-sel-filtro q-sel-vendedor" onchange="page=1;carregarDashboard()" title="Filtrar por vendedor do CRM">
                     <option value="">Todos os vendedores</option>
                 </select>
-                <button class="btn btn-outline-secondary btn-sm" type="button" id="btn-mais-filtros" onclick="toggleMaisFiltrosQualidade()" title="Mais filtros">
-                    <i class="bi bi-sliders"></i> Mais
-                </button>
-                <button class="btn btn-primary btn-sm" type="button" onclick="page=1;carregarDashboard()" title="Aplicar filtros"><i class="bi bi-funnel"></i></button>
-                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="limparFiltrosQualidade()" title="Limpar filtros">
-                    <i class="bi bi-x-circle"></i>
-                </button>
-                <span class="qualidade-chip-ativos" id="filtros-ativos-resumo"></span>
-            </div>
-            <div class="qualidade-mais-filtros" id="qualidade-mais-filtros">
                 <select id="filtro-conferencia-fpd" class="form-select form-select-sm q-sel-filtro" onchange="page=1;carregarDashboard()" title="Conferência FPD">
                     <option value="">Conf. FPD</option>
                     <option value="AGUARDANDO">Aguardando FPD</option>
@@ -1854,12 +1968,10 @@
         if (conf) chips.push('conf. FPD');
         if (st) chips.push('contrato');
         if (elig) chips.push('elegível');
-        el.textContent = chips.length ? `Filtros: ${chips.join(' · ')}` : '';
-        // Abre "Mais" automaticamente se algum filtro avançado estiver ativo
-        if (conf || st || elig) {
-            const box = document.getElementById('qualidade-mais-filtros');
-            if (box && !box.classList.contains('is-open')) box.classList.add('is-open');
-        }
+        el.textContent = chips.length ? chips.join(' · ') : '';
+        const nFiltros = chips.filter((c) => c !== 'busca').length;
+        const badgeFiltros = document.getElementById('cnt-mais-filtros');
+        if (badgeFiltros) badgeFiltros.textContent = nFiltros ? String(nFiltros) : '';
     }
 
     window.limparFiltrosQualidade = function () {
@@ -3347,7 +3459,7 @@
         } finally {
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-whatsapp"></i> Reenviar atrasados';
+                btn.innerHTML = '<i class="bi bi-whatsapp"></i>';
             }
         }
     };
@@ -4326,6 +4438,12 @@
         modalNio = new bootstrap.Modal(document.getElementById('modalNioOpcoes'));
         modalLigacaoQualidade = new bootstrap.Modal(document.getElementById('modalLigacaoQualidade'));
         modalHistoricoContato = new bootstrap.Modal(document.getElementById('modalHistoricoContato'));
+        setTimeout(() => {
+            document.querySelectorAll('a[href="/area-interna/"]').forEach((a) => {
+                a.textContent = 'Voltar';
+                a.title = 'Voltar para a área interna';
+            });
+        }, 0);
         if (modoSomenteFpd) {
             aplicarModoSomenteFpd();
             return;
