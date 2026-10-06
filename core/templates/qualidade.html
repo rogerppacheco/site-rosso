@@ -990,17 +990,18 @@
 }
 .qualidade-page.modo-tratamento .table-qualidade .col-cliente {
     white-space: nowrap;
-    max-width: 18rem;
+    max-width: 16rem;
+}
+.qualidade-page.modo-tratamento .table-qualidade .cliente-nome {
+    display: inline-block;
+    max-width: 15rem;
     overflow: hidden;
     text-overflow: ellipsis;
+    vertical-align: bottom;
 }
-.qualidade-page.modo-tratamento .table-qualidade .cliente-nome,
-.qualidade-page.modo-tratamento .table-qualidade .cliente-cpf {
-    display: inline;
-}
-.qualidade-page.modo-tratamento .table-qualidade .cliente-cpf {
-    margin-left: 0.35rem;
-    font-size: 0.66rem;
+.table-qualidade .col-cpf {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 .qualidade-page.modo-tratamento .table-qualidade .acoes-btns {
     display: flex;
@@ -1275,6 +1276,7 @@
                             <th>O.S.</th>
                             <th title="ID_CONTRATO / CONTRATO da planilha FPD">Contrato</th>
                             <th>Cliente</th>
+                            <th>CPF</th>
                             <th>Vendedor</th>
                             <th>Status</th>
                             <th id="th-fatura-indicador">1ª fatura</th>
@@ -1288,7 +1290,7 @@
                         </tr>
                     </thead>
                     <tbody id="tbody-contratos">
-                        <tr><td colspan="13" class="text-center text-muted py-4">Selecione um mês</td></tr>
+                        <tr><td colspan="14" class="text-center text-muted py-4">Selecione um mês</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -2649,7 +2651,7 @@
         if (vendedor) params.set('vendedor', vendedor);
 
         const tbody = document.getElementById('tbody-contratos');
-        tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-3">Carregando…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-3">Carregando…</td></tr>';
         try {
             const r = await fetch(`${API}/api/qualidade/dashboard/?${params}`, { headers: authHeaders() });
             const data = await r.json();
@@ -2708,7 +2710,7 @@
             window._qualidadeContratos = window._qualidadeContratos || {};
             rows.forEach((c) => { window._qualidadeContratos[c.id] = c; });
             if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4">Nenhum contrato nesta fila</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4">Nenhum contrato nesta fila</td></tr>';
             } else {
                 tbody.innerHTML = rows.map(c => {
                     const bonusCell = podeVerBonus
@@ -2722,9 +2724,7 @@
                         : escapeAttr(c.motivo_bloqueio_envio || 'Dados incompletos para cobrança');
                     const disabledLigar = (c.venda_id && c.pode_tratar) ? '' : 'disabled title="Sem venda vinculada"';
                     const cpfFmt = formatarCpfCnpj(c.cpf_cliente);
-                    const cpfHtml = cpfFmt
-                        ? `<div class="cliente-cpf text-muted">${escapeHtml(cpfFmt)}</div>`
-                        : '<div class="cliente-cpf text-muted">CPF —</div>';
+                    const cpfHtml = cpfFmt ? escapeHtml(cpfFmt) : '—';
                     const contatosHtml = renderBadgesContato(c.contatos || {}, c.id);
                     const mesRefHtml = (buscaGeral && (c.mes_ref || c.safra))
                         ? `<div class="small text-muted">${escapeHtml(c.mes_ref || c.safra)}</div>`
@@ -2733,7 +2733,8 @@
                     return `<tr class="${c.orfao ? 'row-orfao' : ''}" data-contrato-id="${c.id}">
                         <td>${escapeHtml(c.ordem_servico || '-')}${orfaoBadge}${mesRefHtml}</td>
                         ${htmlCelulaContratoFpd(c)}
-                        <td class="col-cliente"><div class="cliente-nome">${escapeHtml(c.cliente_nome || '-')}</div>${cpfHtml}${promessaBadge}</td>
+                        <td class="col-cliente" title="${escapeAttr(c.cliente_nome || '')}"><span class="cliente-nome">${escapeHtml(c.cliente_nome || '-')}</span>${promessaBadge}</td>
+                        <td class="col-cpf">${cpfHtml}</td>
                         <td>${escapeHtml(c.vendedor_nome || '-')}</td>
                         <td>${escapeHtml(c.status_contrato || '-')}</td>
                         <td>${badgeFatura(c.status_fatura1, c.status_fatura1_display)} ${badgeConferenciaFpd(c.conferencia_fpd, c.fatura1_id)}</td>
@@ -2765,7 +2766,7 @@
             document.getElementById('btn-next').disabled = page >= totalPages;
             aplicarFocoAposAcao();
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="13" class="text-danger text-center">${escapeHtml(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="14" class="text-danger text-center">${escapeHtml(e.message)}</td></tr>`;
         }
     }
     window.carregarDashboard = carregarDashboard;
