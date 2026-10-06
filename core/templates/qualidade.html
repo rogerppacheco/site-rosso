@@ -1907,7 +1907,7 @@
                 atualizarSelectMes();
                 return;
             }
-            // Vencimento: abre na safra no limite (mês atual − 2). Instalação: mais recente.
+            // Vencimento: abre na safra que ainda tem vencimento com menos de 60 dias. Instalação: mais recente.
             const mesPadrao = data.mes_padrao || periodosCache[0].mes;
             if (!mesAtual || !periodosCache.some(p => p.mes === mesAtual)) {
                 mesAtual = mesPadrao;
@@ -1918,7 +1918,7 @@
                     : `${p.total || 0} · ${p.elegiveis || 0} elegíveis`;
                 const limiteCls = p.no_limite ? ' is-limite' : '';
                 const limiteTag = p.no_limite
-                    ? '<div class="mes-limite-tag" title="Fecha o tratamento no fim deste mês calendário">No limite</div>'
+                    ? '<div class="mes-limite-tag" title="Safra mais antiga que ainda tem vencimento com menos de 60 dias">No limite</div>'
                     : '';
                 return `<div class="qualidade-card-mes${limiteCls} ${p.mes === mesAtual ? 'active' : ''}" data-mes="${p.mes}" onclick="selecionarMes('${p.mes}')">
                     <div class="mes-label">${escapeHtml(p.label || p.mes)}</div>

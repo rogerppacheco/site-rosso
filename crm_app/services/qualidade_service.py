@@ -52,8 +52,6 @@ class _StripNonDigits(Func):
 STATUS_FATURA_FECHADA: frozenset[str] = frozenset({'PAGO', 'OUTROS'})
 STATUS_FATURA_ABERTA_PROMESSA: frozenset[str] = frozenset({'NAO_PAGO', 'ATRASADO', 'AGUARDANDO'})
 
-# Safra de vencimento fecha o tratamento no fim do mês + 2 (ex.: jun/26 → até ago/26).
-MESES_OFFSET_LIMITE_VENCIMENTO = 2
 # Meta operacional de FPD (inadimplência da 1ª fatura) no mês.
 META_FPD_PCT = 11.0
 # Atraso da 1ª fatura a partir do qual o FPD da empresa já está consolidado.
@@ -259,14 +257,19 @@ def _corte_safra_instalacao_tratavel() -> date:
 
 
 def mes_limite_tratamento_vencimento(hoje: Optional[date] = None) -> str:
-    """Safra de vencimento cujo prazo de tratamento fecha no fim do mês corrente.
+    """Mês da safra de vencimento que ainda tem 1ª fatura com menos de 60 dias.
 
-    Ex.: em ago/2026 → ``2026-06`` (junho fecha até o fim de agosto);
-    em set/2026 → ``2026-07`` (julho fecha até o fim de setembro).
+    É o mês mais antigo em que ainda existe vencimento recuperável (atraso < 60).
+    Avança dia a dia: quando o último dia desse mês completa 60 dias, o padrão
+    passa para o mês seguinte.
+
+    Ex.: em 05/10/2026 o corte de 60 dias cai em 06/08, então ainda há
+    vencimentos de agosto (a partir de 07/08) e a tela abre em ``2026-08``.
+    Em 30/10/2026 agosto já completou 60 dias e a tela abre em ``2026-09``.
     """
-    ref = (hoje or timezone.localdate()).replace(day=1)
-    alvo = ref - relativedelta(months=MESES_OFFSET_LIMITE_VENCIMENTO)
-    return alvo.strftime('%Y-%m')
+    ref = hoje or timezone.localdate()
+    primeiro_ainda_tratavel = corte_vencimento_fpd(ref) + timedelta(days=1)
+    return primeiro_ainda_tratavel.strftime('%Y-%m')
 
 
 def _resolver_mes_padrao(

@@ -16,6 +16,7 @@ from crm_app.services.qualidade_service import (
     classificar_motivo_bloqueio_cobranca,
     corte_vencimento_fpd,
     escolher_template_fatura_cobranca,
+    mes_limite_tratamento_vencimento,
     extrair_data_promessa_texto,
     proximos_no_job_cobranca,
     validar_fatura_para_envio_cobranca,
@@ -264,3 +265,34 @@ class TestMotivoBloqueioCobranca(SimpleTestCase):
 
     def test_job_agora_as_nove(self) -> None:
         self.assertEqual(HORARIO_JOB_COBRANCA, '09:00')
+
+
+class TestMesLimiteTratamentoVencimento(SimpleTestCase):
+    """Safra inicial do Qualidade: mês mais antigo ainda com atraso < 60 dias."""
+
+    def test_5_outubro_abre_agosto(self) -> None:
+        # 05/10 − 60 dias = 06/08; 07/08 ainda não completou 60 dias.
+        self.assertEqual(
+            mes_limite_tratamento_vencimento(date(2026, 10, 5)),
+            '2026-08',
+        )
+
+    def test_29_outubro_agosto_ainda_tem_dia_tratavel(self) -> None:
+        # 29/10 − 60 dias = 30/08; 31/08 ainda está abaixo de 60 dias.
+        self.assertEqual(
+            mes_limite_tratamento_vencimento(date(2026, 10, 29)),
+            '2026-08',
+        )
+
+    def test_30_outubro_agosto_ja_completou_60_abre_setembro(self) -> None:
+        # 30/10 − 60 dias = 31/08; agosto inteiro já está em +60.
+        self.assertEqual(
+            mes_limite_tratamento_vencimento(date(2026, 10, 30)),
+            '2026-09',
+        )
+
+    def test_1_novembro_continua_em_setembro(self) -> None:
+        self.assertEqual(
+            mes_limite_tratamento_vencimento(date(2026, 11, 1)),
+            '2026-09',
+        )
