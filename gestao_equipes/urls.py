@@ -60,6 +60,7 @@ from crm_app.views import (
 )
 from crm_app.qualidade_api import (
     QualidadePeriodosView,
+    QualidadeFocoTratamentoView,
     QualidadeDashboardView,
     QualidadeSincronizarFaltantesView,
     QualidadeOrfaosView,
@@ -220,6 +221,7 @@ urlpatterns = [
     # Módulo Qualidade (UI unificada FPD + bônus)
     path('qualidade/', page_qualidade, name='page_qualidade'),
     path('api/qualidade/periodos/', QualidadePeriodosView.as_view(), name='api-qualidade-periodos'),
+    path('api/qualidade/foco-tratamento/', QualidadeFocoTratamentoView.as_view(), name='api-qualidade-foco-tratamento'),
     path('api/qualidade/dashboard/', QualidadeDashboardView.as_view(), name='api-qualidade-dashboard'),
     path('api/qualidade/sincronizar-faltantes/', QualidadeSincronizarFaltantesView.as_view(), name='api-qualidade-sync'),
     path('api/qualidade/orfaos/', QualidadeOrfaosView.as_view(), name='api-qualidade-orfaos'),

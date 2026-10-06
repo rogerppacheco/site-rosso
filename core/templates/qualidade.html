@@ -187,6 +187,13 @@
     white-space: nowrap;
 }
 .qualidade-toolbar .q-sel-mes { width: auto; min-width: 7.2rem; max-width: 9rem; }
+.q-foco-grupo .btn {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.12rem 0.45rem;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
+}
 .qualidade-toolbar .q-sel-filtro {
     width: auto;
     min-width: 7.5rem;
@@ -1023,6 +1030,15 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="filtrarPromessas('proximos')">Próx. 3 dias</button>
             </div>
             <div class="qualidade-toolbar-row">
+                <div class="btn-group q-foco-grupo" id="foco-indicador" role="group" aria-label="Fatura em tratamento">
+                    <button type="button" class="btn btn-sm btn-primary" data-ind="FPD" title="1ª fatura" onclick="setFocoIndicador('FPD')">FPD</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-ind="SPD" title="2ª fatura" onclick="setFocoIndicador('SPD')">SPD</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-ind="TPD" title="3ª fatura" onclick="setFocoIndicador('TPD')">TPD</button>
+                </div>
+                <div class="btn-group q-foco-grupo" id="foco-segmento" role="group" aria-label="Segmento">
+                    <button type="button" class="btn btn-sm btn-primary" data-seg="" title="Todos os segmentos" onclick="setFocoSegmento('')">Todos</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-seg="Empresarial" title="Só o empresarial da fatura selecionada" onclick="setFocoSegmento('Empresarial')">Empresarial</button>
+                </div>
                 <select id="sel-mes-tratamento" class="form-select form-select-sm q-sel-mes" title="Mês" onchange="selecionarMes(this.value)"></select>
                 <div class="qualidade-filas btn-group" role="group" aria-label="Fila de tratamento" id="filas-tratamento">
                     <input type="radio" class="btn-check" name="fila-trat" id="fila-atrasados-lt60" autocomplete="off" checked>
@@ -1052,7 +1068,7 @@
                 </button>
                 <span class="qualidade-pct-fpd d-none" id="pct-fpd" title="(Atrasados + Em aberto) ÷ Total">
                     <span class="q-pct-val" id="pct-fpd-val">—</span>
-                    <span class="q-pct-lbl">% FPD</span>
+                    <span class="q-pct-lbl" id="pct-fpd-lbl">% FPD</span>
                     <span class="q-pct-meta d-none" id="pct-fpd-meta"></span>
                 </span>
                 <div class="q-reconc-wrap ms-auto d-none" id="reconciliacao-fpd">
@@ -1147,7 +1163,7 @@
                             <th>Cliente</th>
                             <th>Vendedor</th>
                             <th>Status</th>
-                            <th>1ª fatura</th>
+                            <th id="th-fatura-indicador">1ª fatura</th>
                             <th>Venc.</th>
                             <th>Status trat.</th>
                             <th>Pagas</th>
@@ -1578,6 +1594,8 @@
     let modoSomenteFpd = false;
     let abaPrincipal = 'tratamento';
     let fila = 'atrasados_lt60';
+    let indicadorTratamento = 'FPD';
+    let segmentoTratamento = '';
     let periodosCache = [];
     let statusTratamentoOpcoes = [];
     let modalEnvio = null;
@@ -1880,9 +1898,77 @@
             'btn ' + (lente === 'vencimento' ? 'btn-primary' : 'btn-outline-primary');
         document.getElementById('btn-lente-instalacao').className =
             'btn ' + (lente === 'instalacao' ? 'btn-primary' : 'btn-outline-primary');
+        pintarFocoTratamento();
         carregarPeriodos();
     }
     window.setLente = setLente;
+
+    function rotuloFaturaFoco() {
+        return { FPD: '1ª fatura', SPD: '2ª fatura', TPD: '3ª fatura' }[indicadorTratamento] || '1ª fatura';
+    }
+
+    function pintarFocoTratamento() {
+        document.querySelectorAll('#foco-indicador [data-ind]').forEach((btn) => {
+            const on = btn.dataset.ind === indicadorTratamento;
+            btn.classList.toggle('btn-primary', on);
+            btn.classList.toggle('btn-outline-primary', !on);
+        });
+        document.querySelectorAll('#foco-segmento [data-seg]').forEach((btn) => {
+            const on = (btn.dataset.seg || '') === (segmentoTratamento || '');
+            btn.classList.toggle('btn-primary', on);
+            btn.classList.toggle('btn-outline-primary', !on);
+        });
+        const th = document.getElementById('th-fatura-indicador');
+        if (th) th.textContent = rotuloFaturaFoco();
+        const pct = document.getElementById('pct-fpd-lbl');
+        if (pct) pct.textContent = `% ${indicadorTratamento}`;
+        const mostra = lente === 'vencimento';
+        document.getElementById('foco-indicador')?.classList.toggle('d-none', !mostra);
+        document.getElementById('foco-segmento')?.classList.toggle('d-none', !mostra);
+    }
+
+    async function carregarFocoTratamento() {
+        try {
+            const r = await fetch(`${API}/api/qualidade/foco-tratamento/`, { headers: authHeaders() });
+            const data = await r.json();
+            if (r.ok) {
+                indicadorTratamento = data.indicador || 'FPD';
+                segmentoTratamento = data.segmento || '';
+            }
+        } catch (_) { /* abre em FPD / Todos */ }
+        pintarFocoTratamento();
+    }
+
+    function salvarFocoTratamento() {
+        fetch(`${API}/api/qualidade/foco-tratamento/`, {
+            method: 'PUT',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                indicador: indicadorTratamento,
+                segmento: segmentoTratamento,
+            }),
+        }).catch(() => {});
+    }
+
+    window.setFocoIndicador = function (ind) {
+        if (indicadorTratamento === ind) return;
+        indicadorTratamento = ind;
+        mesAtual = '';
+        page = 1;
+        pintarFocoTratamento();
+        salvarFocoTratamento();
+        carregarPeriodos();
+    };
+
+    window.setFocoSegmento = function (seg) {
+        const proximo = seg || '';
+        if ((segmentoTratamento || '') === proximo) return;
+        segmentoTratamento = proximo;
+        page = 1;
+        pintarFocoTratamento();
+        salvarFocoTratamento();
+        carregarPeriodos();
+    };
 
     function atualizarSelectMes() {
         const sel = document.getElementById('sel-mes-tratamento');
@@ -1895,7 +1981,12 @@
         const wrap = document.getElementById('periodos-cards');
         wrap.innerHTML = '<div class="text-muted small p-2">Carregando meses…</div>';
         try {
-            const r = await fetch(`${API}/api/qualidade/periodos/?lente=${encodeURIComponent(lente)}`, {
+            const paramsPeriodo = new URLSearchParams({ lente });
+            if (lente === 'vencimento') {
+                paramsPeriodo.set('indicador', indicadorTratamento || 'FPD');
+                if (segmentoTratamento) paramsPeriodo.set('nm_seg', segmentoTratamento);
+            }
+            const r = await fetch(`${API}/api/qualidade/periodos/?${paramsPeriodo}`, {
                 headers: authHeaders(),
             });
             const data = await r.json();
@@ -2436,6 +2527,10 @@
             page_size: pageSizeEfetivo(),
             fila: filaEfetiva(),
         });
+        if (lente === 'vencimento') {
+            params.set('indicador', indicadorTratamento || 'FPD');
+            if (segmentoTratamento) params.set('nm_seg', segmentoTratamento);
+        }
         if (q) params.set('q', q);
         if (st) params.set('status', st);
         if (el) params.set('elegivel', el);
@@ -2489,8 +2584,8 @@
                     thValor.textContent = 'Bônus';
                     thValor.title = 'Bônus M10 (R$ 150) — apenas se elegível (Diretoria/Admin)';
                 } else {
-                    thValor.textContent = 'Valor 1ª';
-                    thValor.title = 'Valor da 1ª fatura do contrato';
+                    thValor.textContent = 'Valor';
+                    thValor.title = `Valor da ${rotuloFaturaFoco()}`;
                 }
             }
             document.getElementById('kpi-bonus-wrap').style.display = podeVerBonus ? '' : 'none';
@@ -2512,7 +2607,7 @@
                 tbody.innerHTML = rows.map(c => {
                     const bonusCell = podeVerBonus
                         ? `<td title="Bônus M10 — só para elegíveis">${c.elegivel ? ('R$ ' + Number(c.valor_bonus || 0).toFixed(2)) : '—'}</td>`
-                        : `<td title="Valor da 1ª fatura">${c.valor_fatura1 != null ? formatMoney(c.valor_fatura1) : '—'}</td>`;
+                        : `<td title="Valor da ${rotuloFaturaFoco()}">${c.valor_fatura1 != null ? formatMoney(c.valor_fatura1) : '—'}</td>`;
                     const orfaoBadge = c.orfao ? ' <span class="badge badge-orfao">órfão</span>' : '';
                     const disabled = c.pode_tratar ? '' : 'disabled title="Precisa CPF/vínculo"';
                     const corBord = c.status_tratamento_cor ? `style="border-color:${escapeAttr(c.status_tratamento_cor)}"` : '';
@@ -4244,7 +4339,7 @@
         document.getElementById('qualidade-page').classList.add('modo-tratamento');
         const tb = document.getElementById('qualidade-toolbar');
         if (tb) tb.style.display = '';
-        carregarPeriodos();
+        carregarFocoTratamento().then(() => carregarPeriodos());
         carregarPreviewCobranca();
         setInterval(carregarPreviewCobranca, 60000);
     });

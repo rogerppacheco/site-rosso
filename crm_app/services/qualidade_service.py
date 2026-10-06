@@ -17,6 +17,7 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db.models import CharField, Count, F, Func, Q, QuerySet, Value
+from django.db.utils import OperationalError, ProgrammingError
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
@@ -29,6 +30,7 @@ from crm_app.models import (
     ContratoM10,
     FaturaM10,
     ImportacaoFPD,
+    QualidadeFocoTratamento,
     SafraM10,
     StatusCRM,
     Venda,
@@ -61,6 +63,26 @@ HORARIO_JOB_COBRANCA = '09:00'
 FILA_ATRASADOS = 'atrasados'
 FILA_ATRASADOS_LT60 = 'atrasados_lt60'
 FILA_ATRASADOS_GTE60 = 'atrasados_gte60'
+INDICADORES_TRATAMENTO = ('FPD', 'SPD', 'TPD')
+
+
+def normalizar_indicador_tratamento(valor: Optional[str]) -> str:
+    """FPD (1ª), SPD (2ª) ou TPD (3ª). Qualquer outro valor volta para FPD."""
+    ind = (valor or 'FPD').strip().upper()
+    if ind in INDICADORES_TRATAMENTO:
+        return ind
+    return 'FPD'
+
+
+def numero_fatura_tratamento(indicador: Optional[str]) -> int:
+    """Número da fatura M10 correspondente ao indicador em tratamento."""
+    return INDICADOR_PARA_NUMERO_FATURA.get(normalizar_indicador_tratamento(indicador), 1)
+
+
+def normalizar_segmento_foco(valor: Optional[str]) -> str:
+    """Segmento gravado no foco: vazio (todos) ou Empresarial."""
+    seg = _normalizar_filtro_nm_seg(valor)
+    return 'Empresarial' if seg == 'Empresarial' else ''
 
 
 def _fatura_esta_fechada(status: Optional[str]) -> bool:
@@ -308,10 +330,14 @@ def faltam_pagamentos_meta_fpd(
     return max(0, inad - max_inad)
 
 
-def listar_periodos(lente: str) -> list[dict[str, Any]]:
+def listar_periodos(
+    lente: str,
+    indicador: Optional[str] = None,
+    nm_seg: Optional[str] = None,
+) -> list[dict[str, Any]]:
     """Lista meses disponíveis na lente, ordenados do mais recente ao mais antigo.
 
-    - ``vencimento``: meses distintos de ``data_vencimento`` da fatura 1.
+    - ``vencimento``: meses da 1ª fatura. SPD, TPD ou Empresarial usam a planilha.
     - ``instalacao``: só safras que ainda não completaram 10 meses (tratáveis).
     """
     lente_norm = (lente or LENTE_VENCIMENTO).strip().lower()
@@ -361,17 +387,37 @@ def listar_periodos(lente: str) -> list[dict[str, Any]]:
                 'no_limite': False,
             }
     else:
-        qs = (
-            FaturaM10.objects.filter(numero_fatura=1)
-            .exclude(data_vencimento__isnull=True)
-            .annotate(mes_ref=TruncMonth('data_vencimento'))
-            .values('mes_ref')
-            .annotate(
-                total=Count('id'),
-                pagas=Count('id', filter=Q(status__in=STATUS_FATURA_FECHADA)),
-                abertas=Count('id', filter=~Q(status__in=STATUS_FATURA_FECHADA)),
+        ind = normalizar_indicador_tratamento(indicador) if indicador else ''
+        seg = _normalizar_filtro_nm_seg(nm_seg)
+        if ind and (ind != 'FPD' or seg):
+            qs_imp = ImportacaoFPD.objects.filter(
+                indicador=ind,
+                dt_venc_orig__isnull=False,
+                match_status='MATCHED',
             )
-        )
+            if seg:
+                qs_imp = qs_imp.filter(nm_seg__iexact=seg)
+            qs = (
+                qs_imp.annotate(mes_ref=TruncMonth('dt_venc_orig'))
+                .values('mes_ref')
+                .annotate(
+                    total=Count('id'),
+                    abertas=Count('id', filter=Q(ds_sit_fatura__iexact='ABERTA')),
+                    pagas=Count('id', filter=Q(ds_sit_fatura__iexact='FECHADA')),
+                )
+            )
+        else:
+            qs = (
+                FaturaM10.objects.filter(numero_fatura=1)
+                .exclude(data_vencimento__isnull=True)
+                .annotate(mes_ref=TruncMonth('data_vencimento'))
+                .values('mes_ref')
+                .annotate(
+                    total=Count('id'),
+                    pagas=Count('id', filter=Q(status__in=STATUS_FATURA_FECHADA)),
+                    abertas=Count('id', filter=~Q(status__in=STATUS_FATURA_FECHADA)),
+                )
+            )
         for row in qs:
             mes_ref = row['mes_ref']
             if not mes_ref:
@@ -389,10 +435,20 @@ def listar_periodos(lente: str) -> list[dict[str, Any]]:
     return sorted(periodos.values(), key=lambda p: p['mes'], reverse=True)
 
 
-def payload_periodos_qualidade(lente: str) -> dict[str, Any]:
+def payload_periodos_qualidade(
+    lente: str,
+    indicador: Optional[str] = None,
+    nm_seg: Optional[str] = None,
+) -> dict[str, Any]:
     """Resposta da API de períodos, com mês padrão (safra no limite de tratamento)."""
     lente_norm = (lente or LENTE_VENCIMENTO).strip().lower()
-    periodos = listar_periodos(lente_norm)
+    ind = normalizar_indicador_tratamento(indicador) if indicador else 'FPD'
+    seg = normalizar_segmento_foco(nm_seg)
+    periodos = listar_periodos(
+        lente_norm,
+        ind if lente_norm == LENTE_VENCIMENTO else None,
+        seg if lente_norm == LENTE_VENCIMENTO else None,
+    )
     mes_limite = (
         mes_limite_tratamento_vencimento()
         if lente_norm == LENTE_VENCIMENTO
@@ -405,6 +461,8 @@ def payload_periodos_qualidade(lente: str) -> dict[str, Any]:
         'mes_padrao': mes_padrao,
         'mes_limite_tratamento': mes_limite,
         'meta_fpd_pct': META_FPD_PCT,
+        'indicador': ind if lente_norm == LENTE_VENCIMENTO else '',
+        'segmento': seg if lente_norm == LENTE_VENCIMENTO else '',
     }
 
 
@@ -444,24 +502,25 @@ def _aplicar_filtros_contratos(
         elif str(status_tratamento_id).isdigit():
             queryset = queryset.filter(status_tratamento_id=int(status_tratamento_id))
 
+    numero_fatura = numero_fatura_tratamento(filtros.get('indicador'))
     status_fatura1 = filtros.get('status_fatura1')
     if status_fatura1:
         queryset = queryset.filter(
-            faturas__numero_fatura=1,
+            faturas__numero_fatura=numero_fatura,
             faturas__status=status_fatura1,
         ).distinct()
 
     conferencia_fpd = (filtros.get('conferencia_fpd') or '').strip().upper()
     if conferencia_fpd:
         queryset = queryset.filter(
-            faturas__numero_fatura=1,
+            faturas__numero_fatura=numero_fatura,
             faturas__conferencia_fpd=conferencia_fpd,
         ).distinct()
 
     faixa_atraso = (filtros.get('faixa_atraso') or filtros.get('faixa') or '').strip()
     if faixa_atraso:
         queryset = queryset.filter(
-            _q_faixa_atraso_fatura1(faixa_atraso, timezone.localdate())
+            _q_faixa_atraso_fatura1(faixa_atraso, timezone.localdate(), numero_fatura)
         ).distinct()
 
     promessa = (filtros.get('promessa') or '').strip().lower()
@@ -588,12 +647,13 @@ def _promessa_aberta_contrato(
     }
 
 
-def _q_fatura1_atrasada(hoje: date) -> Q:
-    """1ª fatura em débito vencido (visão tratamento / BO).
+def _q_fatura1_atrasada(hoje: date, numero: int = 1) -> Q:
+    """Fatura do indicador em débito vencido (visão tratamento / BO).
 
     OUTROS (ex.: Cancelada) não entra aqui — vai para Pagas/fechadas.
+    ``numero`` 1 = FPD, 2 = SPD, 3 = TPD.
     """
-    return Q(faturas__numero_fatura=1) & (
+    return Q(faturas__numero_fatura=numero) & (
         Q(faturas__status='ATRASADO')
         | (
             Q(faturas__status__in=['NAO_PAGO', 'AGUARDANDO'])
@@ -619,66 +679,75 @@ def classificar_fila_atraso(dias_atraso: int) -> str:
     return FILA_ATRASADOS_LT60
 
 
-def _q_fatura1_atrasada_lt60(hoje: date) -> Q:
-    """Atrasado com menos de 60 dias — ainda dá para recuperar o FPD."""
+def _q_fatura1_atrasada_lt60(hoje: date, numero: int = 1) -> Q:
+    """Atrasado com menos de 60 dias — ainda dá para recuperar o indicador."""
     corte = corte_vencimento_fpd(hoje)
-    return _q_fatura1_atrasada(hoje) & (
+    return _q_fatura1_atrasada(hoje, numero) & (
         Q(faturas__data_vencimento__gt=corte)
         | Q(faturas__data_vencimento__isnull=True)
     )
 
 
-def _q_fatura1_atrasada_gte60(hoje: date) -> Q:
-    """Atrasado com 60+ dias — FPD já consolidado para a empresa."""
+def _q_fatura1_atrasada_gte60(hoje: date, numero: int = 1) -> Q:
+    """Atrasado com 60+ dias — indicador já consolidado para a empresa."""
     corte = corte_vencimento_fpd(hoje)
-    return _q_fatura1_atrasada(hoje) & Q(faturas__data_vencimento__lte=corte)
+    return _q_fatura1_atrasada(hoje, numero) & Q(faturas__data_vencimento__lte=corte)
 
 
-def _q_fatura1_em_aberto(hoje: date) -> Q:
-    """1ª fatura em aberto ainda no prazo (não paga e vencimento >= hoje)."""
+def _q_fatura1_em_aberto(hoje: date, numero: int = 1) -> Q:
+    """Fatura em aberto ainda no prazo (não paga e vencimento >= hoje)."""
     return (
-        Q(faturas__numero_fatura=1)
+        Q(faturas__numero_fatura=numero)
         & Q(faturas__status__in=['NAO_PAGO', 'AGUARDANDO', 'OUTROS'])
         & Q(faturas__data_vencimento__gte=hoje)
     )
 
 
-def _q_fatura1_paga() -> Q:
-    """1ª fatura paga/fechada na visão tratamento (PAGO + OUTROS).
+def _q_fatura1_paga(numero: int = 1) -> Q:
+    """Fatura paga/fechada na visão tratamento (PAGO + OUTROS).
 
-    Inclui PAGO marcado pelo BO (mesmo aguardando confirmação FPD).
+    Inclui PAGO marcado pelo BO (mesmo aguardando confirmação da planilha).
     """
-    return Q(faturas__numero_fatura=1) & Q(faturas__status__in=STATUS_FATURA_FECHADA)
+    return Q(faturas__numero_fatura=numero) & Q(faturas__status__in=STATUS_FATURA_FECHADA)
 
 
-def _aplicar_filtro_fila(queryset: QuerySet[ContratoM10], fila: str) -> QuerySet[ContratoM10]:
+def _aplicar_filtro_fila(
+    queryset: QuerySet[ContratoM10],
+    fila: str,
+    numero: int = 1,
+) -> QuerySet[ContratoM10]:
     """Filas de tratamento: atrasados (−60d / +60d) x em aberto x pagas."""
     hoje = timezone.localdate()
     if fila in (FILA_ATRASADOS_LT60, 'atrasados_-60', 'atrasados_menos_60'):
-        return queryset.filter(_q_fatura1_atrasada_lt60(hoje)).distinct()
+        return queryset.filter(_q_fatura1_atrasada_lt60(hoje, numero)).distinct()
     if fila in (FILA_ATRASADOS_GTE60, 'atrasados_+60', 'atrasados_mais_60'):
-        return queryset.filter(_q_fatura1_atrasada_gte60(hoje)).distinct()
+        return queryset.filter(_q_fatura1_atrasada_gte60(hoje, numero)).distinct()
     if fila == FILA_ATRASADOS:
-        return queryset.filter(_q_fatura1_atrasada(hoje)).distinct()
+        return queryset.filter(_q_fatura1_atrasada(hoje, numero)).distinct()
     if fila in ('abertos', 'em_aberto'):
-        return queryset.filter(_q_fatura1_em_aberto(hoje)).distinct()
+        return queryset.filter(_q_fatura1_em_aberto(hoje, numero)).distinct()
     if fila in ('pagas', 'pago', 'pagos'):
-        return queryset.filter(_q_fatura1_paga()).distinct()
+        return queryset.filter(_q_fatura1_paga(numero)).distinct()
     if fila in ('todos', 'total', ''):
         return queryset.filter(
-            _q_fatura1_atrasada(hoje) | _q_fatura1_em_aberto(hoje) | _q_fatura1_paga()
+            _q_fatura1_atrasada(hoje, numero)
+            | _q_fatura1_em_aberto(hoje, numero)
+            | _q_fatura1_paga(numero)
         ).distinct()
     return queryset
 
 
-def contagens_filas_tratamento(queryset: QuerySet[ContratoM10]) -> dict[str, Any]:
+def contagens_filas_tratamento(
+    queryset: QuerySet[ContratoM10],
+    numero: int = 1,
+) -> dict[str, Any]:
     """Contagens das filas sem aplicar o filtro de fila atual."""
     hoje = timezone.localdate()
-    atrasados_lt60 = queryset.filter(_q_fatura1_atrasada_lt60(hoje)).distinct().count()
-    atrasados_gte60 = queryset.filter(_q_fatura1_atrasada_gte60(hoje)).distinct().count()
+    atrasados_lt60 = queryset.filter(_q_fatura1_atrasada_lt60(hoje, numero)).distinct().count()
+    atrasados_gte60 = queryset.filter(_q_fatura1_atrasada_gte60(hoje, numero)).distinct().count()
     atrasados = atrasados_lt60 + atrasados_gte60
-    abertos = queryset.filter(_q_fatura1_em_aberto(hoje)).distinct().count()
-    pagas = queryset.filter(_q_fatura1_paga()).distinct().count()
+    abertos = queryset.filter(_q_fatura1_em_aberto(hoje, numero)).distinct().count()
+    pagas = queryset.filter(_q_fatura1_paga(numero)).distinct().count()
     total = atrasados + abertos + pagas
     pct_fpd = round(
         ((atrasados + abertos) / total * 100) if total > 0 else 0.0,
@@ -717,7 +786,10 @@ _FILTROS_OPCAO_CONTAGEM: frozenset[str] = frozenset({
 })
 
 
-def contagens_opcoes_filtros(queryset: QuerySet[ContratoM10]) -> dict[str, Any]:
+def contagens_opcoes_filtros(
+    queryset: QuerySet[ContratoM10],
+    numero: int = 1,
+) -> dict[str, Any]:
     """Contagens por opção de filtro no contexto atual (mês + fila + demais filtros).
 
     O queryset deve já estar anotado com ``faturas_pagas`` e sem os filtros
@@ -727,7 +799,7 @@ def contagens_opcoes_filtros(queryset: QuerySet[ContratoM10]) -> dict[str, Any]:
     faixas: dict[str, int] = {}
     for chave, _label in FAIXAS_NIO_ORDEM:
         faixas[chave] = queryset.filter(
-            _q_faixa_atraso_fatura1(chave, hoje)
+            _q_faixa_atraso_fatura1(chave, hoje, numero)
         ).distinct().count()
 
     faturas_pagas: dict[str, int] = {}
@@ -737,7 +809,7 @@ def contagens_opcoes_filtros(queryset: QuerySet[ContratoM10]) -> dict[str, Any]:
     conferencia: dict[str, int] = {}
     for conf in ('AGUARDANDO', 'CONFIRMADO', 'DIVERGENTE'):
         conferencia[conf] = queryset.filter(
-            faturas__numero_fatura=1,
+            faturas__numero_fatura=numero,
             faturas__conferencia_fpd=conf,
         ).distinct().count()
 
@@ -1057,17 +1129,20 @@ def dashboard_qualidade(
             # Usa dt_venc_orig da ImportacaoFPD — não FaturaM10.data_vencimento —
             # para não divergir quando o CRM ficou com vencimento recalculado
             # (ex.: instalação+25) diferente da planilha.
-            contrato_ids = (
-                ImportacaoFPD.objects.filter(
-                    indicador='FPD',
-                    dt_venc_orig__gte=data_inicio,
-                    dt_venc_orig__lt=data_fim,
-                    match_status='MATCHED',
-                    contrato_m10_id__isnull=False,
-                )
-                .values_list('contrato_m10_id', flat=True)
-                .distinct()
+            ind_universo = normalizar_indicador_tratamento(filtros.get('indicador'))
+            seg_universo = _normalizar_filtro_nm_seg(
+                filtros.get('nm_seg') or filtros.get('segmento')
             )
+            imp_universo = ImportacaoFPD.objects.filter(
+                indicador=ind_universo,
+                dt_venc_orig__gte=data_inicio,
+                dt_venc_orig__lt=data_fim,
+                match_status='MATCHED',
+                contrato_m10_id__isnull=False,
+            )
+            if seg_universo:
+                imp_universo = imp_universo.filter(nm_seg__iexact=seg_universo)
+            contrato_ids = imp_universo.values_list('contrato_m10_id', flat=True).distinct()
             queryset = ContratoM10.objects.filter(id__in=contrato_ids)
 
     # Órfãos ficam fora do tratamento por padrão (contam em "Faltam no CRM" / modal órfãos)
@@ -1094,8 +1169,25 @@ def dashboard_qualidade(
     )
 
     fila = (filtros.get('fila') or 'todos').strip().lower()
-    qs_para_opcoes = _aplicar_filtro_fila(qs_base_annot, fila) if fila else qs_base_annot
-    contagens_filtros = contagens_opcoes_filtros(qs_para_opcoes)
+    numero_fatura = (
+        numero_fatura_tratamento(filtros.get('indicador'))
+        if lente_norm == LENTE_VENCIMENTO
+        else 1
+    )
+    indicador_fila = (
+        normalizar_indicador_tratamento(filtros.get('indicador'))
+        if lente_norm == LENTE_VENCIMENTO
+        else 'FPD'
+    )
+    segmento_fila = (
+        normalizar_segmento_foco(filtros.get('nm_seg') or filtros.get('segmento'))
+        if lente_norm == LENTE_VENCIMENTO
+        else ''
+    )
+    qs_para_opcoes = (
+        _aplicar_filtro_fila(qs_base_annot, fila, numero_fatura) if fila else qs_base_annot
+    )
+    contagens_filtros = contagens_opcoes_filtros(qs_para_opcoes, numero_fatura)
 
     # QS completo (todos os filtros dimensionais) — filas usam o QS sem filtro de fila
     queryset = (
@@ -1122,13 +1214,19 @@ def dashboard_qualidade(
         if n_pagas is not None and 0 <= n_pagas <= 10:
             queryset = queryset.filter(faturas_pagas=n_pagas)
 
-    filas = contagens_filas_tratamento(queryset)
+    filas = contagens_filas_tratamento(queryset, numero_fatura)
     reconciliacao = (
         None if busca_geral
-        else reconciliar_fpd_com_painel(mes, filas, lente=lente_norm)
+        else reconciliar_fpd_com_painel(
+            mes,
+            filas,
+            lente=lente_norm,
+            indicador=indicador_fila,
+            nm_seg=segmento_fila,
+        )
     )
     if fila:
-        queryset = _aplicar_filtro_fila(queryset, fila)
+        queryset = _aplicar_filtro_fila(queryset, fila, numero_fatura)
 
     contratos_list = list(queryset)
     for c in contratos_list:
@@ -1144,7 +1242,7 @@ def dashboard_qualidade(
     faturas1_map: dict[int, FaturaM10] = {}
     for f in faturas_qs:
         faturas_por_contrato.setdefault(f.contrato_id, []).append(f)
-        if f.numero_fatura == 1:
+        if f.numero_fatura == numero_fatura:
             faturas1_map[f.contrato_id] = f
 
     total = len(contratos_list)
@@ -1200,10 +1298,15 @@ def dashboard_qualidade(
     for c in pagina_contratos:
         is_elegivel = _contrato_elegivel_dinamico(c)
         f1 = faturas1_map.get(c.id)
-        status_fatura1 = f1.status if f1 else (c.status_fatura_fpd or None)
-        status_fatura1_display = (
-            status_display_map.get(f1.status, f1.status) if f1 else (c.status_fatura_fpd or '-')
-        )
+        if f1:
+            status_fatura1 = f1.status
+            status_fatura1_display = status_display_map.get(f1.status, f1.status)
+        elif numero_fatura == 1:
+            status_fatura1 = c.status_fatura_fpd or None
+            status_fatura1_display = c.status_fatura_fpd or '-'
+        else:
+            status_fatura1 = None
+            status_fatura1_display = '-'
         orfao = _eh_orfao(c)
         contato = enriquecer_contato_contrato(c)
         valor_bonus: Optional[int]
@@ -1310,6 +1413,9 @@ def dashboard_qualidade(
         'total_pages': total_pages,
         'total': total,
         'pode_ver_valor_bonus': ver_bonus,
+        'indicador': indicador_fila,
+        'segmento': segmento_fila,
+        'numero_fatura': numero_fatura,
     }
 
 
@@ -1318,6 +1424,8 @@ def reconciliar_fpd_com_painel(
     filas: dict[str, int],
     *,
     lente: str = 'vencimento',
+    indicador: str = 'FPD',
+    nm_seg: Optional[str] = None,
 ) -> dict[str, Any]:
     """Compara totais da planilha FPD com as filas do painel (atrasados/abertos/pagas)."""
     data_inicio, data_fim = mes_range(mes)
@@ -1327,11 +1435,16 @@ def reconciliar_fpd_com_painel(
     painel_total = atrasados + abertos + pagas
     painel_abertas = atrasados + abertos
 
+    ind_rec = normalizar_indicador_tratamento(indicador)
+    seg_rec = _normalizar_filtro_nm_seg(nm_seg)
+    numero_rec = numero_fatura_tratamento(ind_rec)
     qs_fpd = ImportacaoFPD.objects.filter(
-        indicador='FPD',
+        indicador=ind_rec,
         dt_venc_orig__gte=data_inicio,
         dt_venc_orig__lt=data_fim,
     )
+    if seg_rec:
+        qs_fpd = qs_fpd.filter(nm_seg__iexact=seg_rec)
     fpd_total = qs_fpd.count()
     fpd_abertas = qs_fpd.filter(ds_sit_fatura__iexact='ABERTA').count()
     fpd_fechadas = qs_fpd.filter(ds_sit_fatura__iexact='FECHADA').count()
@@ -1346,15 +1459,12 @@ def reconciliar_fpd_com_painel(
 
     # PAGO no tratamento ainda aguardando/divergente da planilha (explica Δ abertas)
     # Mesmo universo do painel: ImportacaoFPD MATCHED do mês (não data_vencimento CRM)
-    contrato_ids_mes = ImportacaoFPD.objects.filter(
-        indicador='FPD',
-        dt_venc_orig__gte=data_inicio,
-        dt_venc_orig__lt=data_fim,
+    contrato_ids_mes = qs_fpd.filter(
         match_status='MATCHED',
         contrato_m10_id__isnull=False,
     ).values_list('contrato_m10_id', flat=True)
     aguard_fpd = FaturaM10.objects.filter(
-        numero_fatura=1,
+        numero_fatura=numero_rec,
         contrato_id__in=contrato_ids_mes,
         status='PAGO',
         conferencia_fpd__in=['AGUARDANDO', 'DIVERGENTE'],
@@ -1462,7 +1572,7 @@ def _normalizar_faixa_nio(faixa: str, dias_atraso: int = 0) -> str:
     return _faixa_por_dias_vivos(dias_atraso)
 
 
-def _q_faixa_atraso_fatura1(faixa_chave: str, hoje: date) -> Q:
+def _q_faixa_atraso_fatura1(faixa_chave: str, hoje: date, numero: int = 1) -> Q:
     """Filtro de contratos pela faixa de atraso da 1ª fatura (ao vivo pelo vencimento)."""
     chave = (faixa_chave or '').strip().lower()
     limites = FAIXA_ATRASO_RANGES.get(chave)
@@ -1471,7 +1581,7 @@ def _q_faixa_atraso_fatura1(faixa_chave: str, hoje: date) -> Q:
     lo, hi = limites
     from datetime import timedelta
 
-    base = Q(faturas__numero_fatura=1) & ~Q(faturas__status__in=STATUS_FATURA_FECHADA)
+    base = Q(faturas__numero_fatura=numero) & ~Q(faturas__status__in=STATUS_FATURA_FECHADA)
     # Sempre calcula pela data de vencimento (não depende de dias_atraso congelado da planilha)
     if hi is None:
         return base & Q(faturas__data_vencimento__lte=hoje - timedelta(days=lo))
@@ -1981,6 +2091,35 @@ def dashboard_fpd_por_vendedor(
         'abertas_total': tot_geral['abertas'],
         'divergencias_faixa_planilha': 0,
     }
+
+
+def obter_foco_tratamento(user: Any) -> dict[str, str]:
+    """Foco salvo do usuário. Sem registro, abre em FPD e todos os segmentos."""
+    padrao = {'indicador': 'FPD', 'segmento': ''}
+    try:
+        foco = QualidadeFocoTratamento.objects.filter(usuario=user).first()
+    except (ProgrammingError, OperationalError):
+        logger.warning('Tabela de foco do tratamento ainda não existe')
+        return padrao
+    if not foco:
+        return padrao
+    return {
+        'indicador': normalizar_indicador_tratamento(foco.indicador),
+        'segmento': normalizar_segmento_foco(foco.segmento),
+    }
+
+
+def salvar_foco_tratamento(user: Any, indicador: Optional[str], segmento: Optional[str]) -> dict[str, str]:
+    """Grava o foco e devolve o valor normalizado."""
+    dados = {
+        'indicador': normalizar_indicador_tratamento(indicador),
+        'segmento': normalizar_segmento_foco(segmento),
+    }
+    QualidadeFocoTratamento.objects.update_or_create(
+        usuario=user,
+        defaults=dados,
+    )
+    return dados
 
 
 def _normalizar_filtro_nm_seg(nm_seg: Optional[str]) -> Optional[str]:

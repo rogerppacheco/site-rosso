@@ -5437,6 +5437,28 @@ class HistoricoPapBusca(models.Model):
         return f"Busca PAP #{self.pk} {self.status}"
 
 
+class QualidadeFocoTratamento(models.Model):
+    """Última carteira escolhida na aba Tratamento (por usuário)."""
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='qualidade_foco_tratamento',
+    )
+    indicador = models.CharField(max_length=3, default='FPD')
+    segmento = models.CharField(max_length=32, blank=True, default='')
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'crm_qualidade_foco_tratamento'
+        verbose_name = 'Foco do tratamento Qualidade'
+        verbose_name_plural = 'Focos do tratamento Qualidade'
+
+    def __str__(self) -> str:
+        seg = self.segmento or 'Todos'
+        return f'{self.usuario_id} {self.indicador} {seg}'
+
+
 # Injetado de nova-velox
 class GdpPrecoMunicipioManager(models.Manager):
     def get_queryset(self) -> GdpPrecoMunicipioQuerySet:

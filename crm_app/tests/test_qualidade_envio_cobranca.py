@@ -17,6 +17,9 @@ from crm_app.services.qualidade_service import (
     corte_vencimento_fpd,
     escolher_template_fatura_cobranca,
     mes_limite_tratamento_vencimento,
+    normalizar_indicador_tratamento,
+    normalizar_segmento_foco,
+    numero_fatura_tratamento,
     extrair_data_promessa_texto,
     proximos_no_job_cobranca,
     validar_fatura_para_envio_cobranca,
@@ -296,3 +299,19 @@ class TestMesLimiteTratamentoVencimento(SimpleTestCase):
             mes_limite_tratamento_vencimento(date(2026, 11, 1)),
             '2026-09',
         )
+
+
+class TestFocoTratamento(SimpleTestCase):
+    def test_indicadores(self) -> None:
+        self.assertEqual(normalizar_indicador_tratamento('spd'), 'SPD')
+        self.assertEqual(normalizar_indicador_tratamento('TPD'), 'TPD')
+        self.assertEqual(normalizar_indicador_tratamento('outro'), 'FPD')
+        self.assertEqual(numero_fatura_tratamento('SPD'), 2)
+        self.assertEqual(numero_fatura_tratamento('TPD'), 3)
+        self.assertEqual(numero_fatura_tratamento('FPD'), 1)
+
+    def test_segmento_so_empresarial_ou_todos(self) -> None:
+        self.assertEqual(normalizar_segmento_foco('empresarial'), 'Empresarial')
+        self.assertEqual(normalizar_segmento_foco(''), '')
+        self.assertEqual(normalizar_segmento_foco('Varejo'), '')
+        self.assertEqual(normalizar_segmento_foco('todos'), '')

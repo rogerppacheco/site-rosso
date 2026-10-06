@@ -8,6 +8,7 @@ from typing import Optional
 from rest_framework import permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from django.db.utils import OperationalError, ProgrammingError
 from rest_framework.views import APIView
 
 from crm_app.services import qualidade_service as qs
@@ -42,8 +43,17 @@ class QualidadePeriodosView(APIView):
         if bloqueio:
             return bloqueio
         lente = request.GET.get('lente', qs.LENTE_VENCIMENTO)
+        indicador = request.GET.get('indicador')
+        nm_seg = request.GET.get('nm_seg')
+        if request.GET.get('segmento') and nm_seg is None:
+            nm_seg = request.GET.get('segmento')
+        if not indicador and (lente or qs.LENTE_VENCIMENTO).strip().lower() != qs.LENTE_INSTALACAO:
+            foco = qs.obter_foco_tratamento(request.user)
+            indicador = foco['indicador']
+            if nm_seg is None:
+                nm_seg = foco['segmento']
         try:
-            return Response(qs.payload_periodos_qualidade(lente))
+            return Response(qs.payload_periodos_qualidade(lente, indicador, nm_seg))
         except Exception as e:
             logger.exception('Erro ao listar períodos Qualidade')
             return Response({'error': str(e)}, status=500)
@@ -77,6 +87,8 @@ class QualidadeDashboardView(APIView):
             'faixa_atraso': request.GET.get('faixa_atraso') or request.GET.get('faixa'),
             'faturas_pagas': request.GET.get('faturas_pagas') or request.GET.get('faturas_pagas_n'),
             'promessa': request.GET.get('promessa'),
+            'indicador': request.GET.get('indicador'),
+            'nm_seg': request.GET.get('nm_seg') or request.GET.get('segmento'),
         }
         try:
             data = qs.dashboard_qualidade(lente, mes, request.user, filtros)
@@ -86,6 +98,35 @@ class QualidadeDashboardView(APIView):
         except Exception as e:
             logger.exception('Erro no dashboard Qualidade')
             return Response({'error': str(e)}, status=500)
+
+
+class QualidadeFocoTratamentoView(APIView):
+    """GET/PUT /api/qualidade/foco-tratamento/ — carteira salva do usuário."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        bloqueio = _exige_acesso(request.user)
+        if bloqueio:
+            return bloqueio
+        return Response(qs.obter_foco_tratamento(request.user))
+
+    def put(self, request):
+        bloqueio = _exige_acesso(request.user)
+        if bloqueio:
+            return bloqueio
+        try:
+            data = qs.salvar_foco_tratamento(
+                request.user,
+                request.data.get('indicador'),
+                request.data.get('segmento') if 'segmento' in request.data else request.data.get('nm_seg'),
+            )
+        except (OperationalError, ProgrammingError):
+            return Response(
+                {'error': 'Foco do tratamento ainda não está disponível. Rode as migrações.'},
+                status=503,
+            )
+        return Response(data)
 
 
 class QualidadeSincronizarFaltantesView(APIView):
