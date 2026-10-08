@@ -253,6 +253,8 @@ from .tempo_tratamento_api import (
     relatorio_tratamento_view,
 )
 
+from .pap_mfa_aviso_api import pap_mfa_pendente_view
+
 router = DefaultRouter()
 router.register(r'vendas', VendaViewSet, basename='venda')
 router.register(r'clientes', ClienteViewSet, basename='cliente')
@@ -262,6 +264,7 @@ router.register(r'grupos-disparo', GrupoDisparoViewSet, basename='grupos-disparo
 router.register(r'lancamentos-financeiros', LancamentoFinanceiroViewSet, basename='lancamentos-financeiros')
 
 urlpatterns = [
+    path('pap/mfa-pendente/', pap_mfa_pendente_view, name='pap-mfa-pendente'),
     # Rotas específicas de vendas ANTES do router (evita que "enviar-boas-vindas" seja interpretado como pk)
     path('vendas/enviar-boas-vindas/', EnviarBoasVindasView.as_view(), name='enviar-boas-vindas'),
     # Boas-Vindas Gestão (ferramenta dedicada)

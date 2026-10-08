@@ -15,6 +15,14 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from django.conf import settings
 
+from crm_app.pap_login_microsoft import (
+    ESPERA_APROVACAO_MFA_SEGUNDOS,
+    classificar_tela_microsoft,
+    email_acesso_microsoft,
+    extrair_numero_mfa,
+)
+from crm_app.pap_mfa_aviso import limpar_aviso_mfa, publicar_aviso_mfa
+
 logger = logging.getLogger(__name__)
 
 # Tentar importar Playwright
@@ -355,6 +363,7 @@ class PAPNioAutomation:
         self.context = self.browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             viewport={"width": 1280, "height": 960},
+            locale="pt-BR",
         )
         self.page = self.context.new_page()
         self.page.set_default_timeout(25000)
@@ -738,6 +747,7 @@ class PAPNioAutomation:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 # Altura maior: drawer de streaming tem Salvar no rodapé (abaixo da dobra em 800px).
                 viewport={"width": 1280, "height": 960},
+                locale="pt-BR",
                 storage_state=storage_state,
             )
             if self.headless:
@@ -812,6 +822,8 @@ class PAPNioAutomation:
 
             precisa_login = (
                 "login.vtal.com" in current_url
+                or "login.microsoftonline.com" in current_url
+                or "login.microsoft.com" in current_url
                 or ("login" in current_url.lower() and "pap.niointernet.com.br" not in current_url)
                 or bool(login_form_visivel)
                 or not self._sessao_pap_autenticada()
@@ -1167,6 +1179,158 @@ class PAPNioAutomation:
                 raise
         return ""
 
+    def _campo_login_visivel(self, seletor: str) -> bool:
+        if not self.page:
+            return False
+        try:
+            campo = self.page.query_selector(seletor)
+            return bool(campo and campo.is_visible())
+        except Exception:
+            return False
+
+    def _texto_visivel_login(self) -> str:
+        if not self.page:
+            return ""
+        try:
+            return self.page.inner_text("body") or ""
+        except Exception:
+            return ""
+
+    def _deve_login_microsoft(self) -> bool:
+        url = self._ler_url_atual().lower()
+        if "login.microsoftonline.com" in url or "login.microsoft.com" in url:
+            return True
+        return self._campo_login_visivel('input[name="loginfmt"]')
+
+    def _estado_login_microsoft(self) -> str:
+        return classificar_tela_microsoft(
+            url=self._ler_url_atual(),
+            texto=self._texto_visivel_login(),
+            email_visivel=self._campo_login_visivel('input[name="loginfmt"]'),
+            senha_visivel=self._campo_login_visivel('input[name="passwd"]'),
+        )
+
+    def _numero_mfa_visivel(self) -> str:
+        if not self.page:
+            return ""
+        for seletor in ("#idRichContext_DisplaySign", "#idRemoteNGC_DisplaySign"):
+            try:
+                campo = self.page.query_selector(seletor)
+                if campo and campo.is_visible():
+                    texto = (campo.inner_text() or "").strip()
+                    if texto.isdigit() and len(texto) <= 3:
+                        return texto
+            except Exception:
+                continue
+        return extrair_numero_mfa(self._texto_visivel_login())
+
+    def _aceitar_manter_conectado(self) -> None:
+        """Clica em Sim / Yes. O botão Não fica em #idBtn_Back e não é usado."""
+        if not self.page:
+            return
+        try:
+            caixa = self.page.query_selector("#KmsiCheckboxField")
+            if caixa and caixa.is_visible() and not caixa.is_checked():
+                caixa.check()
+        except Exception:
+            pass
+        self.page.click("#idSIButton9", timeout=8000)
+
+    def _fazer_login_microsoft(self) -> Tuple[bool, str]:
+        """
+        Login no Entra ID: e-mail da matrícula, senha uma vez, espera o Authenticator.
+
+        A senha não é reenviada. Se a tela pedir aprovação, o CRM avisa os BOs
+        logados e segue sozinho quando a página sai do MFA.
+        """
+        email = email_acesso_microsoft(self.matricula_pap)
+        if not email or not self.page:
+            return False, "Matrícula PAP vazia para o login Microsoft."
+
+        email_enviado = False
+        senha_enviada = False
+        avisou = False
+        numero_avisado = ""
+        espera = float(getattr(self, "_mfa_espera_segundos", ESPERA_APROVACAO_MFA_SEGUNDOS))
+        limite = time.monotonic() + espera
+        try:
+            while time.monotonic() < limite:
+                estado = self._estado_login_microsoft()
+                if estado == "pap_ok":
+                    limpar_aviso_mfa(self.matricula_pap)
+                    logger.info("[PAP] Login Microsoft concluído para %s", self.matricula_pap)
+                    return True, "Login realizado com sucesso!"
+                if estado == "erro_credencial":
+                    limpar_aviso_mfa(self.matricula_pap)
+                    logger.warning(
+                        "[PAP] Microsoft recusou a credencial de %s; sem nova tentativa.",
+                        self.matricula_pap,
+                    )
+                    return False, (
+                        "A Microsoft recusou o acesso e a tentativa foi interrompida "
+                        "para não bloquear a conta. Confira a senha do PAP dessa matrícula."
+                    )
+                if estado == "cadastro":
+                    limpar_aviso_mfa(self.matricula_pap)
+                    return False, (
+                        "Essa matrícula ainda não tem o Microsoft Authenticator cadastrado. "
+                        "O QR Code é configurado uma vez no celular. "
+                        "A senha não foi enviada de novo."
+                    )
+                if estado == "kmsi":
+                    self._aceitar_manter_conectado()
+                    self.page.wait_for_timeout(1200)
+                    continue
+                if estado == "mfa":
+                    numero = self._numero_mfa_visivel()
+                    if (not avisou) or (numero and numero != numero_avisado):
+                        publicar_aviso_mfa(self.matricula_pap, numero)
+                        avisou = True
+                        numero_avisado = numero
+                        logger.info(
+                            "[PAP] Aguardando Authenticator de %s",
+                            self.matricula_pap,
+                        )
+                        try:
+                            self._capture_screenshot("00_mfa_microsoft", forcar=True)
+                        except Exception:
+                            pass
+                    self.page.wait_for_timeout(2000)
+                    continue
+                if estado == "email" and not email_enviado:
+                    self.page.fill('input[name="loginfmt"]', email, timeout=8000)
+                    self.page.click("#idSIButton9", timeout=8000)
+                    email_enviado = True
+                    self.page.wait_for_timeout(1200)
+                    continue
+                if estado == "senha" and not senha_enviada:
+                    self.page.fill('input[name="passwd"]', self.senha_pap, timeout=8000)
+                    self.page.click("#idSIButton9", timeout=8000)
+                    senha_enviada = True
+                    self.page.wait_for_timeout(1500)
+                    continue
+                self.page.wait_for_timeout(1000)
+        except Exception as exc:
+            logger.error(
+                "[PAP] Erro no login Microsoft de %s: %s",
+                self.matricula_pap,
+                type(exc).__name__,
+            )
+            if senha_enviada:
+                return False, (
+                    "O login Microsoft parou depois do envio da senha. "
+                    "A senha não será enviada de novo nesta tentativa."
+                )
+            return False, "Não foi possível concluir o login Microsoft. A senha não foi reenviada."
+
+        if senha_enviada:
+            return False, (
+                "O Microsoft Authenticator pediu aprovação e ela não chegou a tempo. "
+                "Quem está com o login de BO aberto no CRM recebe o aviso. "
+                "A senha não foi enviada de novo."
+            )
+        return False, "A tela de login da Microsoft não avançou. A senha não foi reenviada."
+
     def _fazer_login(self) -> Tuple[bool, str]:
         """
         Realiza o login no PAP via Vtal.
@@ -1180,6 +1344,8 @@ class PAPNioAutomation:
             try:
                 logger.info(f"[PAP] Fazendo login para {self.matricula_pap} (tentativa {tentativa}/{max_tentativas})")
                 self._aguardar_pagina_estavel()
+                if self._deve_login_microsoft():
+                    return self._fazer_login_microsoft()
 
                 # Garantir que estamos na página de login (pode ter vindo de retry após timeout)
                 current_url, pagina_html = self._ler_url_e_conteudo()
@@ -1354,7 +1520,7 @@ class PAPNioAutomation:
             url = (self.page.url or "").lower()
         except Exception:
             return False
-        if "login.vtal.com" in url:
+        if "login.vtal.com" in url or "login.microsoftonline.com" in url or "login.microsoft.com" in url:
             return False
         if "pap.niointernet.com.br" not in url:
             return False
@@ -1371,10 +1537,21 @@ class PAPNioAutomation:
                 url = (self.page.url or "").lower()
             except Exception:
                 return False
-        return "login.vtal.com" in url
+        atual = (url or "").lower()
+        if "login.microsoftonline.com" in atual or "login.microsoft.com" in atual:
+            return True
+        return "login.vtal.com" in atual
 
     def _pagina_login_vtal_travada(self, pagina: str = "", url: str = "") -> bool:
         """Detecta SSO V.tal preso em FAST PASS / 'Processando o login'."""
+        atual = (url or "").lower()
+        if not atual and self.page:
+            try:
+                atual = (self.page.url or "").lower()
+            except Exception:
+                atual = ""
+        if "login.microsoftonline.com" in atual or "login.microsoft.com" in atual:
+            return False
         if not self._esta_no_idp_vtal(url=url):
             return False
         pagina = (pagina or "").lower()
@@ -1545,6 +1722,8 @@ class PAPNioAutomation:
                 return True
             # Qualquer tela do IdP Vtal sem PAP aberto costuma indicar sessão perdida no fluxo
             if "login.vtal.com" in url:
+                return True
+            if "login.microsoftonline.com" in url or "login.microsoft.com" in url:
                 return True
         except Exception:
             pass
@@ -1785,6 +1964,13 @@ class PAPNioAutomation:
             pass
         if self._pagina_senha_expirada(url=url):
             return self._mensagem_senha_pap_expirada()
+        if "login.microsoftonline.com" in url.lower() or "login.microsoft.com" in url.lower():
+            return (
+                "Sessão do PAP caiu no login Microsoft ao abrir Novo Pedido "
+                f"(login={self.matricula_pap or '?'}). "
+                "Se o celular pediu aprovação, aprove no Authenticator. "
+                "A senha não é reenviada."
+            )
         if self._esta_no_idp_vtal(url=url) or "login.vtal.com" in url.lower():
             return (
                 "Sessão do PAP caiu no login V.tal ao abrir Novo Pedido "
