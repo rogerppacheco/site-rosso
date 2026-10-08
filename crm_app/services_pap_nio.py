@@ -5838,6 +5838,221 @@ class PAPNioAutomation:
             return "EMAIL_INVALIDO"
         return None
 
+    _ETAPA4_JS_LER_DIALOGO = r"""
+        () => {
+          const marca = "etapa4-ler-dialogo";
+          const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+          const todos = [...document.querySelectorAll(
+            'div[role="dialog"][aria-modal="true"][aria-labelledby="contained-modal-title-vcenter"]'
+          )];
+          const abertos = todos.filter((d) => d.classList.contains("show"));
+          const aberto = abertos.length ? abertos[abertos.length - 1] : null;
+          if (!aberto) return null;
+          void marca;
+          const tituloEl = aberto.querySelector("#contained-modal-title-vcenter");
+          const titulo = norm(tituloEl && tituloEl.innerText);
+          const texto = norm(aberto.innerText).slice(0, 1500);
+          const botoes = [...aberto.querySelectorAll("button")]
+            .map((b) => norm(b.innerText))
+            .filter(Boolean);
+          return { titulo, texto, botoes };
+        }
+    """
+
+    _ETAPA4_JS_CLICAR_DIALOGO = r"""
+        (rotulo) => {
+          const marca = "etapa4-clicar-dialogo";
+          const norm = (s) => (s || "").replace(/\s+/g, " ").trim().toLowerCase();
+          const alvo = norm(rotulo);
+          const todos = [...document.querySelectorAll(
+            'div[role="dialog"][aria-modal="true"][aria-labelledby="contained-modal-title-vcenter"]'
+          )];
+          const abertos = todos.filter((d) => d.classList.contains("show"));
+          const aberto = abertos.length ? abertos[abertos.length - 1] : null;
+          void marca;
+          if (!aberto || !alvo) return false;
+          const btn = [...aberto.querySelectorAll("button")].find(
+            (b) => norm(b.innerText) === alvo
+          );
+          if (!btn) return false;
+          btn.click();
+          return true;
+        }
+    """
+
+    @staticmethod
+    def _etapa4_rotulo_dialogo(botoes: list, *nomes: str) -> Optional[str]:
+        mapa = {
+            str(b).strip().lower(): str(b).strip()
+            for b in (botoes or [])
+            if str(b).strip()
+        }
+        for nome in nomes:
+            achado = mapa.get(nome.lower())
+            if achado:
+                return achado
+        return None
+
+    def _etapa4_decidir_dialogo(
+        self, titulo: str, texto: str, botoes: list
+    ) -> tuple[Optional[str], Optional[str]]:
+        """
+        Escolhe o botão do dialog que cobre a etapa 4 e, se o aviso impede seguir,
+        o código/mensagem já usado pelo fluxo de crédito.
+
+        Retorna (rotulo_do_botao, erro). erro vazio significa que o clique da
+        etapa pode continuar depois de confirmar o aviso.
+        """
+        titulo_n = (titulo or "").strip()
+        texto_n = (texto or "").strip()
+        blob = f"{titulo_n}\n{texto_n}".lower()
+        rotulos = [str(b).strip() for b in (botoes or []) if str(b).strip()]
+
+        def rotulo(*nomes: str) -> Optional[str]:
+            return self._etapa4_rotulo_dialogo(rotulos, *nomes)
+
+        for titulo_conhecido, codigo in self._MODAIS_BLOQUEANTES:
+            if titulo_conhecido.lower() not in blob:
+                continue
+            if codigo == PAP_ERRO_PORTAL_NIO:
+                return rotulo("Tentar novamente"), PAP_ERRO_PORTAL_NIO
+            if codigo == "PAP_OCORREU_ERRO":
+                return rotulo("Ok", "OK"), PAP_ERRO_PORTAL_NIO
+            msg = self._mensagem_usuario_modal_bloqueante(
+                {
+                    "codigo": codigo,
+                    "titulo": titulo_conhecido,
+                    "texto": texto_n or titulo_conhecido,
+                },
+                etapa="contato",
+            )
+            return None, msg
+
+        if "atenção" in blob or "atencao" in blob:
+            codigo = self._etapa4_codigo_rejeicao_contato_da_pagina(blob)
+            return rotulo("Ok", "OK"), codigo
+
+        if any(
+            sinal in blob
+            for sinal in (
+                "sessão expirada",
+                "sessao expirada",
+                "sessão encerrada",
+                "sessao encerrada",
+                "sessao finalizada",
+                "sessão finalizada",
+                "feche seu navegador",
+                "logar novamente no portal",
+            )
+        ):
+            return rotulo("Ok", "OK", "Fechar"), None
+
+        if (
+            ("disponível" in blob or "disponivel" in blob)
+            and "indisponível" not in blob
+            and "indisponivel" not in blob
+            and "análise de crédito" not in blob
+            and "analise de credito" not in blob
+            and "resultado da an" not in blob
+        ):
+            seguir = rotulo("Continuar")
+            if seguir:
+                return seguir, None
+
+        if "resultado da análise de crédito" in blob or "resultado da analise de credito" in blob:
+            return None, None
+
+        nomes = {item.lower() for item in rotulos}
+        if nomes and nomes <= {"ok", "fechar"}:
+            return rotulo("Ok", "OK", "Fechar"), None
+        return None, None
+
+    def _etapa4_ler_dialogo_pap(self) -> Optional[dict]:
+        if not self.page:
+            return None
+        try:
+            dados = self.page.evaluate(self._ETAPA4_JS_LER_DIALOGO)
+        except Exception as exc:
+            logger.debug("[PAP] Etapa 4: falha ao ler dialog: %s", exc)
+            return None
+        if not isinstance(dados, dict):
+            return None
+        if not (dados.get("titulo") or dados.get("texto") or dados.get("botoes")):
+            return None
+        return dados
+
+    def _etapa4_clicar_botao_dialogo_pap(self, rotulo: str) -> bool:
+        """Aciona o botão de dentro do dialog, sem clique forçado no alvo coberto."""
+        if not self.page or not rotulo:
+            return False
+        try:
+            return bool(self.page.evaluate(self._ETAPA4_JS_CLICAR_DIALOGO, rotulo))
+        except Exception as exc:
+            logger.debug("[PAP] Etapa 4: falha ao clicar botão do dialog: %s", exc)
+            return False
+
+    def _etapa4_dispensar_dialogo_que_cobre_clique(self) -> Optional[str]:
+        """
+        Se o modal do PAP (role=dialog, contained-modal-title-vcenter) estiver
+        aberto, confirma o aviso conhecido e devolve erro quando ele impede seguir.
+        """
+        dados = self._etapa4_ler_dialogo_pap()
+        if not dados:
+            return None
+        titulo = str(dados.get("titulo") or "")
+        texto = str(dados.get("texto") or "")
+        botoes = dados.get("botoes") or []
+        if not isinstance(botoes, list):
+            botoes = []
+        logger.info(
+            "[PAP] Etapa 4: dialog cobrindo o clique (titulo=%s, botoes=%s)",
+            (titulo or "(sem titulo)")[:120],
+            [str(b)[:40] for b in botoes[:8]],
+        )
+        rotulo, erro = self._etapa4_decidir_dialogo(titulo, texto, botoes)
+        if rotulo:
+            if not self._etapa4_clicar_botao_dialogo_pap(rotulo):
+                logger.warning(
+                    "[PAP] Etapa 4: não confirmou o dialog pelo botão %s",
+                    rotulo,
+                )
+                if not erro:
+                    return (
+                        "Não foi possível confirmar o aviso do PAP "
+                        "que cobria o botão da etapa de contato."
+                    )
+            else:
+                try:
+                    self.page.wait_for_timeout(
+                        300 if self.optimize_for_credit else 500
+                    )
+                except Exception:
+                    pass
+        elif not erro:
+            logger.warning(
+                "[PAP] Etapa 4: dialog sem ação conhecida (titulo=%s)",
+                (titulo or "(sem titulo)")[:120],
+            )
+        if erro in (
+            "TELEFONE_REJEITADO",
+            "CELULAR_INVALIDO",
+            "EMAIL_REJEITADO",
+            "EMAIL_INVALIDO",
+        ):
+            self._etapa4_limpar_todos_campos_contato()
+        return erro
+
+    def _etapa4_clicar_avancar_contato(self) -> tuple[bool, Optional[str]]:
+        """Dispensa o dialog que intercepta o ponteiro e só então clica em Avançar."""
+        erro = self._etapa4_dispensar_dialogo_que_cobre_clique()
+        if erro:
+            return False, erro
+        btn = self.page.query_selector('button:has-text("Avançar"):not([disabled])')
+        if not btn:
+            return False, None
+        btn.click()
+        return True, None
+
     def _etapa4_tratar_modal_atencao_contato(self) -> Optional[str]:
         """
         Fecha o modal Atenção! se estiver aberto e devolve o código de rejeição.
@@ -5859,13 +6074,19 @@ class PAPNioAutomation:
         pagina = (self._page_content_seguro(tentativas=2, pausa_ms=200) or "").lower()
         codigo = self._etapa4_codigo_rejeicao_contato_da_pagina(pagina)
         texto_modal = self._extrair_texto_ao_redor_titulo(modal) or ""
-        btn_ok = self.page.query_selector('button:has-text("Ok")')
-        if btn_ok:
+        if not self._etapa4_clicar_botao_dialogo_pap("Ok"):
             try:
-                btn_ok.click(force=True, timeout=3000)
-                self.page.wait_for_timeout(300 if self.optimize_for_credit else 500)
+                btn_ok = self.page.locator(
+                    'div[role="dialog"][aria-labelledby="contained-modal-title-vcenter"] button'
+                ).filter(has_text=re.compile(r"^\s*ok\s*$", re.I)).first
+                if btn_ok.is_visible(timeout=800):
+                    btn_ok.click(timeout=3000)
             except Exception:
                 pass
+        try:
+            self.page.wait_for_timeout(300 if self.optimize_for_credit else 500)
+        except Exception:
+            pass
         if codigo:
             self._etapa4_limpar_todos_campos_contato()
             logger.info(
@@ -5921,6 +6142,9 @@ class PAPNioAutomation:
                 for indice in reversed(range(botoes_avancar.count())):
                     botao = botoes_avancar.nth(indice)
                     if botao.is_visible() and botao.is_enabled():
+                        erro_dialogo = self._etapa4_dispensar_dialogo_que_cobre_clique()
+                        if erro_dialogo:
+                            return False, erro_dialogo, None, None
                         botao.scroll_into_view_if_needed()
                         botao.click()
                         clicou = True
@@ -6032,6 +6256,11 @@ class PAPNioAutomation:
                                         "[PAP] Etapa 4 não carregou em 25s; "
                                         "repetindo clique em Avançar."
                                     )
+                                    erro_dialogo = (
+                                        self._etapa4_dispensar_dialogo_que_cobre_clique()
+                                    )
+                                    if erro_dialogo:
+                                        return False, erro_dialogo, None, None
                                     botao.click()
                             except Exception:
                                 pass
@@ -6059,13 +6288,10 @@ class PAPNioAutomation:
                         None,
                     )
             
-            # Fechar modal "Atenção!" se já estiver aberto (ex: de tentativa anterior)
-            modal_atencao = self.page.query_selector('h2:has-text("Atenção!")')
-            if modal_atencao:
-                btn_ok = self.page.query_selector('button:has-text("Ok")')
-                if btn_ok:
-                    btn_ok.click()
-                    self.page.wait_for_timeout(250 if modo_rapido_credito else 500)
+            # Dialog do PAP pode cobrir o formulário (o Ok genérico ficava atrás do modal).
+            erro_dialogo = self._etapa4_dispensar_dialogo_que_cobre_clique()
+            if erro_dialogo:
+                return False, erro_dialogo, None, None
             
             celular_limpo = re.sub(r'\D', '', celular)
             
@@ -6107,18 +6333,20 @@ class PAPNioAutomation:
             if codigo_pre:
                 return False, codigo_pre, None, None
             
-            # Clicar Avançar para disparar análise de crédito
+            # Clicar Avançar para disparar análise de crédito.
+            # O dialog react-bootstrap (contained-modal-title-vcenter) intercepta
+            # o ponteiro; confirma o aviso antes, sem clique forçado no Avançar.
             t_avancar = time.time()
             self._credito_apis_pos_avancar = set()
-            btn_avancar = self.page.query_selector('button:has-text("Avançar"):not([disabled])')
-            if btn_avancar:
-                btn_avancar.click()
-            else:
+            clicou_avancar, erro_dialogo = self._etapa4_clicar_avancar_contato()
+            if erro_dialogo:
+                return False, erro_dialogo, None, None
+            if not clicou_avancar:
                 self.page.keyboard.press("Tab")
                 self.page.wait_for_timeout(250 if modo_rapido_credito else 500)
-                btn_avancar = self.page.query_selector('button:has-text("Avançar"):not([disabled])')
-                if btn_avancar:
-                    btn_avancar.click()
+                clicou_avancar, erro_dialogo = self._etapa4_clicar_avancar_contato()
+                if erro_dialogo:
+                    return False, erro_dialogo, None, None
             
             # Verificar modal "Atenção!" e modal "OPS, OCORREU UM ERRO!" (erro do portal)
             # Em crédito: mais tentativas — a validação de e-mail do Nio costuma
