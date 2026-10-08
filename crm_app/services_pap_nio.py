@@ -1328,16 +1328,56 @@ class PAPNioAutomation:
         if imagem:
             publicar_tela_login(chave, imagem)
 
-    def _aceitar_manter_conectado(self) -> None:
-        """Clica em Sim / Yes. O botão Não fica em #idBtn_Back e não é usado."""
+    def _marcar_nao_mostrar_novamente(self) -> None:
+        """Marca 'Não mostrar isso novamente' antes do Sim."""
         if not self.page:
             return
+        for seletor in ("#KmsiCheckboxField", "input[name='DontShowAgain']"):
+            try:
+                caixa = self.page.query_selector(seletor)
+                if caixa and caixa.is_visible() and not caixa.is_checked():
+                    caixa.check()
+                    return
+            except Exception:
+                continue
         try:
-            caixa = self.page.query_selector("#KmsiCheckboxField")
-            if caixa and caixa.is_visible() and not caixa.is_checked():
-                caixa.check()
+            self.page.evaluate(
+                """() => {
+                    const alvos = [
+                        'não mostrar isso novamente',
+                        'nao mostrar isso novamente',
+                        "don't show this again",
+                        'dont show this again',
+                    ];
+                    const norm = (t) => (t || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+                    const nos = Array.from(document.querySelectorAll('label, span, div, p'));
+                    for (const no of nos) {
+                        const texto = norm(no.innerText || no.textContent);
+                        if (!alvos.some((alvo) => texto.includes(alvo))) continue;
+                        if (texto.length > 80) continue;
+                        const raiz = no.closest('div') || no.parentElement || document.body;
+                        const caixa = raiz.querySelector(
+                            'input[type="checkbox"], [role="checkbox"]'
+                        ) || document.querySelector(
+                            '#KmsiCheckboxField, input[type="checkbox"], [role="checkbox"]'
+                        );
+                        if (!caixa) return false;
+                        const marcado = caixa.checked === true
+                            || caixa.getAttribute('aria-checked') === 'true';
+                        if (!marcado) caixa.click();
+                        return true;
+                    }
+                    return false;
+                }"""
+            )
         except Exception:
-            pass
+            return
+
+    def _aceitar_manter_conectado(self) -> None:
+        """Marca não mostrar de novo e clica em Sim. O Não fica em #idBtn_Back."""
+        if not self.page:
+            return
+        self._marcar_nao_mostrar_novamente()
         self.page.click("#idSIButton9", timeout=8000)
 
     def _fazer_login_microsoft(self) -> Tuple[bool, str]:

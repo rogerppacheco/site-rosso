@@ -80,6 +80,19 @@ class ClassificarTelaTests(SimpleTestCase):
         )
         self.assertEqual(estado, "kmsi")
 
+    def test_continuar_conectado_e_a_mesma_pergunta(self) -> None:
+        estado = classificar_tela_microsoft(
+            url="https://login.microsoftonline.com/tenant/saml2",
+            texto=(
+                "Continuar conectado?\n"
+                "Faça isso para reduzir o número de vezes que será solicitado a entrar.\n"
+                "Não mostrar isso novamente"
+            ),
+            email_visivel=False,
+            senha_visivel=False,
+        )
+        self.assertEqual(estado, "kmsi")
+
     def test_numero_do_authenticator(self) -> None:
         texto = "Aprovar uma solicitação\n82"
         self.assertEqual(extrair_numero_mfa(texto), "82")
@@ -108,6 +121,22 @@ class ClassificarTelaTests(SimpleTestCase):
             senha_visivel=False,
         )
         self.assertEqual(estado, "cadastro")
+
+
+class _CaixaNaoMostrar:
+    def __init__(self) -> None:
+        self.marcado = False
+        self.eventos: list[str] = []
+
+    def is_visible(self) -> bool:
+        return True
+
+    def is_checked(self) -> bool:
+        return self.marcado
+
+    def check(self) -> None:
+        self.marcado = True
+        self.eventos.append("marcou")
 
 
 class _Campo:
@@ -139,6 +168,8 @@ class _PaginaMicrosoft:
         self.clicks: list[str] = []
         self.fase = "email"
         self._esperas_mfa = 0
+        self.caixa_nao_mostrar = None
+        self.avaliou_nao_mostrar = False
 
     def inner_text(self, _seletor: str) -> str:
         return self.texto
@@ -151,8 +182,14 @@ class _PaginaMicrosoft:
         if seletor == "#idRichContext_DisplaySign":
             return None
         if seletor == "#KmsiCheckboxField":
+            return self.caixa_nao_mostrar
+        if seletor == "input[name='DontShowAgain']":
             return None
         return None
+
+    def evaluate(self, _script: str):
+        self.avaliou_nao_mostrar = True
+        return True
 
     def fill(self, seletor: str, valor: str, timeout: int = 0) -> None:
         self.fills.append((seletor, valor))
@@ -293,6 +330,44 @@ class LoginMicrosoftSemRepetirSenhaTests(SimpleTestCase):
         self.assertIn("#idSIButton9", pagina.clicks)
         self.assertNotIn("#idBtn_Back", pagina.clicks)
         self.assertEqual(pagina.fills, [])
+
+    def test_continuar_conectado_marca_caixa_e_clica_sim(self) -> None:
+        pagina = _PaginaMicrosoft()
+        pagina.fase = "kmsi"
+        pagina.texto = "Continuar conectado?\nNão mostrar isso novamente"
+        pagina.email_visivel = False
+        pagina.senha_visivel = False
+        caixa = _CaixaNaoMostrar()
+        pagina.caixa_nao_mostrar = caixa
+        pap = PAPNioAutomation("TT398861", "senha-teste")
+        pap.page = pagina  # type: ignore[assignment]
+        pap._mfa_espera_segundos = 3
+
+        ok, _msg = pap._fazer_login_microsoft()
+
+        self.assertTrue(ok)
+        self.assertTrue(caixa.marcado)
+        self.assertEqual(caixa.eventos, ["marcou"])
+        self.assertEqual(pagina.clicks, ["#idSIButton9"])
+        self.assertNotIn("#idBtn_Back", pagina.clicks)
+        self.assertFalse(pagina.avaliou_nao_mostrar)
+
+    def test_continuar_conectado_acha_caixa_pelo_texto(self) -> None:
+        pagina = _PaginaMicrosoft()
+        pagina.fase = "kmsi"
+        pagina.texto = "Continuar conectado?\nNão mostrar isso novamente"
+        pagina.email_visivel = False
+        pagina.senha_visivel = False
+        pap = PAPNioAutomation("TT398861", "senha-teste")
+        pap.page = pagina  # type: ignore[assignment]
+        pap._mfa_espera_segundos = 3
+
+        ok, _msg = pap._fazer_login_microsoft()
+
+        self.assertTrue(ok)
+        self.assertTrue(pagina.avaliou_nao_mostrar)
+        self.assertEqual(pagina.clicks, ["#idSIButton9"])
+        self.assertNotIn("#idBtn_Back", pagina.clicks)
 
     def test_redirect_durante_formulario_antigo_segue_na_microsoft(self) -> None:
         pap = PAPNioAutomation("TT713110", "senha-teste")

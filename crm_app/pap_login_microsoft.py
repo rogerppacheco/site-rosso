@@ -33,6 +33,7 @@ _KMSI = (
     "stay signed in",
     "permanecer conectado",
     "manter conectado",
+    "continuar conectado",
 )
 
 _CADASTRO = (
