@@ -86,6 +86,21 @@ def extrair_numero_mfa(texto: str) -> str:
     return ""
 
 
+def _texto_pede_senha(visivel: str) -> bool:
+    """A primeira tela da Microsoft traz o campo de senha no HTML, sem pedir senha."""
+    return any(
+        sinal in visivel
+        for sinal in (
+            "enter password",
+            "enter the password",
+            "insira a senha",
+            "digite a senha",
+            "senha",
+            "password",
+        )
+    )
+
+
 def classificar_tela_microsoft(
     *,
     url: str,
@@ -96,7 +111,8 @@ def classificar_tela_microsoft(
     """
     Estado da tela visível.
 
-    A senha existe no HTML da primeira etapa, mas fica oculta. Só conta se estiver visível.
+    O campo de senha já vem no HTML da etapa do e-mail e o Playwright pode
+    marcá-lo como visível. Sem o texto pedindo a senha, a etapa continua sendo o e-mail.
     """
     url_l = (url or "").lower()
     visivel = (texto or "").lower()
@@ -111,6 +127,8 @@ def classificar_tela_microsoft(
         return "cadastro"
     if any(sinal in visivel for sinal in _MFA):
         return "mfa"
+    if email_visivel and not _texto_pede_senha(visivel):
+        return "email"
     if senha_visivel:
         return "senha"
     if email_visivel:

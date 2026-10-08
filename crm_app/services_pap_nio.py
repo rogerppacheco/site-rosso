@@ -1189,9 +1189,55 @@ class PAPNioAutomation:
             return False
         try:
             campo = self.page.query_selector(seletor)
-            return bool(campo and campo.is_visible())
+            if not campo or not campo.is_visible():
+                return False
         except Exception:
             return False
+        try:
+            return bool(campo.evaluate(
+                """el => {
+                    const estilo = getComputedStyle(el);
+                    const box = el.getBoundingClientRect();
+                    const opacidade = parseFloat(estilo.opacity || '1');
+                    return estilo.display !== 'none'
+                        && estilo.visibility !== 'hidden'
+                        && opacidade > 0.1
+                        && box.width > 40
+                        && box.height > 8;
+                }"""
+            ))
+        except Exception:
+            return True
+
+    def _ler_valor_campo(self, seletor: str) -> str:
+        if not self.page:
+            return ""
+        try:
+            return (self.page.input_value(seletor) or "").strip()
+        except Exception:
+            return ""
+
+    def _preencher_campo_login(self, seletor: str, valor: str) -> bool:
+        """Digita e só confirma se o valor ficou no campo visível."""
+        esperado = (valor or "").strip()
+        if not esperado or not self.page:
+            return False
+        try:
+            self.page.fill(seletor, esperado, timeout=8000)
+        except Exception:
+            return False
+        if self._ler_valor_campo(seletor).lower() == esperado.lower():
+            return True
+        teclado = getattr(self.page, "keyboard", None)
+        if teclado is None:
+            return False
+        try:
+            self.page.click(seletor, timeout=5000)
+            teclado.press("Control+A")
+            teclado.type(esperado, delay=15)
+        except Exception:
+            return False
+        return self._ler_valor_campo(seletor).lower() == esperado.lower()
 
     def _texto_visivel_login(self) -> str:
         if not self.page:
@@ -1359,16 +1405,33 @@ class PAPNioAutomation:
                     self.page.wait_for_timeout(2000)
                     continue
                 if estado == "email" and not email_enviado:
-                    self.page.fill('input[name="loginfmt"]', email, timeout=8000)
+                    if not self._preencher_campo_login('input[name="loginfmt"]', email):
+                        self.page.wait_for_timeout(800)
+                        continue
                     self.page.click("#idSIButton9", timeout=8000)
                     email_enviado = True
                     self.page.wait_for_timeout(1200)
+                    if self._estado_login_microsoft() == "email":
+                        email_enviado = False
+                        logger.info(
+                            "[PAP] A Microsoft ainda pediu o e-mail de %s.",
+                            self.matricula_pap,
+                        )
                     continue
                 if estado == "senha" and not senha_enviada:
-                    self.page.fill('input[name="passwd"]', self.senha_pap, timeout=8000)
+                    if not self._preencher_campo_login('input[name="passwd"]', self.senha_pap):
+                        self.page.wait_for_timeout(800)
+                        continue
                     self.page.click("#idSIButton9", timeout=8000)
-                    senha_enviada = True
                     self.page.wait_for_timeout(1500)
+                    if self._estado_login_microsoft() == "email":
+                        logger.info(
+                            "[PAP] O Avançar ainda estava na tela de e-mail de %s. Senha não enviada.",
+                            self.matricula_pap,
+                        )
+                        email_enviado = False
+                        continue
+                    senha_enviada = True
                     continue
                 self.page.wait_for_timeout(1000)
         except Exception as exc:

@@ -58,6 +58,19 @@ class ClassificarTelaTests(SimpleTestCase):
         )
         self.assertEqual(estado, "email")
 
+    def test_campo_de_senha_no_html_nao_pula_o_email(self) -> None:
+        estado = classificar_tela_microsoft(
+            url="https://login.microsoftonline.com/tenant/saml2",
+            texto=(
+                "Entrar\n"
+                "Insira um endereço de email, número de telefone ou nome Skype válido.\n"
+                "Avançar"
+            ),
+            email_visivel=True,
+            senha_visivel=True,
+        )
+        self.assertEqual(estado, "email")
+
     def test_manter_conectado(self) -> None:
         estado = classificar_tela_microsoft(
             url="https://login.microsoftonline.com/tenant/saml2",
@@ -122,6 +135,7 @@ class _PaginaMicrosoft:
         self.email_visivel = True
         self.senha_visivel = False
         self.fills: list[tuple[str, str]] = []
+        self.valores: dict[str, str] = {}
         self.clicks: list[str] = []
         self.fase = "email"
         self._esperas_mfa = 0
@@ -142,8 +156,12 @@ class _PaginaMicrosoft:
 
     def fill(self, seletor: str, valor: str, timeout: int = 0) -> None:
         self.fills.append((seletor, valor))
+        self.valores[seletor] = valor
         if "passwd" in seletor and self.fase == "erro":
             return None
+
+    def input_value(self, seletor: str) -> str:
+        return self.valores.get(seletor, "")
 
     def click(self, seletor: str, timeout: int = 0) -> None:
         self.clicks.append(seletor)
@@ -201,6 +219,32 @@ class LoginMicrosoftSemRepetirSenhaTests(SimpleTestCase):
         self.assertNotIn("#idBtn_Back", pap.page.clicks)
         self.assertEqual(listar_avisos_mfa(), [])
         pap._capture_screenshot.assert_called()
+
+    def test_campo_senha_visivel_no_email_nao_aperta_avancar_vazio(self) -> None:
+        pagina = _PaginaMicrosoft()
+        pagina.senha_visivel = True
+        pagina.texto = "Entrar\nEmail, telefone ou Skype"
+        pap = PAPNioAutomation("TT398861", "senha-teste")
+        pap.page = pagina  # type: ignore[assignment]
+        pap._capture_screenshot = Mock()  # type: ignore[method-assign]
+        pap._mfa_espera_segundos = 5
+
+        ok, msg = pap._fazer_login_microsoft()
+
+        self.assertTrue(ok)
+        self.assertIn("sucesso", msg.lower())
+        self.assertEqual(
+            [valor for seletor, valor in pagina.fills if "loginfmt" in seletor],
+            ["TT398861@vtalcorp.onmicrosoft.com"],
+        )
+        self.assertEqual(
+            [valor for seletor, valor in pagina.fills if "passwd" in seletor],
+            ["senha-teste"],
+        )
+        self.assertLess(
+            pagina.fills.index(("input[name=\"loginfmt\"]", "TT398861@vtalcorp.onmicrosoft.com")),
+            pagina.fills.index(("input[name=\"passwd\"]", "senha-teste")),
+        )
 
     def test_senha_recusada_nao_reenvia(self) -> None:
         pagina = _PaginaMicrosoft()
