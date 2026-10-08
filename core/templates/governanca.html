@@ -640,7 +640,7 @@
                                         <div class="col-md-8"><label class="form-label fw-bold">Evento Gatilho</label><select id="regra_evento" class="form-select" required><option value="NOVO_CDOI">Novo CDOI Cadastrado ({{ SITE_MODULE_PREFIX }} Vertical)</option></select></div>
                                         <div class="col-md-4"><label class="form-label fw-bold">Status</label><select id="regra_ativo" class="form-select"><option value="true">Ativo</option><option value="false">Inativo</option></select></div>
                                     </div>
-                                    <div class="mb-3"><label class="form-label fw-bold d-flex justify-content-between">Grupos de Destino (WhatsApp) <button type="button" class="btn btn-xs btn-outline-secondary" onclick="carregarGruposExternos()"><i class="bi bi-arrow-clockwise"></i> Atualizar Lista</button></label><select id="regra_grupos" class="form-select" multiple style="height: 120px;"><option value="" disabled>Clique em atualizar para buscar...</option></select><div class="form-text small">Segure Ctrl para selecionar vários.</div></div>
+                                    <div class="mb-3"><label class="form-label fw-bold d-flex justify-content-between">Grupos de Destino (WhatsApp) <button type="button" class="btn btn-xs btn-outline-secondary" onclick="carregarGruposExternos(true)"><i class="bi bi-arrow-clockwise"></i> Atualizar Lista</button></label><select id="regra_grupos" class="form-select" multiple style="height: 120px;"><option value="" disabled>Clique em atualizar para buscar...</option></select><div class="form-text small">Segure Ctrl para selecionar vários.</div></div>
                                     <div class="mb-3"><label class="form-label fw-bold">Números Individuais (Opcional)</label><input type="text" class="form-control" id="regra_numeros" placeholder="Ex: 553199999999, 551188888888"><div class="form-text small">Separe por vírgula. Use DDI (55).</div></div>
                                     <div class="mb-3"><label class="form-label fw-bold">Mensagem Personalizada</label><div class="bg-light p-2 border rounded mb-2 small text-secondary"><strong>Variáveis Disponíveis:</strong><br><code>{id}</code>, <code>{cliente}</code>, <code>{sindico}</code>, <code>{contato}</code>, <code>{total_hps}</code>, <code>{usuario}</code>, <code>{cidade}</code>, <code>{link}</code></div><textarea id="regra_msg" class="form-control" rows="5" required>🔔 *NOVO CDOI*&#13;&#10;Cliente: {cliente}&#13;&#10;Resp: {usuario}&#13;&#10;Link: {link}</textarea></div>
                                     <div class="d-grid gap-2"><button type="submit" class="btn btn-success">Salvar Regra</button><button type="button" class="btn btn-outline-secondary" onclick="resetFormRegraAuto()">Limpar</button></div>
@@ -4322,8 +4322,9 @@
     // ====================================================================
     // 4. AUTOMAÇÃO DE EVENTOS (NOVA LÓGICA ROBUSTA)
     // ====================================================================
-    async function carregarGruposExternos() {
+    async function carregarGruposExternos(perguntar) {
         const select = document.getElementById('regra_grupos');
+        if (!select) return;
         select.innerHTML = '<option disabled>Buscando na API...</option>';
         try {
             const res = await apiFetch('/whatsapp/groups/');
@@ -4331,10 +4332,13 @@
             select.innerHTML = '';
             if (grupos && grupos.length > 0) {
                 grupos.forEach(g => { select.add(new Option(g.name || g.subject, g.id || g.jid)); });
-            } else { throw new Error("Lista vazia"); }
+                return;
+            }
+            throw new Error("Lista vazia");
         } catch (e) {
-            console.warn("API de grupos não encontrada ou erro. Usando modo manual.", e);
-            select.innerHTML = '<option value="" disabled>Não foi possível carregar automático.</option>';
+            console.warn("API de grupos não devolveu lista.", e);
+            select.innerHTML = '<option value="" disabled>Nenhum grupo nesta conta de WhatsApp.</option>';
+            if (!perguntar) return;
             const manualId = prompt("A API de grupos não retornou. Digite o ID do grupo (JID) se souber, ou cancele:");
             if(manualId) select.add(new Option("Grupo Manual ("+manualId+")", manualId, true, true));
         }
@@ -4532,7 +4536,7 @@
         
         // --- NOVAS FUNÇÕES DA ABA AUTOMAÇÃO (SUBSTITUÍRAM AS ANTIGAS) ---
         carregarRegrasAutomacao();
-        carregarGruposExternos();
+        carregarGruposExternos(false);
 
         const link = document.querySelector('.admin-nav-link');
         if(link) mostrarSecao(null, 'usuarios', link);
