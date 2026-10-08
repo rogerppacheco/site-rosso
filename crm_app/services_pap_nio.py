@@ -1266,8 +1266,17 @@ class PAPNioAutomation:
         chave = (getattr(self, "tela_login_chave", "") or "").strip()
         if not chave or not self.page:
             return
+        agora = time.monotonic()
+        if agora - getattr(self, "_ultima_tela_login", 0) < 2:
+            return
+        self._ultima_tela_login = agora
+        imagem = b""
         try:
-            imagem = self.page.screenshot(type="jpeg", quality=45)
+            cartao = self.page.query_selector("#lightbox")
+            if cartao and cartao.is_visible():
+                imagem = cartao.screenshot(type="jpeg", quality=40) or b""
+            if not imagem:
+                imagem = self.page.screenshot(type="jpeg", quality=30) or b""
         except Exception:
             return
         if imagem:

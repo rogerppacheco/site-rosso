@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
+import re
+import tempfile
+import time
 
 from django.core.cache import cache
 
@@ -66,41 +70,66 @@ def limpar_aviso_mfa(matricula: str = "") -> None:
         logger.warning("[PAP] Não foi possível limpar o aviso de MFA no CRM.")
 
 
-def _chave_tela(chave: str) -> str:
-    return f"pap_tela_login:{(chave or '').strip()}"
+def _caminho_tela(chave: str) -> str:
+    pasta = os.path.join(tempfile.gettempdir(), "pap_telas")
+    os.makedirs(pasta, exist_ok=True)
+    seguro = re.sub(r"[^A-Za-z0-9_-]", "", (chave or "").strip())[:80] or "pap"
+    return os.path.join(pasta, seguro + ".jpg")
 
 
 def publicar_tela_login(chave: str, imagem: bytes) -> None:
-    """Guarda a foto da tela de aprovação para o modal da auditoria."""
+    """Guarda a foto da tela de aprovação para o modal da auditoria.
+
+    O login roda na thread do Playwright. Gravar no cache do banco a partir
+    dessa thread falha, então a foto vai para um arquivo no mesmo servidor.
+    """
     if not (chave or "").strip() or not imagem:
         return
+    caminho = _caminho_tela(chave)
+    temporario = caminho + ".tmp"
     try:
-        cache.set(
-            _chave_tela(chave),
-            base64.b64encode(imagem).decode("ascii"),
-            _TTL_SEGUNDOS,
+        with open(temporario, "wb") as arquivo:
+            arquivo.write(imagem)
+        os.replace(temporario, caminho)
+    except Exception as exc:
+        logger.warning(
+            "[PAP] Não foi possível guardar a tela de login (%s bytes): %s",
+            len(imagem),
+            type(exc).__name__,
         )
-    except Exception:
-        logger.warning("[PAP] Não foi possível guardar a tela de login.")
 
 
 def obter_tela_login_b64(chave: str) -> str:
     if not (chave or "").strip():
         return ""
+    caminho = _caminho_tela(chave)
     try:
-        return cache.get(_chave_tela(chave)) or ""
-    except Exception:
-        logger.warning("[PAP] Não foi possível ler a tela de login.")
+        if not os.path.isfile(caminho):
+            return ""
+        if time.time() - os.path.getmtime(caminho) > _TTL_SEGUNDOS:
+            return ""
+        with open(caminho, "rb") as arquivo:
+            return base64.b64encode(arquivo.read()).decode("ascii")
+    except Exception as exc:
+        logger.warning(
+            "[PAP] Não foi possível ler a tela de login: %s",
+            type(exc).__name__,
+        )
         return ""
 
 
 def limpar_tela_login(chave: str) -> None:
     if not (chave or "").strip():
         return
+    caminho = _caminho_tela(chave)
     try:
-        cache.delete(_chave_tela(chave))
-    except Exception:
-        logger.warning("[PAP] Não foi possível limpar a tela de login.")
+        if os.path.isfile(caminho):
+            os.remove(caminho)
+    except Exception as exc:
+        logger.warning(
+            "[PAP] Não foi possível limpar a tela de login: %s",
+            type(exc).__name__,
+        )
 
 
 def listar_avisos_mfa() -> list:
