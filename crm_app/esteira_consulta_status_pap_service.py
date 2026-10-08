@@ -470,6 +470,20 @@ def _pausa_interruptivel(execucao_id: int) -> bool:
     return True
 
 
+def _recusa_microsoft_sem_retry(msg: str) -> bool:
+    """A senha já foi para a Microsoft. Repetir no mesmo lote pode bloquear a conta."""
+    texto = (msg or '').lower()
+    return any(
+        sinal in texto
+        for sinal in (
+            'microsoft',
+            'authenticator',
+            'não bloquear',
+            'nao bloquear',
+        )
+    )
+
+
 def _msg_indica_sessao_invalida(msg: str) -> bool:
     m = (msg or '').lower()
     sinais = (
@@ -506,6 +520,7 @@ class _SessaoPapUsuarioHolder:
         self.senha = robo.senha if robo else ''
         self.automacao = None
         self.consultas = 0
+        self.recusa_microsoft = ''
         self.telefone_job = f'{TELEFONE_JOB_PREFIX}-CONSULTA'
 
     def fechar(self) -> None:
@@ -519,6 +534,9 @@ class _SessaoPapUsuarioHolder:
         self.consultas = 0
 
     def _garantir_sessao(self) -> Tuple[bool, str]:
+        if self.recusa_microsoft:
+            return False, self.recusa_microsoft
+
         from crm_app.services_pap_nio import PAPNioAutomation
 
         if self.automacao is not None and getattr(self.automacao, 'logado', False):
@@ -539,11 +557,14 @@ class _SessaoPapUsuarioHolder:
         )
         sucesso, msg = automacao.iniciar_sessao()
         if not sucesso:
+            msg = msg or 'Falha ao logar no PAP.'
+            if _recusa_microsoft_sem_retry(msg):
+                self.recusa_microsoft = msg
             try:
                 automacao._fechar_sessao()
             except Exception:
                 pass
-            return False, msg or 'Falha ao logar no PAP.'
+            return False, msg
 
         self.automacao = automacao
         self.consultas = 0
@@ -580,7 +601,10 @@ class _SessaoPapUsuarioHolder:
                 os_prioridade_crm=os_prioridade,
             )
             self.consultas += 1
-            if not sucesso and _msg_indica_sessao_invalida(msg):
+            if not sucesso and _recusa_microsoft_sem_retry(msg):
+                self.recusa_microsoft = msg or self.recusa_microsoft
+                self.fechar()
+            elif not sucesso and _msg_indica_sessao_invalida(msg):
                 logger.warning(
                     '[CONSULTA ESTEIRA] Sessão invalidada após venda #%s: %s',
                     venda.id,
@@ -854,7 +878,8 @@ def executar_job_consulta_aba(execucao_id: int) -> None:
             elif resultado.get('erro'):
                 processados += 1
                 erros += 1
-                if _msg_indica_sessao_invalida(str(resultado.get('erro') or '')):
+                erro_lote = str(resultado.get('erro') or '')
+                if _msg_indica_sessao_invalida(erro_lote) or _recusa_microsoft_sem_retry(erro_lote):
                     detalhes.append(resultado)
                     _atualizar_execucao(
                         execucao,

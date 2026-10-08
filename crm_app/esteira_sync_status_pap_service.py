@@ -315,6 +315,20 @@ def _montar_relatorio_final(execucao, detalhes: List[dict]) -> str:
     return '\n'.join(linhas)
 
 
+def _recusa_microsoft_sem_retry(msg: str) -> bool:
+    """A senha já foi para a Microsoft. Repetir no mesmo lote pode bloquear a conta."""
+    texto = (msg or '').lower()
+    return any(
+        sinal in texto
+        for sinal in (
+            'microsoft',
+            'authenticator',
+            'não bloquear',
+            'nao bloquear',
+        )
+    )
+
+
 def _msg_indica_sessao_invalida(msg: str) -> bool:
     """Erros que exigem fechar o browser e abrir sessão nova no próximo pedido."""
     m = (msg or '').lower()
@@ -346,6 +360,7 @@ class _SessaoPapSyncHolder:
         self.senha = robo.senha if robo else ''
         self.automacao = None
         self.consultas = 0
+        self.recusa_microsoft = ''
         self.telefone_job = TELEFONE_JOB
 
     def fechar(self) -> None:
@@ -358,6 +373,9 @@ class _SessaoPapSyncHolder:
         self.consultas = 0
 
     def _garantir_sessao(self, contador_uso_bo=None) -> tuple[bool, str]:
+        if self.recusa_microsoft:
+            return False, self.recusa_microsoft
+
         from crm_app.services_pap_nio import PAPNioAutomation
         if self.automacao is not None and getattr(self.automacao, 'logado', False):
             return True, ''
@@ -375,11 +393,14 @@ class _SessaoPapSyncHolder:
         )
         sucesso, msg = automacao.iniciar_sessao()
         if not sucesso:
+            msg = msg or 'Falha ao logar no PAP.'
+            if _recusa_microsoft_sem_retry(msg):
+                self.recusa_microsoft = msg
             try:
                 automacao._fechar_sessao()
             except Exception:
                 pass
-            return False, msg or 'Falha ao logar no PAP.'
+            return False, msg
 
         self.automacao = automacao
         self.consultas = 0
@@ -703,6 +724,23 @@ def executar_job(execucao_id: int) -> None:
                 ignorados += 1
                 detalhes.append(resultado)
             elif resultado.get('erro'):
+                if _recusa_microsoft_sem_retry(str(resultado.get('erro') or '')):
+                    processados += 1
+                    erros += 1
+                    detalhes.append(resultado)
+                    logger.warning(
+                        '[SYNC ESTEIRA] Parando lote: a Microsoft recusou o login e a senha não será enviada de novo.',
+                    )
+                    _atualizar_execucao(
+                        execucao,
+                        processados=processados,
+                        atualizados=atualizados,
+                        sem_alteracao=sem_alteracao,
+                        erros=erros,
+                        ignorados_sem_cpf=ignorados,
+                        relatorio_json={'detalhes': detalhes[-200:]},
+                    )
+                    break
                 if resultado.get('retentar') and not retry:
                     retentativas.append(venda)
                     detalhes.append({**resultado, 'aguardando_retry': True})
