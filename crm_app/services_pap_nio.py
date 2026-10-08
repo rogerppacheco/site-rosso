@@ -1197,10 +1197,42 @@ class PAPNioAutomation:
             return ""
 
     def _deve_login_microsoft(self) -> bool:
-        url = self._ler_url_atual().lower()
+        try:
+            url = self._ler_url_atual().lower()
+        except Exception as exc:
+            return self._texto_indica_login_microsoft(exc)
         if "login.microsoftonline.com" in url or "login.microsoft.com" in url:
             return True
         return self._campo_login_visivel('input[name="loginfmt"]')
+
+    @staticmethod
+    def _texto_indica_login_microsoft(exc: BaseException) -> bool:
+        texto = str(exc).lower()
+        return "login.microsoftonline.com" in texto or "login.microsoft.com" in texto
+
+    def _esperar_tipo_login(self, timeout_ms: Optional[int] = None) -> str:
+        """
+        O PAP redireciona para a Microsoft depois que a página antiga já começou a abrir.
+        Espera esse redirect antes de procurar o formulário da V.tal.
+        """
+        if timeout_ms is None:
+            timeout_ms = int(getattr(self, "_espera_tipo_login_ms", 12000))
+        prazo = time.monotonic() + (timeout_ms / 1000.0)
+        while True:
+            if self._deve_login_microsoft():
+                return "microsoft"
+            if self._campo_login_visivel("#inputMatricula"):
+                return "vtal"
+            if time.monotonic() >= prazo:
+                return "microsoft" if self._deve_login_microsoft() else "vtal"
+            if not self.page:
+                return "vtal"
+            try:
+                self.page.wait_for_timeout(400)
+            except Exception as exc:
+                if self._texto_indica_login_microsoft(exc) or self._deve_login_microsoft():
+                    return "microsoft"
+                return "vtal"
 
     def _estado_login_microsoft(self) -> str:
         return classificar_tela_microsoft(
@@ -1344,7 +1376,7 @@ class PAPNioAutomation:
             try:
                 logger.info(f"[PAP] Fazendo login para {self.matricula_pap} (tentativa {tentativa}/{max_tentativas})")
                 self._aguardar_pagina_estavel()
-                if self._deve_login_microsoft():
+                if self._esperar_tipo_login() == "microsoft" or self._deve_login_microsoft():
                     return self._fazer_login_microsoft()
 
                 # Garantir que estamos na página de login (pode ter vindo de retry após timeout)
@@ -1367,6 +1399,9 @@ class PAPNioAutomation:
                         timeout=sel_timeout,
                     )
                 except Exception as e_sel:
+                    if self._texto_indica_login_microsoft(e_sel) or self._deve_login_microsoft():
+                        logger.info("[PAP] Formulário antigo sumiu no redirect da Microsoft.")
+                        return self._fazer_login_microsoft()
                     if self._pagina_senha_expirada():
                         self._capture_screenshot("00_err_senha_expirada", forcar=True)
                         return False, self._mensagem_senha_pap_expirada()
@@ -1488,6 +1523,9 @@ class PAPNioAutomation:
                 
             except Exception as e:
                 logger.error(f"[PAP] Erro no login (tentativa {tentativa}): {e}")
+                if self._texto_indica_login_microsoft(e) or self._deve_login_microsoft():
+                    logger.info("[PAP] Login antigo interrompido pelo redirect da Microsoft.")
+                    return self._fazer_login_microsoft()
                 if self._pagina_senha_expirada():
                     self._capture_screenshot("00_err_senha_expirada", forcar=True)
                     return False, self._mensagem_senha_pap_expirada()

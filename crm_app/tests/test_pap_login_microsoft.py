@@ -247,6 +247,38 @@ class LoginMicrosoftSemRepetirSenhaTests(SimpleTestCase):
         self.assertNotIn("#idBtn_Back", pagina.clicks)
         self.assertEqual(pagina.fills, [])
 
+    def test_redirect_durante_formulario_antigo_segue_na_microsoft(self) -> None:
+        pap = PAPNioAutomation("TT713110", "senha-teste")
+        pap._aguardar_pagina_estavel = Mock()  # type: ignore[method-assign]
+        pap._esperar_tipo_login = Mock(return_value="vtal")  # type: ignore[method-assign]
+        pap._deve_login_microsoft = Mock(return_value=False)  # type: ignore[method-assign]
+        pap._pagina_senha_expirada = Mock(return_value=False)  # type: ignore[method-assign]
+        pap._fazer_login_microsoft = Mock(  # type: ignore[method-assign]
+            return_value=(True, "Login realizado com sucesso!")
+        )
+
+        class Pagina:
+            url = "https://pap.niointernet.com.br/"
+
+            def content(self) -> str:
+                return ""
+
+            def wait_for_selector(self, *_args, **_kwargs) -> None:
+                raise Exception(
+                    'Timeout 10000ms exceeded. navigated to '
+                    '"https://login.microsoftonline.com/tenant/saml2"'
+                )
+
+            def wait_for_timeout(self, _timeout: int) -> None:
+                return None
+
+        pap.page = Pagina()  # type: ignore[assignment]
+        ok, msg = pap._fazer_login()
+
+        self.assertTrue(ok)
+        self.assertIn("sucesso", msg.lower())
+        pap._fazer_login_microsoft.assert_called_once()
+
     def test_fazer_login_desvia_para_microsoft_sem_repetir(self) -> None:
         pap = PAPNioAutomation("TT9", "senha-teste")
         pap._aguardar_pagina_estavel = Mock()  # type: ignore[method-assign]
