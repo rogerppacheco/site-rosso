@@ -15,9 +15,12 @@ from crm_app.pap_login_microsoft import (
 )
 from crm_app.pap_mfa_aviso import (
     limpar_aviso_mfa,
+    limpar_tela_login,
     listar_avisos_mfa,
     mensagem_aviso_mfa,
+    obter_tela_login_b64,
     publicar_aviso_mfa,
+    publicar_tela_login,
     usuario_ve_aviso_mfa,
 )
 from crm_app.pap_mfa_aviso_api import pap_mfa_pendente_view
@@ -302,6 +305,15 @@ class AvisoBoConectadoTests(SimpleTestCase):
         self.assertIn("TT123456", texto)
         self.assertIn("82", texto)
         self.assertIn("segue sozinho", texto)
+
+    def test_foto_da_tela_fica_disponivel_para_o_modal(self) -> None:
+        publicar_tela_login("historico-73", b"foto-jpeg")
+        self.assertEqual(
+            obter_tela_login_b64("historico-73"),
+            "Zm90by1qcGVn",
+        )
+        limpar_tela_login("historico-73")
+        self.assertEqual(obter_tela_login_b64("historico-73"), "")
 
     def test_so_bo_conectado_ve_o_aviso(self) -> None:
         bo = SimpleNamespace(is_authenticated=True, is_staff=False, is_superuser=False, senha_pap="x")

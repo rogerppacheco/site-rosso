@@ -1887,6 +1887,37 @@ async function baixarExcelPapOnline(buscaId) {
     }
 }
 
+function mostrarTelaLoginPap(imagem) {
+    if (!imagem) return;
+    let fundo = document.getElementById('modal-tela-login-pap');
+    if (!fundo) {
+        fundo = document.createElement('div');
+        fundo.id = 'modal-tela-login-pap';
+        fundo.className = 'modal fade';
+        fundo.tabIndex = -1;
+        fundo.innerHTML = ''
+            + '<div class="modal-dialog modal-lg modal-dialog-centered">'
+            + '<div class="modal-content">'
+            + '<div class="modal-header">'
+            + '<h5 class="modal-title">Aprovação do PAP</h5>'
+            + '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>'
+            + '</div>'
+            + '<div class="modal-body">'
+            + '<p class="mb-2">Aprove no celular o número que aparecer nesta tela. O sistema segue sozinho quando a aprovação entrar.</p>'
+            + '<img id="img-tela-login-pap" alt="Tela de aprovação do Microsoft Authenticator" class="img-fluid rounded border w-100">'
+            + '</div></div></div>';
+        document.body.appendChild(fundo);
+    }
+    const img = document.getElementById('img-tela-login-pap');
+    if (img && img.dataset.quadro !== imagem) {
+        img.dataset.quadro = imagem;
+        img.src = 'data:image/jpeg;base64,' + imagem;
+    }
+    if (window.bootstrap && bootstrap.Modal) {
+        bootstrap.Modal.getOrCreateInstance(fundo).show();
+    }
+}
+
 async function iniciarBuscaPapOnline(opcoes = {}) {
     const btn = document.getElementById('btn-sync-pap');
     btn.disabled = true;
@@ -1942,6 +1973,7 @@ async function iniciarBuscaPapOnline(opcoes = {}) {
             const st = await fetch(`/api/crm/funil-venda-wpp/historico-pap/status/?id=${buscaId}`, { headers });
             ultimo = await st.json().catch(() => null);
             if (!ultimo) continue;
+            if (ultimo.tela_login) mostrarTelaLoginPap(ultimo.tela_login);
             const status = (ultimo.status || '').toLowerCase();
             const emAndamento = !!ultimo.em_andamento || status === 'em_andamento' || status === 'pendente';
             if (!emAndamento) break;

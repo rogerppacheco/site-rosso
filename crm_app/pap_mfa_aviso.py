@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 
 from django.core.cache import cache
@@ -63,6 +64,43 @@ def limpar_aviso_mfa(matricula: str = "") -> None:
             cache.delete(_CHAVE)
     except Exception:
         logger.warning("[PAP] Não foi possível limpar o aviso de MFA no CRM.")
+
+
+def _chave_tela(chave: str) -> str:
+    return f"pap_tela_login:{(chave or '').strip()}"
+
+
+def publicar_tela_login(chave: str, imagem: bytes) -> None:
+    """Guarda a foto da tela de aprovação para o modal da auditoria."""
+    if not (chave or "").strip() or not imagem:
+        return
+    try:
+        cache.set(
+            _chave_tela(chave),
+            base64.b64encode(imagem).decode("ascii"),
+            _TTL_SEGUNDOS,
+        )
+    except Exception:
+        logger.warning("[PAP] Não foi possível guardar a tela de login.")
+
+
+def obter_tela_login_b64(chave: str) -> str:
+    if not (chave or "").strip():
+        return ""
+    try:
+        return cache.get(_chave_tela(chave)) or ""
+    except Exception:
+        logger.warning("[PAP] Não foi possível ler a tela de login.")
+        return ""
+
+
+def limpar_tela_login(chave: str) -> None:
+    if not (chave or "").strip():
+        return
+    try:
+        cache.delete(_chave_tela(chave))
+    except Exception:
+        logger.warning("[PAP] Não foi possível limpar a tela de login.")
 
 
 def listar_avisos_mfa() -> list:

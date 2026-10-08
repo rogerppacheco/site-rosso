@@ -2527,6 +2527,8 @@ def registrar_exportacao(usuario, nome: str, content: bytes) -> dict:
 
 
 def serializar_busca(busca, *, em_andamento: bool) -> dict:
+    from crm_app.pap_mfa_aviso import obter_tela_login_b64
+
     login_user = getattr(busca, "login_pap", None)
     return {
         "id": busca.id,
@@ -2543,6 +2545,7 @@ def serializar_busca(busca, *, em_andamento: bool) -> dict:
         "mensagem": busca.mensagem or "",
         "grava_venda": False,
         "login_pap": getattr(login_user, "username", None) or "",
+        "tela_login": obter_tela_login_b64(f"historico-{busca.id}"),
         "iniciado_em": busca.iniciado_em.isoformat() if busca.iniciado_em else "",
         "finalizado_em": busca.finalizado_em.isoformat() if busca.finalizado_em else "",
     }
@@ -3029,6 +3032,7 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
         optimize_for_credit=True,
         url_pos_login=PAP_HISTORICO_URL,
     )
+    automacao.tela_login_chave = f"historico-{busca_id}"
 
     def _rodar_com_sessao(*, forcar_login_fresco: bool) -> tuple[bool, str]:
         if forcar_login_fresco and hasattr(automacao, "storage_state_path"):

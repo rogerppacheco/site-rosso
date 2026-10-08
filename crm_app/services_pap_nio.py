@@ -21,7 +21,12 @@ from crm_app.pap_login_microsoft import (
     email_acesso_microsoft,
     extrair_numero_mfa,
 )
-from crm_app.pap_mfa_aviso import limpar_aviso_mfa, publicar_aviso_mfa
+from crm_app.pap_mfa_aviso import (
+    limpar_aviso_mfa,
+    limpar_tela_login,
+    publicar_aviso_mfa,
+    publicar_tela_login,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1256,6 +1261,18 @@ class PAPNioAutomation:
                 continue
         return extrair_numero_mfa(self._texto_visivel_login())
 
+    def _publicar_tela_login(self) -> None:
+        """Foto da tela depois da senha, para o modal de aprovação."""
+        chave = (getattr(self, "tela_login_chave", "") or "").strip()
+        if not chave or not self.page:
+            return
+        try:
+            imagem = self.page.screenshot(type="jpeg", quality=45)
+        except Exception:
+            return
+        if imagem:
+            publicar_tela_login(chave, imagem)
+
     def _aceitar_manter_conectado(self) -> None:
         """Clica em Sim / Yes. O botão Não fica em #idBtn_Back e não é usado."""
         if not self.page:
@@ -1288,8 +1305,11 @@ class PAPNioAutomation:
         try:
             while time.monotonic() < limite:
                 estado = self._estado_login_microsoft()
+                if senha_enviada and estado not in ("pap_ok", "erro_credencial", "cadastro"):
+                    self._publicar_tela_login()
                 if estado == "pap_ok":
                     limpar_aviso_mfa(self.matricula_pap)
+                    limpar_tela_login(getattr(self, "tela_login_chave", "") or "")
                     logger.info("[PAP] Login Microsoft concluído para %s", self.matricula_pap)
                     return True, "Login realizado com sucesso!"
                 if estado == "erro_credencial":
