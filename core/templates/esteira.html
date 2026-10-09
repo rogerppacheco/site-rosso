@@ -2709,15 +2709,18 @@ min-width: 100%;
                 alert('Consulta PAP disponível apenas em Todos, Agendados, Pendentes ou em uma data específica.');
                 return;
             }
-            const filtros = montarFiltrosConsultaStatusPap();
-            const rotulo = rotuloFiltrosConsultaStatusPap(filtros);
+            const filtros = { aba: String(filtroAtual || 'TODOS') };
+            const rotulo = rotuloAbaConsultaStatusPap();
+            const escopoTxt = filtros.aba === 'TODOS'
+                ? 'todos os pedidos NIO da esteira com O.S., sem nenhum outro filtro'
+                : 'pedidos NIO com O.S. desta aba (filtros de tipo, motivo, busca e colunas não se aplicam)';
             // ETA ~47s/pedido (medido no lote de 72)
             const etaHint = 'Ritmo ~5–6 O.S./min (≈ 45–50s por pedido).';
             if (!confirm(
                 `Consultar STATUS no PAP?\n\n`
-                + `Escopo: ${rotulo}\n`
-                + `(mesma ordem e filtros da tabela — começa pelo 1º da lista)\n\n`
-                + '• Usa a matrícula PAP do SEU usuário no CRM {{ SITE_BRAND }}.\n'
+                + `Escopo: ${rotulo} — ${escopoTxt}.\n`
+                + '(mesma ordem da tabela — começa pelo 1º da lista; O.S. repetida é consultada uma vez)\n\n'
+                + '• Usa a conta de serviço PAP de Consulta configurada no sistema.\n'
                 + '• Deslogue do PAP em outros lugares antes de continuar.\n'
                 + `• ${etaHint}\n`
                 + '• Cancelar encerra e desloga a sessão PAP.\n\n'

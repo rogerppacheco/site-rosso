@@ -738,10 +738,14 @@ def buscar_venda_ativa_por_os_cpf(cpf_limpo, numero_os):
 
 
 def _esteira_permite_sync_status_pap(venda):
-    st_u = ((venda.status_esteira.nome if venda.status_esteira else "") or "").upper()
-    if "INSTALAD" in st_u:
+    """Qualquer status ABERTO da esteira (universo da aba Todos), nunca instalada/cancelada."""
+    se = venda.status_esteira
+    if not se:
         return False
-    return "AGENDADO" in st_u or "PENDENCI" in st_u
+    st_u = (se.nome or "").upper()
+    if "INSTALAD" in st_u or "CANCELAD" in st_u:
+        return False
+    return (se.estado or "").strip().upper() == "ABERTO"
 
 
 def obter_os_prioridade_crm_por_cpf(cpf_limpo):
@@ -1044,8 +1048,9 @@ def montar_mensagem_whatsapp_esteira_vendedor(venda, *, prefixo_atualizacao=Fals
 
 def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=None):
     """
-    Sincroniza CRM a partir do detalhe PAP (por O.S. cadastrada, venda ativa):
-    - Concluído → INSTALADA (de AGENDADO ou PENDENCIADA; mantém data/turno agendado; + data_instalacao do PAP)
+    Sincroniza CRM a partir do detalhe PAP (por O.S. cadastrada, venda ativa com
+    esteira ABERTA — AGENDADO, PENDENCIADA, NÃO CONSTA NA OSAB etc.):
+    - Concluído → INSTALADA (mantém data/turno agendado; + data_instalacao do PAP)
     - Status lista = Pendência Cliente ou Técnica + código no detalhe (cadastrado) → PENDENCIADA
       (limpa data_agendamento e periodo_agendamento)
     - Status lista = Em Aprovisionamento + Agendamento com data/turno no detalhe → AGENDADO
@@ -1095,7 +1100,7 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
         esteira_nome = (venda.status_esteira.nome if venda.status_esteira else "") or ""
         if not _esteira_permite_sync_status_pap(venda):
             logger.info(
-                "[STATUS SYNC] OS %s: esteira '%s' fora de AGENDADO/PENDENCIADA — não atualiza.",
+                "[STATUS SYNC] OS %s: esteira '%s' não está aberta — não atualiza.",
                 os_raw,
                 esteira_nome,
             )
@@ -1132,8 +1137,7 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
             alteracoes.append(item)
 
         if status_inst and pap_status_indica_concluido(d.get("status"), d.get("status_agendamento")):
-            st_u = esteira_nome.upper()
-            if "AGENDADO" in st_u or "PENDENCI" in st_u:
+            if _esteira_permite_sync_status_pap(venda):
                 dt = extrair_data_instalacao_texto_pap(d.get("agendamento"), d.get("status_agendamento"))
                 venda.status_esteira = status_inst
                 venda.motivo_pendencia = None
@@ -1153,7 +1157,7 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
                 _registrar_alteracao_se_houve()
             else:
                 logger.info(
-                    "[STATUS SYNC] OS %s: PAP concluído, mas esteira '%s' não é AGENDADO/PENDENCIADA — não altera.",
+                    "[STATUS SYNC] OS %s: PAP concluído, mas esteira '%s' não está aberta — não altera.",
                     os_raw,
                     esteira_nome,
                 )

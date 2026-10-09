@@ -85,61 +85,92 @@ def _aba_permitida(aba: str) -> bool:
     return bool(re.match(r'^\d{4}-\d{2}-\d{2}$', (aba or '').strip()))
 
 
-def queryset_vendas_consulta_aba(filtros: Dict[str, Any]):
+def queryset_vendas_esteira_com_os():
     """
-    Queryset alinhado à aba/filtros da Esteira (o que o usuário vê).
-
-    Ordem = mesma da tabela (`-data_criacao`): o 1º da tela é o 1º consultado.
-    Respeita data, turno, status do agendamento, tipo/motivo de pendência, busca
-    e filtros de coluna (Posso reagendar?, Posso antecipar?, O.S., vendedor, etc.).
+    Mesmo universo da aba "Todos" da Esteira (venda ativa, esteira ABERTA e não
+    cancelada), restrito a pedidos com O.S. preenchida de operadora que usa o
+    PAP Nio (as demais nunca seriam encontradas no portal).
     """
     from crm_app.models import Venda
+    from crm_app.services.pap_operadora_guard import filtro_vendas_com_pap
 
-    aba = (filtros.get('aba') or 'TODOS').strip()
-    busca = (filtros.get('busca') or '').strip()
-    turno = (filtros.get('periodo_agendamento') or '').strip().upper()
-    status_ag = (filtros.get('status_agendamento') or '').strip()
-    tipo_pend = (filtros.get('tipo_pendencia') or '').strip().upper()
-    motivo_pend = (filtros.get('motivo_pendencia') or '').strip()
-    colunas = filtros.get('colunas') if isinstance(filtros.get('colunas'), dict) else {}
-
-    qs = (
+    return (
         Venda.objects.filter(
             ativo=True,
             status_esteira__isnull=False,
             status_esteira__estado__iexact='ABERTO',
         )
-        .filter(
-            Q(status_esteira__nome__iexact='AGENDADO')
-            | Q(status_esteira__nome__icontains='PENDEN')
-        )
+        .filter(filtro_vendas_com_pap())
+        .exclude(status_esteira__nome__icontains='CANCELAD')
         .exclude(ordem_servico__isnull=True)
-        .exclude(ordem_servico='')
-        .select_related(
-            'cliente',
-            'vendedor',
-            'status_esteira',
-            'motivo_pendencia',
-            'status_agendamento',
-            'plano',
-            'editado_por',
-        )
+        .exclude(ordem_servico__regex=r'^\s*$')
+    )
+
+
+def queryset_vendas_consulta_aba(filtros: Dict[str, Any]):
+    """
+    Queryset da fila de consulta PAP por aba da Esteira.
+
+    - Todos: tudo que está na aba e tem O.S. da NIO, sem nenhum outro filtro
+      (status, tipo/motivo de pendência, busca e colunas são ignorados).
+    - Agendados / Pendentes / data: apenas o status (e a data) da aba.
+
+    Ordem = mesma da tabela (`-data_criacao`): o 1º da tela é o 1º consultado.
+    """
+    aba = (filtros.get('aba') or 'TODOS').strip()
+
+    qs = queryset_vendas_esteira_com_os().select_related(
+        'cliente',
+        'vendedor',
+        'status_esteira',
+        'motivo_pendencia',
+        'status_agendamento',
+        'plano',
+        'editado_por',
     )
 
     aba_u = aba.upper()
-    if aba_u == 'PENDEN' or 'PENDEN' in aba_u:
+    if aba_u == 'TODOS':
+        pass
+    elif 'PENDEN' in aba_u:
         qs = qs.filter(status_esteira__nome__icontains='PENDEN')
     elif aba_u == 'AGENDADO':
         qs = qs.filter(status_esteira__nome__iexact='AGENDADO')
     elif re.match(r'^\d{4}-\d{2}-\d{2}$', aba):
         qs = qs.filter(status_esteira__nome__iexact='AGENDADO', data_agendamento=aba)
-    elif aba_u != 'TODOS':
+    else:
         qs = qs.none()
 
-    # REMOVIDO: Filtros complexos (turno, tipo_pend, motivo_pend, busca, colunas) conforme regra de "consulta PAP na aba atual" simplificada.
-
-    # Mesma ordem da listagem da Esteira (1º da tabela = 1º consultado)
     return qs.order_by('-data_criacao', '-id')
+
+
+def _normalizar_os(os_num: str) -> str:
+    digitos = re.sub(r'\D', '', os_num or '')
+    return (digitos.lstrip('0') or digitos) if digitos else (os_num or '').strip().upper()
+
+
+def ids_fila_consulta_aba(filtros: Dict[str, Any]) -> List[int]:
+    """
+    IDs da fila na ordem da tabela, sem repetir a mesma O.S.
+    (a consulta no PAP é por O.S.; repetir só gasta sessão e tempo).
+    """
+    ids: List[int] = []
+    vistas = set()
+    for venda_id, os_num in queryset_vendas_consulta_aba(filtros).values_list('id', 'ordem_servico'):
+        chave = _normalizar_os(os_num)
+        if not chave or chave in vistas:
+            continue
+        vistas.add(chave)
+        ids.append(venda_id)
+    return ids
+
+
+def _recarregar_venda_elegivel(venda_id: int, filtros: Dict[str, Any]):
+    """
+    Relê a venda do banco antes de consultar: o lote pode durar horas e o pedido
+    pode ter saído da aba (cancelado, instalado, O.S. removida) nesse meio tempo.
+    """
+    return queryset_vendas_consulta_aba(filtros).filter(pk=venda_id).first()
 
 
 def _aplicar_filtros_colunas_esteira(qs, colunas: Dict[str, Any]):
@@ -343,7 +374,7 @@ def _cpf_cnpj_venda(venda) -> str:
 def _resumo_resultado_item(resultado: dict) -> dict:
     """Item compacto para o front (últimos processados)."""
     err = (resultado.get('erro') or '').strip()
-    if resultado.get('ignorado_sem_cpf'):
+    if resultado.get('ignorado_sem_cpf') or resultado.get('ignorado_fora_escopo'):
         situacao = 'ignorado'
     elif err:
         situacao = 'erro'
@@ -415,6 +446,7 @@ def _enviar_relatorio_operador(execucao, detalhes: List[dict]) -> None:
         f'Atualizados CRM: {execucao.atualizados}',
         f'Sem alteração: {execucao.sem_alteracao}',
         f'Erros: {execucao.erros}',
+        f'Ignorados (sem CPF/CNPJ, fora da aba ou não-NIO): {execucao.ignorados_sem_cpf}',
     ]
     atualizados = [d for d in detalhes if d.get('alterou')]
     if atualizados:
@@ -750,6 +782,8 @@ def _minutos_sem_progresso(execucao) -> Optional[float]:
 # Sessão ativa por execução — cancelamento força logout imediato se possível
 _sessoes_ativas: Dict[int, _SessaoPapUsuarioHolder] = {}
 _sessoes_lock = threading.Lock()
+# Evita duas execuções criadas por cliques simultâneos no mesmo processo.
+_criacao_lock = threading.Lock()
 
 
 def executar_job_consulta_aba(execucao_id: int) -> None:
@@ -792,8 +826,8 @@ def executar_job_consulta_aba(execucao_id: int) -> None:
         return
 
     filtros = dict((execucao.relatorio_json or {}).get('filtros') or {})
-    vendas = list(queryset_vendas_consulta_aba(filtros))
-    fila: List = list(vendas)
+    fila: List[int] = ids_fila_consulta_aba(filtros)
+    total_fila = len(fila)
     detalhes: List[dict] = []
     sessao = _SessaoPapUsuarioHolder(usuario)
     with _sessoes_lock:
@@ -802,19 +836,20 @@ def executar_job_consulta_aba(execucao_id: int) -> None:
     _atualizar_execucao(
         execucao,
         status=SyncStatusEsteiraExecucao.STATUS_EM_ANDAMENTO,
-        total_pedidos=len(vendas),
+        total_pedidos=total_fila,
         relatorio_json=_montar_relatorio_json(filtros=filtros, detalhes=[], matricula=sessao.matricula),
     )
     logger.info(
         '[CONSULTA ESTEIRA] Início #%s (aba=%s) — %s pedidos, matrícula=%s.',
         execucao_id,
         filtros.get('aba'),
-        len(vendas),
+        total_fila,
         sessao.matricula,
     )
 
     processados = atualizados = sem_alteracao = erros = ignorados = 0
-    primeira = True
+    # Pausa anti-robô só entre consultas que de fato foram ao PAP.
+    pausar_antes_do_proximo = False
 
     try:
         while fila:
@@ -824,13 +859,43 @@ def executar_job_consulta_aba(execucao_id: int) -> None:
                 execucao.status = status_atual
                 break
 
-            if not primeira:
-                if not _pausa_interruptivel(execucao_id):
+            venda_id = fila.pop(0)
+            venda = _run_django_sync(
+                lambda: _recarregar_venda_elegivel(venda_id, filtros),
+                timeout_seconds=60,
+            )
+            if venda is None:
+                processados += 1
+                ignorados += 1
+                detalhes.append({
+                    'venda_id': venda_id,
+                    'os': '',
+                    'alterou': False,
+                    'ignorado_fora_escopo': True,
+                })
+                logger.info(
+                    '[CONSULTA ESTEIRA] Venda #%s saiu da aba/perdeu O.S. durante o lote — pulada.',
+                    venda_id,
+                )
+                _atualizar_execucao(
+                    execucao,
+                    processados=processados,
+                    ignorados_sem_cpf=ignorados,
+                    relatorio_json=_montar_relatorio_json(
+                        filtros=filtros,
+                        detalhes=detalhes,
+                        atual_fase='entre_pedidos' if fila else 'finalizando',
+                        matricula=sessao.matricula,
+                    ),
+                )
+                continue
+
+            if len(_cpf_cnpj_venda(venda)) in (11, 14):
+                if pausar_antes_do_proximo and not _pausa_interruptivel(execucao_id):
                     execucao.status = _status_execucao(execucao_id)
                     break
-            primeira = False
+                pausar_antes_do_proximo = True
 
-            venda = fila.pop(0)
             os_atual = (venda.ordem_servico or '').strip()
             _atualizar_execucao(
                 execucao,
@@ -1009,21 +1074,25 @@ def criar_e_iniciar_consulta_aba(*, usuario, filtros: Dict[str, Any]) -> Tuple[O
             'Consulta PAP disponível apenas nas abas Todos, Agendados, Pendentes '
             'ou em uma data específica.'
         ), 0
+    if aba.upper() == 'TODOS':
+        aba = 'TODOS'
+    filtros = {'aba': aba}
 
-    if job_em_andamento():
-        return None, 'Já existe uma sincronização/consulta PAP em andamento.', 0
+    with _criacao_lock:
+        if job_em_andamento():
+            return None, 'Já existe uma sincronização/consulta PAP em andamento.', 0
 
-    total = queryset_vendas_consulta_aba(filtros).count()
-    if total <= 0:
-        return None, 'Nenhum pedido elegível na aba/filtros atuais (AGENDADO/PENDENCIADA com O.S.).', 0
+        total = len(ids_fila_consulta_aba(filtros))
+        if total <= 0:
+            return None, 'Nenhum pedido NIO com O.S. na aba selecionada.', 0
 
-    execucao = SyncStatusEsteiraExecucao.objects.create(
-        modo=SyncStatusEsteiraExecucao.MODO_CONSULTA_ABA,
-        status=SyncStatusEsteiraExecucao.STATUS_PENDENTE,
-        iniciado_por=usuario,
-        total_pedidos=total,
-        relatorio_json={'filtros': filtros, 'detalhes': []},
-    )
+        execucao = SyncStatusEsteiraExecucao.objects.create(
+            modo=SyncStatusEsteiraExecucao.MODO_CONSULTA_ABA,
+            status=SyncStatusEsteiraExecucao.STATUS_PENDENTE,
+            iniciado_por=usuario,
+            total_pedidos=total,
+            relatorio_json={'filtros': filtros, 'detalhes': []},
+        )
 
     def _runner():
         import django.db
