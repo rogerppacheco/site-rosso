@@ -2796,11 +2796,36 @@ class VendaViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def pendentes_auditoria(self, request):
+        status_id = request.query_params.get('status_tratamento_id')
+        qd = getattr(request, '_request', request).GET
+        qd._mutable = True
+        qd.pop('status_tratamento_id', None)
+        qd._mutable = False
+
         qs = self._queryset_pendentes_auditoria(request)
+        from django.db.models import Count
+        contagem = [
+            {
+                'id': row['status_tratamento_id'],
+                'nome': row['status_tratamento__nome'] or 'Sem status',
+                'qtd': row['qtd'],
+            }
+            for row in (
+                qs.order_by()
+                .values('status_tratamento_id', 'status_tratamento__nome')
+                .annotate(qtd=Count('id'))
+                .order_by('-qtd', 'status_tratamento__nome')
+            )
+        ]
+        if status_id and str(status_id).isdigit():
+            qs = qs.filter(status_tratamento_id=int(status_id))
+
         page = self.paginate_queryset(qs)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            resp = self.get_paginated_response(serializer.data)
+            resp.data['contagem_status'] = contagem
+            return resp
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
