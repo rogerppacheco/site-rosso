@@ -111,6 +111,25 @@ class AuditoriaSyncVendasPapTests(APITestCase):
             HistoricoAlteracaoVenda.objects.filter(venda=venda, alteracoes__ordem_servico="08907507").exists()
         )
 
+    def test_pedido_gerado_noite_grava_como_tarde(self):
+        pedido = "202610086964805613"
+        venda = self._venda(pedido)
+        self._pap(
+            pedido,
+            primario="PEDIDO_GERADO",
+            os_inst="11631911",
+            data_inst="2026-10-08",
+            periodo="NOITE",
+        )
+        resultado = sincronizar_vendas_com_pap(usuario=self.usuario)
+        venda.refresh_from_db()
+        grupo, item = self._por_pedido(resultado, pedido)
+        self.assertEqual(grupo, "esteira")
+        self.assertEqual(venda.periodo_agendamento, "TARDE")
+        self.assertEqual(venda.ordem_servico, "11631911")
+        self.assertEqual(venda.data_agendamento, date(2026, 10, 8))
+        self.assertIn("Noite no PAP", item["detalhe"])
+
     def test_pedido_gerado_sem_turno_nao_altera(self):
         venda = self._venda("202610086964805598")
         self._pap(

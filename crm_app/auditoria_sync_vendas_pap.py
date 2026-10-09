@@ -198,7 +198,8 @@ def normalizar_periodo(valor) -> str:
     texto = _fold(valor)
     if "MANH" in texto:
         return "MANHA"
-    if "TARD" in texto:
+    # Noite não existe no cadastro da venda; grava como Tarde.
+    if "TARD" in texto or "NOIT" in texto:
         return "TARDE"
     return ""
 
@@ -361,8 +362,12 @@ def _aplicar_esteira(venda, usuario, linha, catalogo) -> tuple[str, str, str]:
         )
         _encerrar_sessao(venda.id, "CADASTRADO", "CADASTRADA")
 
+    noite = "NOIT" in _fold(linha.get("periodo_instalacao"))
+    turno = _rotulo_periodo(periodo)
+    if noite:
+        turno += " (Noite no PAP)"
     detalhe = (
-        f"O.S. {os_valor} · instalação {data.strftime('%d/%m/%Y')} · {_rotulo_periodo(periodo)}. "
+        f"O.S. {os_valor} · instalação {data.strftime('%d/%m/%Y')} · {turno}. "
         "Status CADASTRADA e esteira AGENDADO."
     )
     return "esteira", "CADASTRADA", detalhe
