@@ -210,6 +210,7 @@ from .auditoria_ligacoes_api import (
     AuditoriaLigacaoWebhookView,
 )
 from .auditoria_sem_slot_api import AuditoriaSemSlotEnviarView, AuditoriaSemSlotRelatorioView
+from .auditoria_sync_vendas_pap import AuditoriaSincronizarVendasPapView
 from .auditoria_inclusao_api import (
     DemandaInclusaoListView,
     DemandaInclusaoDetailView,
@@ -546,6 +547,7 @@ urlpatterns = [
     path('antecipar-instalacao/solicitacao/<int:pk>/resposta/', RespostaGCAnteciparInstalacaoView.as_view(), name='antecipar-instalacao-resposta-gc'),
 
     # --- Auditoria: sem slot na agenda (comunicação GC) ---
+    path('auditoria/sincronizar-vendas-pap/', AuditoriaSincronizarVendasPapView.as_view(), name='auditoria-sincronizar-vendas-pap'),
     path('auditoria/sem-slot/enviar/', AuditoriaSemSlotEnviarView.as_view(), name='auditoria-sem-slot-enviar'),
     path('auditoria/sem-slot/relatorio/', AuditoriaSemSlotRelatorioView.as_view(), name='auditoria-sem-slot-relatorio'),
 

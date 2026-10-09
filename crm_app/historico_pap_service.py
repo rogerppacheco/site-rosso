@@ -2708,6 +2708,50 @@ def _pedido_conhecido(numero: str) -> bool:
     return HistoricoPapPedido.objects.filter(numero_pedido=numero).exists()
 
 
+def _atualizar_payload_existente(numero: str, tipo: str, pdv: str, payload: dict) -> bool:
+    """Atualiza status e payload de um protocolo já gravado pelo Buscar do PAP."""
+    from crm_app.models import HistoricoPapPedido
+
+    if not numero or not isinstance(payload, dict):
+        return False
+    tem_dado = bool(
+        payload.get("numeroPedido")
+        or payload.get("chaveStatusPrimario")
+        or payload.get("status")
+        or payload.get("subStatus")
+    )
+    if not tem_dado:
+        return False
+    existente = HistoricoPapPedido.objects.filter(numero_pedido=numero).first()
+    if not existente:
+        return False
+    campos = []
+    if existente.payload != payload:
+        existente.payload = payload
+        campos.append("payload")
+    novo_status = str(payload.get("chaveStatusPrimario") or payload.get("status") or "")[:80]
+    if novo_status and existente.status != novo_status:
+        existente.status = novo_status
+        campos.append("status")
+    if tipo and existente.tipo_venda != tipo:
+        existente.tipo_venda = tipo
+        campos.append("tipo_venda")
+    if pdv and (existente.pdv or "") != pdv:
+        existente.pdv = pdv
+        campos.append("pdv")
+    raw = payload.get("dataCriacao")
+    if raw and not existente.data_criacao_pap:
+        try:
+            existente.data_criacao_pap = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            campos.append("data_criacao_pap")
+        except Exception:
+            pass
+    if not campos:
+        return False
+    existente.save(update_fields=campos)
+    return True
+
+
 def _salvar_novo(numero: str, tipo: str, pdv: str, payload: dict) -> bool:
     from crm_app.models import HistoricoPapPedido
 
@@ -2716,9 +2760,7 @@ def _salvar_novo(numero: str, tipo: str, pdv: str, payload: dict) -> bool:
         
     existente = HistoricoPapPedido.objects.filter(numero_pedido=numero).first()
     if existente:
-        if existente.tipo_venda != tipo:
-            existente.tipo_venda = tipo
-            existente.save(update_fields=['tipo_venda'])
+        _atualizar_payload_existente(numero, tipo, pdv, payload)
         return False
         
     data_criacao = None
@@ -2924,6 +2966,7 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
                 por_tipo[t_api] = {"encontrados": 0, "novos": 0, "ignorados": 0}
             por_tipo[t_api]["encontrados"] += 1
             if _pedido_conhecido(ped):
+                _atualizar_payload_existente(ped, t_api, pdv_venda, v)
                 ignorados += 1
                 por_tipo[t_api]["ignorados"] += 1
             else:
@@ -3205,6 +3248,7 @@ def _paginar_tipo(
 
             def _one():
                 if _pedido_conhecido(ped):
+                    _atualizar_payload_existente(ped, tipo, pdv, p)
                     return False
                 return _salvar_novo(ped, tipo, pdv, p)
 
