@@ -1,6 +1,7 @@
 """Cruza a fila da auditoria com o histórico do botão Buscar do PAP.
 
-PEDIDO_GERADO com O.S., data e turno vai para a esteira (CADASTRADA + AGENDADO).
+PEDIDO_GERADO com O.S. vai para a esteira. Agenda completa fica AGENDADO.
+Sem data ou turno, fica PENDENCIADA com a pendência 7030 (falta de slot).
 VENDA_NAO_CONFIRMADA tenta reprovar pelo status secundário.
 ANALISE_BO reprova como DUPLICIDADE se o CPF já tem pedido com O.S. na esteira.
 """
@@ -24,6 +25,7 @@ from crm_app.utils import (
     buscar_venda_os_ja_cadastrada,
     is_member,
     mensagem_os_ja_cadastrada,
+    resolver_motivo_pendencia_por_texto_pap,
 )
 
 logger = logging.getLogger(__name__)
@@ -318,59 +320,84 @@ def _aplicar_esteira(venda, usuario, linha, catalogo) -> tuple[str, str, str]:
     os_valor, os_erro = extrair_os(linha.get("os_instalacao"))
     data = parse_data_instalacao(linha.get("data_instalacao"))
     periodo = normalizar_periodo(linha.get("periodo_instalacao"))
-    faltas = []
     if os_erro == "ausente":
-        faltas.append("O.S. instalação")
-    elif os_erro == "invalida":
-        faltas.append(f'O.S. instalação inválida ("{linha.get("os_instalacao")}")')
-    if not data:
-        faltas.append("Data instalação")
-    if not periodo:
-        bruto_periodo = (linha.get("periodo_instalacao") or "").strip()
-        if bruto_periodo:
-            faltas.append(f'Período instalação "{bruto_periodo}" não é Manhã nem Tarde')
-        else:
-            faltas.append("Período instalação")
-    if faltas:
-        return "inalterado", "", "Sem informação suficiente: " + ", ".join(faltas) + "."
-    if not catalogo["cadastrada"] or not catalogo["agendado"]:
-        return "inalterado", "", "Status CADASTRADA ou AGENDADO não está cadastrado."
+        return "inalterado", "", "Sem informação suficiente: O.S. instalação."
+    if os_erro == "invalida":
+        bruto = linha.get("os_instalacao")
+        return "inalterado", "", f'Sem informação suficiente: O.S. instalação inválida ("{bruto}").'
+    if not catalogo["cadastrada"]:
+        return "inalterado", "", "Status CADASTRADA não está cadastrado."
 
     conflito = buscar_venda_os_ja_cadastrada(os_valor, excluir_venda_id=venda.id)
     if conflito:
         return "inalterado", "", mensagem_os_ja_cadastrada(os_valor, conflito)
 
+    agenda_completa = bool(data and periodo)
+    if agenda_completa:
+        if not catalogo["agendado"]:
+            return "inalterado", "", "Status AGENDADO não está cadastrado."
+        esteira = catalogo["agendado"]
+        motivo = None
+        rotulo_esteira = "AGENDADO"
+    else:
+        if not catalogo["pendenciada"]:
+            return "inalterado", "", "Status de esteira PENDENCIADA não está cadastrado."
+        if not catalogo["motivo_7030"]:
+            return "inalterado", "", "Pendência 7030 (falta de slot) não está cadastrada."
+        esteira = catalogo["pendenciada"]
+        motivo = catalogo["motivo_7030"]
+        rotulo_esteira = "PENDENCIADA"
+
     with transaction.atomic():
         venda.ordem_servico = os_valor
         venda.data_agendamento = data
-        venda.periodo_agendamento = periodo
+        venda.periodo_agendamento = periodo or None
         venda.status_tratamento = catalogo["cadastrada"]
-        venda.status_esteira = catalogo["agendado"]
+        venda.status_esteira = esteira
+        venda.motivo_pendencia = motivo
         venda.data_abertura = timezone.now()
         venda.auditor_atual = None
         venda.save()
         _gravar_historico(
             venda,
             usuario,
-            "Auditoria finalizada via PAP: CADASTRADA",
+            f"Auditoria finalizada via PAP: {rotulo_esteira}",
             {
                 "ordem_servico": os_valor,
-                "data_agendamento": data.isoformat(),
+                "data_agendamento": data.isoformat() if data else "",
                 "periodo_agendamento": periodo,
-                "status_esteira": "AGENDADO",
+                "status_esteira": rotulo_esteira,
+                "motivo_pendencia": getattr(motivo, "nome", "") or "",
             },
         )
-        _encerrar_sessao(venda.id, "CADASTRADO", "CADASTRADA")
+        _encerrar_sessao(venda.id, "CADASTRADO", rotulo_esteira)
 
-    noite = "NOIT" in _fold(linha.get("periodo_instalacao"))
-    turno = _rotulo_periodo(periodo)
-    if noite:
-        turno += " (Noite no PAP)"
+    if agenda_completa:
+        noite = "NOIT" in _fold(linha.get("periodo_instalacao"))
+        turno = _rotulo_periodo(periodo)
+        if noite:
+            turno += " (Noite no PAP)"
+        detalhe = (
+            f"O.S. {os_valor} · instalação {data.strftime('%d/%m/%Y')} · {turno}. "
+            "Status CADASTRADA e esteira AGENDADO."
+        )
+        return "esteira", "CADASTRADA", detalhe
+
+    faltas = []
+    if not data:
+        faltas.append("data")
+    if not periodo:
+        bruto_periodo = (linha.get("periodo_instalacao") or "").strip()
+        if bruto_periodo:
+            faltas.append(f'turno "{bruto_periodo}"')
+        else:
+            faltas.append("turno")
+    nome_motivo = getattr(motivo, "nome", "") or "7030"
     detalhe = (
-        f"O.S. {os_valor} · instalação {data.strftime('%d/%m/%Y')} · {turno}. "
-        "Status CADASTRADA e esteira AGENDADO."
+        f"O.S. {os_valor}. Agenda incompleta ({', '.join(faltas)}). "
+        f"Esteira PENDENCIADA, pendência {nome_motivo}."
     )
-    return "esteira", "CADASTRADA", detalhe
+    return "esteira", nome_motivo, detalhe
 
 
 def _aplicar_reprova(venda, usuario, status_obj, nota: str, detalhe: str) -> tuple[str, str, str]:
@@ -452,6 +479,13 @@ def sincronizar_vendas_com_pap(*, usuario) -> dict:
         "cadastrada": buscar_status_por_nome(tratamentos, "CADASTRADA"),
         "duplicidade": buscar_status_por_nome(tratamentos, "DUPLICIDADE"),
         "agendado": StatusCRM.objects.filter(tipo="Esteira", nome__iexact="AGENDADO").first(),
+        "pendenciada": (
+            StatusCRM.objects.filter(tipo="Esteira", nome__iexact="PENDENCIADA").first()
+            or StatusCRM.objects.filter(tipo="Esteira", nome__icontains="PENDEN")
+            .exclude(nome__icontains="CANCEL")
+            .first()
+        ),
+        "motivo_7030": resolver_motivo_pendencia_por_texto_pap("7030"),
     }
 
     com_protocolo = []

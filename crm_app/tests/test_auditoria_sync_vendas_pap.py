@@ -9,7 +9,7 @@ from crm_app.auditoria_sync_vendas_pap import (
     sincronizar_vendas_com_pap,
 )
 from crm_app.historico_pap_service import _atualizar_payload_existente
-from crm_app.models import Cliente, HistoricoAlteracaoVenda, HistoricoPapPedido, StatusCRM, Venda
+from crm_app.models import Cliente, HistoricoAlteracaoVenda, HistoricoPapPedido, MotivoPendencia, StatusCRM, Venda
 from usuarios.models import Perfil, Usuario
 
 PROTOCOLO = "202610086964805597"
@@ -62,6 +62,11 @@ class AuditoriaSyncVendasPapTests(APITestCase):
         cls.st_consta_curto = StatusCRM.objects.create(nome="CONSTA PEDIDO", tipo="Tratamento", estado="FECHADO")
         cls.st_dup = StatusCRM.objects.create(nome="DUPLICIDADE", tipo="Tratamento", estado="FECHADO")
         cls.st_agendado = StatusCRM.objects.create(nome="AGENDADO", tipo="Esteira", estado="ABERTO")
+        cls.st_pendenciada = StatusCRM.objects.create(nome="PENDENCIADA", tipo="Esteira", estado="ABERTO")
+        cls.motivo_7030 = MotivoPendencia.objects.create(
+            nome="7030 - PENDENCIA POR FALTA DE SLOT",
+            tipo_pendencia="OPERADORA",
+        )
 
     def _venda(self, pedido, cliente=None, status=None, esteira=None, os_inst=""):
         return Venda.objects.create(
@@ -130,7 +135,7 @@ class AuditoriaSyncVendasPapTests(APITestCase):
         self.assertEqual(venda.data_agendamento, date(2026, 10, 8))
         self.assertIn("Noite no PAP", item["detalhe"])
 
-    def test_pedido_gerado_sem_turno_nao_altera(self):
+    def test_pedido_gerado_sem_turno_vai_pendencia_7030(self):
         venda = self._venda("202610086964805598")
         self._pap(
             "202610086964805598",
@@ -142,11 +147,55 @@ class AuditoriaSyncVendasPapTests(APITestCase):
         resultado = sincronizar_vendas_com_pap(usuario=self.usuario)
         venda.refresh_from_db()
         grupo, item = self._por_pedido(resultado, "202610086964805598")
+        self.assertEqual(grupo, "esteira")
+        self.assertEqual(venda.status_tratamento_id, self.st_cad.id)
+        self.assertEqual(venda.status_esteira_id, self.st_pendenciada.id)
+        self.assertEqual(venda.motivo_pendencia_id, self.motivo_7030.id)
+        self.assertEqual(venda.ordem_servico, "08907508")
+        self.assertEqual(venda.data_agendamento, date(2026, 10, 10))
+        self.assertIsNone(venda.periodo_agendamento)
+        self.assertIn("7030", item["detalhe"])
+        self.assertIn("turno", item["detalhe"])
+
+    def test_pedido_gerado_sem_data_nem_turno_vai_pendencia_7030(self):
+        pedido = "202610064049582617"
+        venda = self._venda(pedido)
+        self._pap(pedido, primario="PEDIDO_GERADO", os_inst="11630001", data_inst="", periodo="")
+        resultado = sincronizar_vendas_com_pap(usuario=self.usuario)
+        venda.refresh_from_db()
+        grupo, item = self._por_pedido(resultado, pedido)
+        self.assertEqual(grupo, "esteira")
+        self.assertEqual(venda.status_esteira_id, self.st_pendenciada.id)
+        self.assertEqual(venda.motivo_pendencia_id, self.motivo_7030.id)
+        self.assertIsNone(venda.data_agendamento)
+        self.assertIn("data", item["detalhe"])
+
+    def test_pedido_gerado_sem_os_nao_altera(self):
+        venda = self._venda("202610066915805597")
+        self._pap("202610066915805597", primario="PEDIDO_GERADO", os_inst="", data_inst="", periodo="")
+        resultado = sincronizar_vendas_com_pap(usuario=self.usuario)
+        venda.refresh_from_db()
+        grupo, item = self._por_pedido(resultado, "202610066915805597")
         self.assertEqual(grupo, "inalteradas")
-        self.assertIn("Período instalação", item["detalhe"])
-        self.assertEqual(venda.status_tratamento_id, self.st_sem.id)
+        self.assertIn("O.S. instalação", item["detalhe"])
         self.assertIsNone(venda.status_esteira_id)
-        self.assertFalse(venda.ordem_servico)
+
+    def test_agenda_incompleta_sem_motivo_7030_nao_altera(self):
+        self.motivo_7030.delete()
+        venda = self._venda("202610068776805597")
+        self._pap(
+            "202610068776805597",
+            primario="PEDIDO_GERADO",
+            os_inst="11630002",
+            data_inst="",
+            periodo="Manhã",
+        )
+        resultado = sincronizar_vendas_com_pap(usuario=self.usuario)
+        venda.refresh_from_db()
+        grupo, item = self._por_pedido(resultado, "202610068776805597")
+        self.assertEqual(grupo, "inalteradas")
+        self.assertIn("7030", item["detalhe"])
+        self.assertIsNone(venda.status_esteira_id)
 
     def test_os_ja_cadastrada_nao_avanca(self):
         self._venda(
