@@ -197,31 +197,33 @@ def _usuario_ativo_por_telefone(telefone):
         return None
 
 
-_ETAPAS_BOT_PUBLICO = frozenset(
-    {
-        "dfv_cep",
-        "cdoe_codigo",
-        "cdoe_uf",
-        "cdoe_escolher_cidade",
-        "cdoe_escolher_rua",
-    }
+MSG_TELEFONE_SEM_USUARIO_ATIVO = (
+    "Seu número de telefone não está cadastrado para um usuário ativo. "
+    "Solicite ao admin o cadastro para uso."
 )
 
 
-def _sessao_bot_publica_ativa(telefone: str) -> bool:
-    """Fluxos DFV/CDOE abertos sem usuário interno cadastrado."""
+def _responder_telefone_sem_usuario_ativo(telefone_formatado: str) -> dict:
+    """Encerra sessão do bot e avisa que o número não pertence a usuário ativo."""
     try:
         from crm_app.models import SessaoWhatsapp
 
-        etapa = (
-            SessaoWhatsapp.objects.filter(telefone=telefone)
-            .values_list("etapa", flat=True)
-            .first()
+        SessaoWhatsapp.objects.filter(telefone=telefone_formatado).update(
+            etapa="inicial",
+            dados_temp={},
         )
-        return bool(etapa and etapa in _ETAPAS_BOT_PUBLICO)
     except Exception as e:
-        logger.warning("[Webhook] Erro ao verificar sessão pública: %s", e)
-        return False
+        logger.warning("[Webhook] Falha ao encerrar sessão de número sem cadastro: %s", e)
+    try:
+        from crm_app.whatsapp_service import WhatsAppService
+
+        WhatsAppService().enviar_mensagem_texto(
+            telefone_formatado,
+            MSG_TELEFONE_SEM_USUARIO_ATIVO,
+        )
+    except Exception as e:
+        logger.exception("[Webhook] Erro ao avisar número sem usuário ativo: %s", e)
+    return {"status": "ok", "mensagem": "Número sem usuário ativo"}
 
 
 def _saudacao_por_hora():
@@ -8541,19 +8543,11 @@ def processar_webhook_whatsapp(data, request=None):
             pass
         return {'status': 'ok', 'mensagem': 'BIO OK recebido'}
 
-    # Verificar se o número está associado a um usuário ativo (em grupo, usar participant_phone)
+    # Comandos do bot (DFV, CDOE, status, fatura, etc.) só para usuário ativo.
     usuario_whatsapp = _usuario_ativo_por_telefone(telefone_formatado_usuario)
-    comandos_liberados_sem_cadastro = (
-        mensagem_limpa in {"DFV", "CDOE", "FACHADA", "FACADA"}
-        or mensagem_limpa.startswith("CDOE ")
-    )
-    sessao_publica_ativa = _sessao_bot_publica_ativa(telefone_formatado)
-    if (
-        not usuario_whatsapp
-        and not comandos_liberados_sem_cadastro
-        and not sessao_publica_ativa
-    ):
-        # Cliente com telefone cadastrado em venda: resposta com dados do pedido + aviso BO/Diretoria
+    if not usuario_whatsapp:
+        # Cliente com telefone em venda: atendimento do pedido no canal do cliente.
+        # Não abre função do bot.
         if mensagem_texto and (mensagem_texto or "").strip():
             try:
                 from crm_app.services.whatsapp_ia_config_service import ia_clientes_venda_habilitada
@@ -8582,32 +8576,8 @@ def processar_webhook_whatsapp(data, request=None):
             except Exception as e:
                 logger.warning("[Webhook] Atendimento cliente venda falhou: %s", e, exc_info=True)
 
-        # Contato externo sem venda: IA acolhedora ou fallback profissional.
-        from crm_app.services.whatsapp_ia_config_service import ia_contatos_externos_habilitada
-
-        if not ia_contatos_externos_habilitada():
-            logger.info("[Webhook] IA contatos externos desabilitada — ignorando %s", telefone_formatado)
-            return {'status': 'ok', 'mensagem': 'IA externa desabilitada'}
-        mensagem_enviar = None
-        try:
-            from crm_app.ai_chat_service import responder_com_ia
-            mensagem_enviar = responder_com_ia(
-                (mensagem_texto or "").strip(),
-                nome_vendedor="",
-                contexto_externo=True,
-            )
-        except Exception as e:
-            logger.warning("[Webhook] IA para contato externo falhou: %s", e)
-        if not mensagem_enviar or not str(mensagem_enviar).strip():
-            mensagem_enviar = (
-                "Recebemos sua mensagem. Em breve um de nossos analistas retornará o contato. "
-                "Agradecemos a compreensão."
-            )
-        try:
-            WhatsAppService().enviar_mensagem_texto(telefone_formatado, mensagem_enviar)
-        except Exception as e:
-            logger.exception("[Webhook] Erro ao enviar resposta para contato externo: %s", e)
-        return {'status': 'ok', 'mensagem': 'Contato externo: resposta enviada'}
+        logger.info("[Webhook] Número sem usuário ativo: %s", telefone_formatado)
+        return _responder_telefone_sem_usuario_ativo(telefone_formatado)
     
     # Inicializar serviço WhatsApp
     whatsapp_service = WhatsAppService()
