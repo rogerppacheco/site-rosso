@@ -5563,13 +5563,47 @@ class ImportacaoOsabView(APIView):
         LogImportacaoOSABSnapshotVenda.objects.bulk_create(objs, batch_size=2000, ignore_conflicts=True)
         return len(objs)
 
+    @staticmethod
+    def _janela_cobertura_osab(df):
+        """
+        Período de abertura de pedidos coberto pela planilha OSAB: (início, fim), ambos date.
+        Início = menor DATA_ABERTURA; fim = DT_REF - 1 dia (a base reflete até o dia anterior
+        à referência) ou, sem DT_REF, a maior DATA_ABERTURA. None se não der para determinar.
+        """
+        import datetime as _dt
+
+        def _datas(col):
+            if col not in df.columns:
+                return []
+            datas = []
+            for v in df[col]:
+                if v is None:
+                    continue
+                d = v.date() if isinstance(v, _dt.datetime) else v
+                if isinstance(d, _dt.date):
+                    datas.append(d)
+            return datas
+
+        aberturas = _datas('DATA_ABERTURA')
+        if not aberturas:
+            return None
+        inicio = min(aberturas)
+        refs = _datas('DT_REF')
+        fim = (min(refs) - _dt.timedelta(days=1)) if refs else max(aberturas)
+        if fim < inicio:
+            return None
+        return inicio, fim
+
     def _marcar_vendas_ausentes_na_osab(
         self, log_id, total_registros_import, osab_bot, snapshots_reversao=None, pedidos_validos_planilha=0,
+        janela_cobertura=None,
     ):
         """
         Após gravar a importação: vendas ativas com O.S. que não existem em ImportacaoOsab.
-        - Só considera pedidos com data de abertura (ou criação, se sem abertura) **antes do dia atual**
-          (base OSAB costuma refletir até o dia anterior).
+        - Só considera pedidos com data de abertura (ou criação, se sem abertura) dentro do período
+          coberto pela planilha (janela_cobertura) e antes do dia atual. Pedidos abertos depois do fim
+          da cobertura (dia corrente, fim de semana) ou antes do início (importação de mês antigo)
+          não são tocados.
         - Esteira INSTALADA: não altera (ausência na base espelho não prova outro PDV;
           ex.: PAP marcou INSTALADA antes da planilha refletir o pedido).
         - Demais status -> NÃO CONSTA NA OSAB.
@@ -5591,6 +5625,8 @@ class ImportacaoOsabView(APIView):
             'crm_sem_osab_nao_consta': 0,
             'crm_sem_osab_outro_pdv': 0,
             'crm_sem_osab_ignoradas_mesmo_dia': 0,
+            'crm_sem_osab_ignoradas_apos_cobertura': 0,
+            'crm_sem_osab_ignoradas_antes_cobertura': 0,
             'pos_processamento_ausentes_pulado': False,
             'pos_processamento_ausentes_motivo': '',
         }
@@ -5606,6 +5642,17 @@ class ImportacaoOsabView(APIView):
                 '(INSTALADA OUTRO PDV / NÃO CONSTA NA OSAB) não executado.'
             )
             return out
+
+        if not janela_cobertura:
+            out['pos_processamento_ausentes_pulado'] = True
+            out['pos_processamento_ausentes_motivo'] = (
+                'Período coberto pela planilha não identificado (DT_REF / DATA_ABERTURA); '
+                'cruzamento CRM×OSAB não executado.'
+            )
+            return out
+        cobertura_inicio, cobertura_fim = janela_cobertura
+        out['cobertura_inicio'] = cobertura_inicio.isoformat()
+        out['cobertura_fim'] = cobertura_fim.isoformat()
 
         LogImportacaoOSAB.objects.filter(id=log_id).update(
             mensagem='Verificando vendas no CRM ausentes da base OSAB...'
@@ -5649,6 +5696,12 @@ class ImportacaoOsabView(APIView):
                 ref_d = timezone.localtime(dc).date() if timezone.is_aware(dc) else dc.date()
             if ref_d >= hoje:
                 out['crm_sem_osab_ignoradas_mesmo_dia'] += 1
+                continue
+            if ref_d > cobertura_fim:
+                out['crm_sem_osab_ignoradas_apos_cobertura'] += 1
+                continue
+            if ref_d < cobertura_inicio:
+                out['crm_sem_osab_ignoradas_antes_cobertura'] += 1
                 continue
 
             se = venda.status_esteira
@@ -6066,6 +6119,7 @@ class ImportacaoOsabView(APIView):
                 df['DATA_ABERTURA'] = alvo_ab.apply(parse_osab_datetime)
             
             df = df.replace({np.nan: None, pd.NaT: None})
+            janela_cobertura = self._janela_cobertura_osab(df)
 
             total_registros = len(df)
             LogImportacaoOSAB.objects.filter(id=log_id).update(
@@ -6549,6 +6603,7 @@ class ImportacaoOsabView(APIView):
                         osab_bot,
                         snapshots_reversao=snapshots_reversao,
                         pedidos_validos_planilha=pedidos_validos,
+                        janela_cobertura=janela_cobertura,
                     )
                     report.update(snap)
                     if snap.get('pos_processamento_ausentes_pulado'):
@@ -14194,6 +14249,22 @@ class DownloadRelatorioOSABView(APIView):
                 {'metrica': 'Atualizados CRM', 'valor': report.get('atualizados', 0)},
                 {'metrica': 'INSTALADA OUTRO PDV (pós-import.)', 'valor': report.get('crm_sem_osab_outro_pdv', 0)},
                 {'metrica': 'NÃO CONSTA OSAB (pós-import.)', 'valor': report.get('crm_sem_osab_nao_consta', 0)},
+                {
+                    'metrica': 'Período coberto pela planilha (abertura)',
+                    'valor': (
+                        f"{report.get('cobertura_inicio')} a {report.get('cobertura_fim')}"
+                        if report.get('cobertura_inicio') else 'não identificado'
+                    ),
+                },
+                {
+                    'metrica': 'Sem OSAB ignoradas (abertas após a cobertura)',
+                    'valor': report.get('crm_sem_osab_ignoradas_apos_cobertura', 0)
+                    + report.get('crm_sem_osab_ignoradas_mesmo_dia', 0),
+                },
+                {
+                    'metrica': 'Sem OSAB ignoradas (abertas antes da cobertura)',
+                    'valor': report.get('crm_sem_osab_ignoradas_antes_cobertura', 0),
+                },
                 {'metrica': 'Criados OSAB', 'valor': report.get('criados', 0)},
                 {'metrica': 'Ignorados DT_REF', 'valor': report.get('ignorados_dt_ref', 0)},
                 {'metrica': 'Erros', 'valor': len(report.get('erros', []))},
