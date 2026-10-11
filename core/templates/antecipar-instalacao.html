@@ -493,7 +493,7 @@
                     '*MÁSCARA PADRÃO DE ACIONAMENTO - GRUPO ELITE:*\n\n' +
                     '- *OS:* ' + (pedidoSelecionado.ordem_servico || '') + '\n' +
                     '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
-                    '- *NOME DO PDV:* {{ SITE_MODULE_PREFIX|upper }}\n' +
+                    '- *NOME DO PDV:* {{ SITE_PDV_CODIGO }} - {{ SITE_PDV_NOME }}\n' +
                     '- *DATA AGENDADA:* ' + (pedidoSelecionado.data_agendamento || '') + ' - ' + (pedidoSelecionado.periodo_agendamento || '') + '\n' +
                     '- *DESCRIÇÃO DETALHADA DA SOLICITAÇÃO:* ' + desc
                 );
@@ -667,7 +667,7 @@
                     '*SINALIZAÇÃO - INSTALAÇÃO FÍSICA / PENDÊNCIA NO SISTEMA:*\n\n' +
                     '- *OS:* ' + (pedidoSelecionado.ordem_servico || '') + '\n' +
                     '- *ENDEREÇO COMPLETO:* ' + (pedidoSelecionado.endereco_completo || '') + '\n' +
-                    '- *NOME DO PDV:* {{ SITE_MODULE_PREFIX|upper }}\n' +
+                    '- *NOME DO PDV:* {{ SITE_PDV_CODIGO }} - {{ SITE_PDV_NOME }}\n' +
                     '- *DATA INSTALAÇÃO FÍSICA (NO CLIENTE):* ' + df + '\n' +
                     '- *CONTEXTO:* Houve instalação física; o pedido segue com pendência na esteira.\n' +
                     '- *DESCRIÇÃO DETALHADA:* ' + desc
