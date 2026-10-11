@@ -41,7 +41,7 @@ from crm_app.services_inclusao_viabilidade import (
 )
 
 EXECUTIVO = "ROGERIO PEREIRA PACHECO"
-EMPRESA = "RECORD"
+EMPRESA = "ROSSO"
 UF = "Minas Gerais"
 
 
@@ -64,7 +64,7 @@ def _dump_listboxes(page) -> list:
         // Fallback: spans Escolher
         document.querySelectorAll('span').forEach((sp) => {
             const t = (sp.innerText || '').trim();
-            if (t === 'Escolher' || t === 'Selecione' || /^ROGERIO|^RECORD|^Minas/.test(t)) {
+            if (t === 'Escolher' || t === 'Selecione' || /^ROGERIO|^ROSSO|^Minas/.test(t)) {
                 // só anotar se parecer trigger de dropdown
                 const cls = sp.className || '';
                 if (cls.includes('vRMGwf') || cls.includes('oJeWuf') || t === 'Escolher') {

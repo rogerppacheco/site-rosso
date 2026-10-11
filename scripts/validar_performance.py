@@ -276,7 +276,7 @@ def analisar_query_explain():
 def main():
     """Função principal"""
     print("\n" + "=" * 60)
-    print("VALIDAÇÃO DE PERFORMANCE - SITE RECORD")
+    print("VALIDAÇÃO DE PERFORMANCE - SITE ROSSO")
     print("Data:", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
     print("=" * 60)
     
