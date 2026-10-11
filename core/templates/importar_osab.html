@@ -170,8 +170,24 @@
         .importar-page .progress-container,
         .importar-page .filter-card { border: 1px solid var(--border-color); color: var(--text-primary); }
 
+        .historico-container {
+            max-width: 1600px;
+            margin: 0 auto 40px;
+            padding: 0 20px;
+        }
+        #historicoImportacoes .table { font-size: 0.875rem; }
+        #historicoImportacoes .table th,
+        #historicoImportacoes .table td { white-space: nowrap; }
+        #historicoImportacoes .table td:last-child { min-width: 0; }
+        #historicoImportacoes .osab-aviso-link {
+            text-decoration: none;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        #historicoImportacoes .osab-aviso-link:hover { text-decoration: underline; }
+        #historicoImportacoes .osab-detalhe td { white-space: normal; text-align: left !important; }
         #historicoImportacoes .osab-col-arquivo {
-            max-width: 220px;
+            max-width: 260px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -260,15 +276,15 @@
 
         <!-- Resultados -->
         <div id="resultadoImportacao" class="mt-4" style="display: none;"></div>
+    </div>
 
-        <!-- Histórico de Importações -->
-        <div class="mt-5">
-            <h4 class="fw-bold text-dark mb-3">
-                <i class="bi bi-clock-history"></i> Histórico de Importações OSAB
-            </h4>
-            <div id="historicoImportacoes" class="table-responsive">
-                <p class="text-center text-muted">Carregando histórico...</p>
-            </div>
+    <!-- Histórico de Importações -->
+    <div class="historico-container">
+        <h4 class="fw-bold text-dark mb-3">
+            <i class="bi bi-clock-history"></i> Histórico de Importações OSAB
+        </h4>
+        <div id="historicoImportacoes" class="table-responsive">
+            <p class="text-center text-muted">Carregando histórico...</p>
         </div>
     </div>
 
@@ -543,7 +559,7 @@
                             <th>Vendas</th>
                             <th>Atualizadas</th>
                             <th>Resultado</th>
-                            <th class="text-end">Ações</th>
+                            <th class="text-center">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -592,24 +608,24 @@
                         <td class="osab-col-resultado">
                             ${log.ja_corretos > 0 ? `<span class="badge bg-secondary">${log.ja_corretos} já corretos</span>` : ''}
                             ${whatsapp}
-                            ${temAviso ? `<button type="button" class="btn btn-link btn-sm p-0 ms-1 ${ehErro ? 'text-danger' : 'text-warning'}" onclick="toggleDetalheOSAB(${log.id})">
+                            ${temAviso ? `<a href="#" role="button" class="osab-aviso-link ms-1 ${ehErro ? 'text-danger' : 'text-warning'}" onclick="toggleDetalheOSAB(${log.id}); return false;">
                                 <i class="bi ${ehErro ? 'bi-x-octagon' : 'bi-exclamation-triangle'}"></i> ${ehErro ? 'Erro' : 'Avisos'}
                                 <i class="bi ${aberto ? 'bi-chevron-up' : 'bi-chevron-down'}" id="osab-chevron-${log.id}"></i>
-                            </button>` : ''}
+                            </a>` : ''}
                             ${log.status === 'REVERTIDO' && log.revertido_em ? `<small class="text-muted d-block">Revertido em ${log.revertido_em}</small>` : ''}
                         </td>
-                        <td class="text-end text-nowrap">
-                            <div class="btn-group btn-group-sm" role="group">
-                                ${log.download_url ? `<button class="btn btn-outline-primary" onclick="baixarRelatorioOSAB(${log.id})" title="Baixar relatório"><i class="bi bi-download"></i></button>` : ''}
-                                ${log.pode_reverter ? `<button class="btn btn-outline-warning" onclick="reverterImportacaoOSAB(${log.id}, ${log.atualizados || 0})" title="Reverter importação (restaura o estado das vendas antes desta importação)"><i class="bi bi-arrow-counterclockwise"></i></button>` : ''}
-                                ${log.status === 'PROCESSANDO' ? `<button class="btn btn-outline-danger" onclick="cancelarImportacaoOSAB(${log.id})" title="Cancelar importação"><i class="bi bi-stop-circle"></i></button>` : ''}
+                        <td class="text-center text-nowrap">
+                            <div class="btn-icon-group">
+                                ${log.download_url ? `<button type="button" class="btn btn-icon btn-icon-sm btn-icon-info" onclick="baixarRelatorioOSAB(${log.id})" title="Baixar relatório" aria-label="Baixar relatório"><i class="bi bi-download"></i></button>` : ''}
+                                ${log.pode_reverter ? `<button type="button" class="btn btn-icon btn-icon-sm btn-icon-warning" onclick="reverterImportacaoOSAB(${log.id}, ${log.atualizados || 0})" title="Reverter importação (restaura o estado das vendas antes desta importação)" aria-label="Reverter importação"><i class="bi bi-arrow-counterclockwise"></i></button>` : ''}
+                                ${log.status === 'PROCESSANDO' ? `<button type="button" class="btn btn-icon btn-icon-sm btn-icon-danger" onclick="cancelarImportacaoOSAB(${log.id})" title="Cancelar importação" aria-label="Cancelar importação"><i class="bi bi-stop-circle"></i></button>` : ''}
                             </div>
                         </td>
                     </tr>
                     ${temAviso ? `
                     <tr id="osab-detalhe-${log.id}" class="osab-detalhe ${aberto ? '' : 'd-none'}">
                         <td colspan="9">
-                            <div class="alert ${ehErro ? 'alert-danger' : 'alert-warning'} mb-0 py-2 small" style="white-space: pre-wrap;">${escHtml(log.mensagem_erro)}</div>
+                            <div class="alert ${ehErro ? 'alert-danger' : 'alert-warning'} mb-0 py-2 small" style="white-space: pre-wrap; text-align: left !important;">${escHtml(log.mensagem_erro)}</div>
                         </td>
                     </tr>` : ''}
                 `;
