@@ -91,7 +91,7 @@
             color: white;
         }
 
-        .spinner-border {
+        .spinner-overlay .spinner-border {
             width: 4rem;
             height: 4rem;
         }
@@ -169,6 +169,15 @@
         .importar-page .upload-zone,
         .importar-page .progress-container,
         .importar-page .filter-card { border: 1px solid var(--border-color); color: var(--text-primary); }
+
+        #historicoImportacoes .osab-col-arquivo {
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #historicoImportacoes .osab-col-resultado { white-space: nowrap; }
+        #historicoImportacoes .osab-detalhe td { border-top: 0; padding-top: 0; }
 
 </style>
 {% endblock %}
@@ -533,7 +542,8 @@
                             <th>Duração</th>
                             <th>Vendas</th>
                             <th>Atualizadas</th>
-                            <th>Detalhes</th>
+                            <th>Resultado</th>
+                            <th class="text-end">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -565,26 +575,43 @@
                     }
                 }
                 
+                const nomeArquivo = escHtml(log.nome_arquivo || '-');
+                const temAviso = !!log.mensagem_erro;
+                const ehErro = log.status === 'ERRO';
+                const aberto = detalhesAbertosOSAB.has(log.id);
+
                 html += `
-                    <tr>
-                        <td><small>${log.nome_arquivo}</small></td>
-                        <td><small class="font-monospace">${usuarioLogin}</small></td>
+                    <tr class="align-middle">
+                        <td class="osab-col-arquivo"><small title="${nomeArquivo}">${nomeArquivo}</small></td>
+                        <td><small class="font-monospace">${escHtml(usuarioLogin)}</small></td>
                         <td>${statusBadge}</td>
-                        <td><small>${iniciado}</small></td>
+                        <td class="text-nowrap"><small>${iniciado}</small></td>
                         <td>${duracao}</td>
                         <td>${vendas}</td>
                         <td>${atualizadas}</td>
-                        <td>
-                            ${log.mensagem_erro ? `<small class="text-danger">${log.mensagem_erro}</small>` : ''}
-                            ${log.atualizados > 0 ? `<span class="badge bg-info">${log.atualizados} atualizados</span> ` : ''}
+                        <td class="osab-col-resultado">
                             ${log.ja_corretos > 0 ? `<span class="badge bg-secondary">${log.ja_corretos} já corretos</span>` : ''}
                             ${whatsapp}
-                            ${log.download_url ? `<button class="btn btn-sm btn-outline-primary ms-2" onclick="baixarRelatorioOSAB(${log.id})">Baixar relatório</button>` : ''}
-                            ${log.pode_reverter ? `<button class="btn btn-sm btn-outline-warning ms-2" onclick="reverterImportacaoOSAB(${log.id}, ${log.atualizados || 0})" title="Restaura o estado das vendas antes desta importação">Reverter importação</button>` : ''}
-                            ${log.status === 'REVERTIDO' && log.revertido_em ? `<small class="text-muted d-block mt-1">Revertido em ${log.revertido_em}</small>` : ''}
-                            ${log.status === 'PROCESSANDO' ? `<button class="btn btn-sm btn-outline-danger ms-2" onclick="cancelarImportacaoOSAB(${log.id})">Cancelar</button>` : ''}
+                            ${temAviso ? `<button type="button" class="btn btn-link btn-sm p-0 ms-1 ${ehErro ? 'text-danger' : 'text-warning'}" onclick="toggleDetalheOSAB(${log.id})">
+                                <i class="bi ${ehErro ? 'bi-x-octagon' : 'bi-exclamation-triangle'}"></i> ${ehErro ? 'Erro' : 'Avisos'}
+                                <i class="bi ${aberto ? 'bi-chevron-up' : 'bi-chevron-down'}" id="osab-chevron-${log.id}"></i>
+                            </button>` : ''}
+                            ${log.status === 'REVERTIDO' && log.revertido_em ? `<small class="text-muted d-block">Revertido em ${log.revertido_em}</small>` : ''}
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <div class="btn-group btn-group-sm" role="group">
+                                ${log.download_url ? `<button class="btn btn-outline-primary" onclick="baixarRelatorioOSAB(${log.id})" title="Baixar relatório"><i class="bi bi-download"></i></button>` : ''}
+                                ${log.pode_reverter ? `<button class="btn btn-outline-warning" onclick="reverterImportacaoOSAB(${log.id}, ${log.atualizados || 0})" title="Reverter importação (restaura o estado das vendas antes desta importação)"><i class="bi bi-arrow-counterclockwise"></i></button>` : ''}
+                                ${log.status === 'PROCESSANDO' ? `<button class="btn btn-outline-danger" onclick="cancelarImportacaoOSAB(${log.id})" title="Cancelar importação"><i class="bi bi-stop-circle"></i></button>` : ''}
+                            </div>
                         </td>
                     </tr>
+                    ${temAviso ? `
+                    <tr id="osab-detalhe-${log.id}" class="osab-detalhe ${aberto ? '' : 'd-none'}">
+                        <td colspan="9">
+                            <div class="alert ${ehErro ? 'alert-danger' : 'alert-warning'} mb-0 py-2 small" style="white-space: pre-wrap;">${escHtml(log.mensagem_erro)}</div>
+                        </td>
+                    </tr>` : ''}
                 `;
             });
 
@@ -594,6 +621,22 @@
             `;
 
             container.innerHTML = html;
+        }
+
+        const detalhesAbertosOSAB = new Set();
+
+        function escHtml(valor) {
+            return String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function toggleDetalheOSAB(logId) {
+            const linha = document.getElementById(`osab-detalhe-${logId}`);
+            const chevron = document.getElementById(`osab-chevron-${logId}`);
+            if (!linha) return;
+            const abrir = linha.classList.contains('d-none');
+            linha.classList.toggle('d-none', !abrir);
+            if (chevron) chevron.className = `bi ${abrir ? 'bi-chevron-up' : 'bi-chevron-down'}`;
+            if (abrir) detalhesAbertosOSAB.add(logId); else detalhesAbertosOSAB.delete(logId);
         }
 
         function getStatusBadge(status, display) {
