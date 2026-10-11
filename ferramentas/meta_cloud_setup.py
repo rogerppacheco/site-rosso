@@ -225,6 +225,20 @@ TEMPLATES: List[Dict[str, Any]] = [
         "exemplo": ["Bom dia", "Maria", "Agosto/2026", "R$ 99,90", "10/08/2026"],
         "botoes": ["Informar previsão", "Já paguei", "Falar com suporte"],
     },
+    {
+        "name": "nio_reagendamento_cliente_v1",
+        "body": [
+            "Olá, {{1}}!", "",
+            "{{2}}, aqui é da {{3}},", "parceiro oficial da Nio Fibra.", "",
+            "O agendamento da instalação do seu pedido",
+            "ficou pendente e queremos remarcar a",
+            "visita técnica com você.", "",
+            "Podemos reagendar a sua instalação?",
+            "Toque em uma das opções abaixo.",
+        ],
+        "exemplo": ["Bom dia", "Maria", "Rosso Telecom"],
+        "botoes": ["Sim, pode reagendar", "Não quero mais", "Falar com atendente"],
+    },
 ]
 
 
