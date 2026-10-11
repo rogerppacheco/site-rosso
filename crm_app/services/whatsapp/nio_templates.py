@@ -27,6 +27,7 @@ TEMPLATE_FATURA_RECORRENTE = "nio_fatura_cobranca_recorrente_v1"
 TEMPLATE_FATURA_REDUCAO_SINAL = "nio_fatura_reducao_sinal_v1"
 TEMPLATE_PENDENCIA_REAGENDAMENTO = "nio_pendencia_reagendamento_v1"
 TEMPLATE_BOAS_VINDAS = "nio_boas_vindas_v1"
+TEMPLATE_REAGENDAMENTO_CLIENTE = "nio_reagendamento_cliente_v1"
 
 NIO_WHATSAPP_OFICIAL_EXIBICAO = "21 3605-1000"
 
@@ -323,6 +324,11 @@ def body_params_pendencia_reagendamento(nome_cliente: str) -> List[str]:
         primeiro_nome(nome_cliente),
         NIO_WHATSAPP_OFICIAL_EXIBICAO,
     ]
+
+
+def body_params_reagendamento_cliente(nome_cliente: str, parceiro: str) -> List[str]:
+    """nio_reagendamento_cliente_v1: {{1}} saudação, {{2}} nome, {{3}} parceiro."""
+    return [saudacao_meta(), primeiro_nome(nome_cliente), (parceiro or "").strip() or "parceiro Nio"]
 
 
 def body_params_boas_vindas(nome_cliente: str) -> List[str]:

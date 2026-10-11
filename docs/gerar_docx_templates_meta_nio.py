@@ -279,6 +279,20 @@ T9 = [
     "SAC: 0800 001 1000 | WhatsApp: 21 3605-1000",
 ]
 
+T10 = [
+    "Olá, {{1}}!",
+    "",
+    "{{2}}, aqui é da {{3}},",
+    "parceiro oficial da Nio Fibra.",
+    "",
+    "O agendamento da instalação do seu pedido",
+    "ficou pendente e queremos remarcar a",
+    "visita técnica com você.",
+    "",
+    "Podemos reagendar a sua instalação?",
+    "Toque em uma das opções abaixo.",
+]
+
 
 def main() -> None:
     doc = Document()
@@ -557,6 +571,29 @@ def main() -> None:
         ],
     )
 
+    _template(
+        doc,
+        titulo="10. Reagendar com o cliente (esteira, em lote)",
+        nome="nio_reagendamento_cliente_v1",
+        finalidade="Perguntar ao cliente se podemos remarcar a visita técnica pendente",
+        body=T10,
+        botoes=["Sim, pode reagendar", "Não quero mais", "Falar com atendente"],
+        variaveis=[
+            "{{1}} saudação",
+            "{{2}} primeiro nome",
+            "{{3}} nome do parceiro (SITE_BRAND_NAME / SITE_BRAND)",
+        ],
+        notas=[
+            "Disparo CRM: esteira → botão Reagendar c/ cliente, para a aba e filtros atuais "
+            "(confirmação mostra a quantidade; não reenvia a quem aguarda resposta há menos de 72h).",
+            "CRM: Sim → 3 datas (sem domingo) → turno Manhã/Tarde → grava preferência; "
+            "Não quero mais → registra; Falar com atendente → responde "
+            "«Em breve um especialista irá falar contigo.».",
+            "Retorno filtrável na esteira (coluna e filtro «Retorno cliente»).",
+            "Amostra: Bom dia / Maria / Rosso.",
+        ],
+    )
+
     _h(doc, "Mapa rápido — texto do botão → ação CRM", 1)
     for row in [
         "CORRETO → avança pedido",
@@ -567,6 +604,7 @@ def main() -> None:
         "Já paguei → solicita comprovante / fila de baixa",
         "Informar previsão → pede data de pagamento (promessa)",
         "Suporte / Falar com suporte / Falar com atendente → fila humana",
+        "Sim, pode reagendar → datas e turno; Não quero mais → registra recusa (template 10)",
     ]:
         _p(doc, f"• {row}")
 

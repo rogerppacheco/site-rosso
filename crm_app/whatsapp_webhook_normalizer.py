@@ -435,6 +435,9 @@ def _normalizar_meta_cloud(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "whatsatendeMessageType": tipo,
                 "_meta_raw": payload,
             }
+            ctx = msg.get("context") if isinstance(msg.get("context"), dict) else {}
+            if ctx.get("id"):
+                canonico["referenceMessageId"] = str(ctx["id"])
             if btn:
                 canonico["buttonsResponseMessage"] = btn
                 if not texto and btn.get("message"):

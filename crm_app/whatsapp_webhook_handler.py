@@ -7914,6 +7914,32 @@ def processar_webhook_whatsapp(data, request=None):
         except Exception as e:
             logger.warning('[Webhook] Erro posso reagendar consultor: %s', e, exc_info=True)
 
+    # --- Resposta cliente (Reagendar com o cliente — disparo em lote da esteira)
+    button_id_rc, texto_botao_rc = _extrair_dados_botao_zapi(data)
+    if not mensagem_texto and texto_botao_rc:
+        mensagem_texto = texto_botao_rc
+    from crm_app.esteira_posso_antecipar_service import _extrair_reference_message_id_zapi as _ref_msg_rc
+    from crm_app.esteira_reagendar_cliente_service import (
+        deve_tentar_reagendar_cliente,
+        processar_resposta_reagendar_cliente,
+    )
+    ref_msg_rc = _ref_msg_rc(data)
+    try:
+        if deve_tentar_reagendar_cliente(
+            mensagem_texto or '',
+            button_id=button_id_rc,
+            reference_message_id=ref_msg_rc,
+            telefone=telefone_formatado_usuario,
+        ) and processar_resposta_reagendar_cliente(
+            telefone_formatado_usuario,
+            mensagem_texto,
+            button_id=button_id_rc,
+            reference_message_id=ref_msg_rc,
+        ):
+            return {'status': 'ok', 'mensagem': 'Resposta reagendar cliente'}
+    except Exception as e:
+        logger.warning('[Webhook] Erro reagendar cliente: %s', e, exc_info=True)
+
     # --- Resposta vendedor (Posso antecipar? — esteira): só se parecer resposta ou botão pa_*
     button_id_pa, texto_botao_pa = _extrair_dados_botao_zapi(data)
     if not mensagem_texto and texto_botao_pa:

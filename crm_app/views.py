@@ -711,14 +711,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.pagination import PageNumberPagination, CursorPagination
+from rest_framework.pagination import PageNumberPagination
 from openpyxl.utils import get_column_letter
 
-
-
-class KanbanCursorPagination(CursorPagination):
-    page_size = 30
-    ordering = '-data_ultima_alteracao'
 
 class VendaPagination(PageNumberPagination):
     """Paginação que aceita page_size na query (até 1000), para esteira e listagens grandes."""
@@ -1981,9 +1976,6 @@ class VendaViewSet(viewsets.ModelViewSet):
         if not hasattr(self, 'request') or not self.request:
             return VendaPagination
             
-        flow = getattr(self.request, 'query_params', {}).get('flow')
-        if flow == 'esteira':
-            return KanbanCursorPagination
         return VendaPagination
 
 
@@ -2017,7 +2009,7 @@ class VendaViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             queryset = queryset.prefetch_related('historico_alteracoes__usuario')
         
-        queryset = queryset.order_by('-data_criacao')
+        queryset = queryset.order_by('-data_criacao', '-id')
         
         user = self.request.user
         view_type = self.request.query_params.get('view')
@@ -2075,6 +2067,10 @@ class VendaViewSet(viewsets.ModelViewSet):
             else:
                 queryset = queryset.filter(status_esteira__nome__iexact=status_filter)
             status_instalada_exata = status_upper == 'INSTALADA'
+
+        status_esteira_id_param = (self.request.query_params.get('status_esteira_id') or '').strip()
+        if status_esteira_id_param.isdigit():
+            queryset = queryset.filter(status_esteira_id=int(status_esteira_id_param))
 
         # --- FILTRO DE BUSCA GLOBAL ---
         if busca_geral:
@@ -2309,6 +2305,12 @@ class VendaViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(motivo_pendencia__isnull=True)
             elif motivo_pend_param.isdigit():
                 queryset = queryset.filter(motivo_pendencia_id=int(motivo_pend_param))
+
+        retorno_cliente = (self.request.query_params.get('reagendar_cliente') or '').strip().upper()
+        if retorno_cliente == 'SEM':
+            queryset = queryset.filter(cliente_reagendar_status='')
+        elif retorno_cliente in dict(Venda.REAGENDAR_CLIENTE_CHOICES):
+            queryset = queryset.filter(cliente_reagendar_status=retorno_cliente)
 
         return queryset
     def update(self, request, *args, **kwargs):
@@ -2761,10 +2763,27 @@ class VendaViewSet(viewsets.ModelViewSet):
             if row['data_agendamento']
         }
 
+        status_todos = [
+            {'id': row['status_esteira_id'], 'nome': row['status_esteira__nome'], 'count': row['count']}
+            for row in (
+                qs.values('status_esteira_id', 'status_esteira__nome')
+                .annotate(count=Count('id'))
+                .order_by('-count', 'status_esteira__nome')
+            )
+            if row['status_esteira_id']
+        ]
+        retorno_cliente = {
+            (row['cliente_reagendar_status'] or 'SEM'): row['count']
+            for row in qs.order_by().values('cliente_reagendar_status').annotate(count=Count('id'))
+        }
+
         return Response({
             'todos': total_todos,
+            'retorno_cliente': retorno_cliente,
             'pendentes': total_pendentes,
+            'agendados': qs.filter(status_esteira__nome__iexact='AGENDADO').count(),
             'agendados_total': sum(datas.values()),
+            'status_todos': status_todos,
             'datas': datas,
             'motivos_pendentes': motivos_pendentes,
             'sem_motivo_pendentes': sem_motivo_pendentes,
@@ -2773,6 +2792,42 @@ class VendaViewSet(viewsets.ModelViewSet):
             'sem_status_agendamento_agendados': sem_status_agendamento_agendados,
             'sem_status_agendamento_por_data': sem_status_agendamento_por_data,
         })
+
+    @action(detail=False, methods=['post'], url_path='reagendar-cliente-lote', permission_classes=[permissions.IsAuthenticated])
+    def reagendar_cliente_lote(self, request):
+        """Envia o template de reagendamento aos clientes da aba/filtros atuais da esteira.
+        Sem confirmar=true devolve só a contagem (prévia)."""
+        from crm_app.esteira_reagendar_cliente_service import (
+            LIMITE_LOTE,
+            disparar_lote_em_background,
+            resumo_lote,
+        )
+
+        user = request.user
+        if is_somente_leitura(user) or not (user.is_superuser or is_member(user, ['Diretoria', 'Admin', 'BackOffice'])):
+            return Response({'detail': 'Permissão negada.'}, status=status.HTTP_403_FORBIDDEN)
+
+        request.GET._mutable = True
+        request.GET['flow'] = 'esteira'
+        request.GET['view'] = 'geral'
+        for k in ('page', 'page_size', '_t'):
+            request.GET.pop(k, None)
+        request.GET._mutable = False
+        resumo = resumo_lote(self.filter_queryset(self.get_queryset()))
+        elegiveis = resumo.pop('elegiveis_qs')
+        resumo['limite'] = LIMITE_LOTE
+
+        if str(request.data.get('confirmar', '')).lower() not in ('1', 'true', 'sim'):
+            return Response(resumo)
+        if not resumo['a_enviar']:
+            return Response({**resumo, 'detail': 'Nenhum cliente a enviar com os filtros atuais.'}, status=status.HTTP_400_BAD_REQUEST)
+        if resumo['a_enviar'] > LIMITE_LOTE:
+            return Response(
+                {**resumo, 'detail': f'Máximo de {LIMITE_LOTE} envios por vez. Refine os filtros.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        disparar_lote_em_background(list(elegiveis.values_list('id', flat=True)), user.id)
+        return Response({**resumo, 'iniciado': True})
 
     def _queryset_pendentes_auditoria(self, request):
         """Fila da auditoria: tratamento aberto, fora da esteira, com os filtros da lista."""

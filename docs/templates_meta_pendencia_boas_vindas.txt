@@ -65,6 +65,33 @@ Botões Quick Reply:
   3. Suporte
 
 ================================================================================
+10. nio_reagendamento_cliente_v1
+================================================================================
+Corpo:
+
+Olá, {{1}}!
+
+{{2}}, aqui é da {{3}},
+parceiro oficial da Nio Fibra.
+
+O agendamento da instalação do seu pedido
+ficou pendente e queremos remarcar a
+visita técnica com você.
+
+Podemos reagendar a sua instalação?
+Toque em uma das opções abaixo.
+
+Variáveis:
+  {{1}} = saudação (Bom dia / Boa tarde / Boa noite)
+  {{2}} = primeiro nome
+  {{3}} = nome do parceiro (ex.: Rosso)
+
+Botões Quick Reply:
+  1. Sim, pode reagendar
+  2. Não quero mais
+  3. Falar com atendente
+
+================================================================================
 CRM (resumo)
 ================================================================================
 Pendência: Esteira → registrar pendência tipo Cliente → modal
@@ -72,3 +99,8 @@ Pendência: Esteira → registrar pendência tipo Cliente → modal
   (enquanto não aprovado: fallback texto livre).
 
 Boas-vindas: ao status INSTALADA (fase 2) → template 8.
+
+Reagendar c/ cliente: Esteira → botão Reagendar c/ cliente (aba e filtros
+  atuais, confirmação com a quantidade) → template 10.
+  Sim → 3 datas → turno Manhã/Tarde → preferência gravada na venda.
+  Não quero mais / Falar com atendente → registrado; filtro «Retorno cliente».

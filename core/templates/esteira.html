@@ -170,6 +170,34 @@
             cursor: default;
             pointer-events: none;
         }
+        .esteira-pag-goto {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .esteira-pag-goto input {
+            width: 3.4rem;
+            min-height: 0 !important;
+            height: 1.6rem;
+            padding: 0 0.25rem !important;
+            font-size: 0.75rem;
+            text-align: center;
+        }
+        #esteira-pag-size {
+            width: auto;
+            min-height: 0 !important;
+            height: 1.6rem;
+            padding: 0 1.5rem 0 0.4rem !important;
+            font-size: 0.72rem;
+        }
+        .esteira-retorno-cliente-select {
+            width: auto;
+            max-width: 11rem;
+            font-size: 0.75rem;
+        }
         .esteira-pag-info {
             font-size: 0.72rem;
             color: var(--text-secondary);
@@ -846,9 +874,21 @@ min-width: 100%;
                     <li class="nav-item" id="tab-tempo-tratamento-item"><a class="nav-link" href="#" data-tab="TEMPO_TRATAMENTO" onclick="filtrarStatus('TEMPO_TRATAMENTO', this)" title="Tempo de tratamento na esteira"><i class="bi bi-stopwatch"></i> Tempo</a></li>
                 </ul>
                 <div id="esteira-paginacao" class="esteira-pag-chrome" style="display: none;" title="Paginação da lista">
-                    <button type="button" class="btn btn-sm btn-outline-secondary esteira-pag-btn" id="btn-esteira-pag-anterior" onclick="mudarPaginaEsteira(-1)" aria-label="Página anterior">‹</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary esteira-pag-btn" id="btn-esteira-pag-primeira" onclick="irParaPaginaEsteira(1)" aria-label="Primeira página" title="Primeira página">«</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary esteira-pag-btn" id="btn-esteira-pag-anterior" onclick="mudarPaginaEsteira(-1)" aria-label="Página anterior" title="Página anterior">‹</button>
+                    <span class="esteira-pag-goto">
+                        <input type="number" id="esteira-pag-input" class="form-control form-control-sm" min="1" value="1" aria-label="Ir para a página" title="Digite a página e pressione Enter" onkeydown="if (event.key === 'Enter') { event.preventDefault(); irParaPaginaEsteira(this.value); }" onchange="irParaPaginaEsteira(this.value)">
+                        <span>/ <span id="esteira-pag-total">1</span></span>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary esteira-pag-btn" id="btn-esteira-pag-proxima" onclick="mudarPaginaEsteira(1)" aria-label="Próxima página" title="Próxima página">›</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary esteira-pag-btn" id="btn-esteira-pag-ultima" onclick="irParaPaginaEsteira(esteiraPaginacaoMeta.totalPages)" aria-label="Última página" title="Última página">»</button>
                     <span id="esteira-paginacao-info" class="esteira-pag-info">—</span>
-                    <button type="button" class="btn btn-sm btn-outline-secondary esteira-pag-btn" id="btn-esteira-pag-proxima" onclick="mudarPaginaEsteira(1)" aria-label="Próxima página">›</button>
+                    <select id="esteira-pag-size" class="form-select form-select-sm" onchange="mudarTamanhoPaginaEsteira(this.value)" aria-label="Itens por página" title="Itens por página">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
                 </div>
                 <span id="esteira-filtros-resumo" class="esteira-filtros-resumo" aria-live="polite"></span>
                 <div class="esteira-chrome-acoes">
@@ -870,6 +910,12 @@ min-width: 100%;
                         <i class="bi bi-x-circle"></i>
                     </button>
                     <span id="nio-reagendamento-badge" class="badge bg-secondary" style="display: none; font-size: 0.65rem;"></span>
+                    <button type="button" id="btn-reagendar-cliente" class="btn btn-sm btn-outline-warning" style="display: none;" onclick="iniciarReagendarCliente()" title="Reagendar com o cliente: WhatsApp para os clientes da aba e filtros atuais">
+                        <i class="bi bi-calendar2-week"></i>
+                    </button>
+                    <select id="filtro-retorno-cliente" class="form-select form-select-sm esteira-retorno-cliente-select" style="display: none;" onchange="filtrarRetornoCliente(this.value)" aria-label="Retorno do cliente" title="Filtrar pelo retorno do cliente ao pedido de reagendamento">
+                        <option value="">Retorno cliente</option>
+                    </select>
                     <button type="button" onclick="carregarVendas()" class="btn btn-sm btn-primary" title="Recarregar a lista da esteira">
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>
@@ -908,6 +954,11 @@ min-width: 100%;
                             <li id="li-nio-reagendamento-massa" style="display: none;">
                                 <button type="button" class="dropdown-item" onclick="iniciarNioReagendamentoMassa()" title="Reagendar pedidos 7029 CLIENTE via bot WhatsApp Nio">
                                     <i class="bi bi-whatsapp"></i> Reagendar Nio (7029)
+                                </button>
+                            </li>
+                            <li id="li-reagendar-cliente" style="display: none;">
+                                <button type="button" class="dropdown-item" onclick="iniciarReagendarCliente()" title="Perguntar ao cliente se podemos reagendar (aba e filtros atuais)">
+                                    <i class="bi bi-calendar2-week"></i> Reagendar c/ cliente
                                 </button>
                             </li>
                             <li>
@@ -992,6 +1043,12 @@ min-width: 100%;
                             <label class="text-muted fw-bold small" for="filtro-motivo-pendencia">Motivo:</label>
                             <select id="filtro-motivo-pendencia" class="form-select form-select-sm" onchange="filtrarMotivoPendencia(this.value)" title="Somente motivos que existem nas pendências da esteira">
                                 <option value="">Todos os motivos</option>
+                            </select>
+                        </div>
+                        <div class="esteira-filtro-inline" id="filtro-status-esteira-wrap" style="display: none;">
+                            <label class="text-muted fw-bold small" for="filtro-status-esteira">Status:</label>
+                            <select id="filtro-status-esteira" class="form-select form-select-sm" onchange="filtrarStatusEsteira(this.value)" title="Status que compõem a aba Todos">
+                                <option value="">Todos os status</option>
                             </select>
                         </div>
                     </div>
@@ -1405,6 +1462,7 @@ min-width: 100%;
                                 <th data-esteira-col="posso_antecip" class="esteira-col-posso-antecip" title="Resposta do vendedor à consulta Posso antecipar?">Posso antecipar?</th>
                                 <th data-esteira-col="posso_reagendar" class="esteira-col-posso-reagendar" title="Resposta do consultor à consulta Posso reagendar?">Posso reagendar?</th>
                                 <th data-esteira-col="lista_agendamento" class="esteira-col-lista-agendamento" title="Resposta do vendedor à lista diária de agendamentos (ciência / reagendar)">Resp. lista agend.</th>
+                                <th data-esteira-col="reagendar_cliente" class="esteira-col-reagendar-cliente" title="Retorno do cliente ao WhatsApp 'Podemos reagendar?'">Retorno cliente</th>
                                 <th data-esteira-col="resp" class="esteira-col-resp">Resp. Alteração</th>
                                 <th data-esteira-col="comissao" class="esteira-col-comissao-cb" title="Selecionar visíveis"><input type="checkbox" id="selecionar-comissao-visiveis" onchange="marcarComissaoVisiveis(this)"></th>
                             </tr>
@@ -1477,6 +1535,7 @@ min-width: 100%;
                                         <option value="aguardando">Aguardando</option>
                                     </select>
                                 </th>
+                                <th data-esteira-col="reagendar_cliente" class="esteira-col-reagendar-cliente"></th>
                                 <th data-esteira-col="resp" class="esteira-col-resp"><input id="fc-resp" class="form-control form-control-sm esteira-fc-input" placeholder="Resp."></th>
                                 <th data-esteira-col="comissao" class="esteira-col-comissao-cb"></th>
                             </tr>
@@ -2070,6 +2129,7 @@ min-width: 100%;
             { key: 'posso_antecip', label: 'Posso antecipar?' },
             { key: 'posso_reagendar', label: 'Posso reagendar?' },
             { key: 'lista_agendamento', label: 'Resp. lista agend.' },
+            { key: 'reagendar_cliente', label: 'Retorno cliente' },
             { key: 'resp', label: 'Resp. Alteração' },
             { key: 'comissao', label: 'Comissão (instaladas)' },
         ];
@@ -2086,6 +2146,15 @@ min-width: 100%;
                             const idxOs = limpo.indexOf('os');
                             if (idxOs >= 0) limpo.splice(idxOs + 1, 0, 'motivo');
                             else limpo.push('motivo');
+                        }
+                        if (!localStorage.getItem('esteira_col_reagendar_cliente_v1')) {
+                            localStorage.setItem('esteira_col_reagendar_cliente_v1', '1');
+                            if (!limpo.includes('reagendar_cliente')) {
+                                const idxLista = limpo.indexOf('lista_agendamento');
+                                if (idxLista >= 0) limpo.splice(idxLista + 1, 0, 'reagendar_cliente');
+                                else limpo.push('reagendar_cliente');
+                                salvarColunasVisiveisEsteira(limpo);
+                            }
                         }
                         if (limpo.length !== parsed.length) salvarColunasVisiveisEsteira(limpo);
                         return limpo;
@@ -2122,6 +2191,7 @@ min-width: 100%;
                 hide.add('conf');
                 hide.add('posso_reagendar');
                 hide.add('lista_agendamento');
+                hide.add('reagendar_cliente');
                 show.add('adiant_cnpj');
                 show.add('adiant_comissao');
                 show.add('adiant_sabado');
@@ -2267,6 +2337,19 @@ min-width: 100%;
         let filtroStatusAgendamentoAtual = '';
         let filtroTipoPendenciaAtual = '';
         let filtroMotivoPendenciaAtual = '';
+        let filtroStatusEsteiraAtual = '';
+        let _statusTodosNaEsteira = [];
+        let filtroRetornoClienteAtual = '';
+        let _retornoClienteContagem = {};
+        const RETORNO_CLIENTE_ROTULOS = {
+            SEM: 'Sem envio',
+            ENVIADO: 'Aguardando',
+            SIM: 'Sim (sem data)',
+            DEFINIDO: 'Sim, data definida',
+            NAO: 'Não quer mais',
+            ATENDENTE: 'Falar c/ atendente',
+            FALHA_ENVIO: 'Falha no envio',
+        };
         let _motivosPendenciaCache = [];
         let _statusAgendamentoCache = [];
         let _motivosPendenciaNaEsteira = [];
@@ -2276,8 +2359,11 @@ min-width: 100%;
         let _statusAgendamentoPorData = {};
         let _semStatusAgendamentoAgendados = 0;
         let _semStatusAgendamentoPorData = {};
-        /** Página menor: com 200, abas como Todos (~182) ficavam em 1 página e a seta › parecia “quebrada”. */
-        const ESTEIRA_PAGE_SIZE = 50;
+        const LS_ESTEIRA_PAGE_SIZE = 'esteira_page_size';
+        const ESTEIRA_PAGE_SIZES = [50, 100, 200, 500];
+        let esteiraPageSize = ESTEIRA_PAGE_SIZES.includes(Number(localStorage.getItem(LS_ESTEIRA_PAGE_SIZE)))
+            ? Number(localStorage.getItem(LS_ESTEIRA_PAGE_SIZE))
+            : 50;
         let esteiraPaginaAtual = 1;
         let esteiraPaginacaoMeta = { count: 0, totalPages: 1 };
         let esteiraContadores = null;
@@ -2405,10 +2491,14 @@ min-width: 100%;
             if (cbSelComissaoVisiveis && !podeEditarAdiantamentosFinanceiros) cbSelComissaoVisiveis.style.display = 'none';
             document.querySelectorAll('input[type="text"], textarea').forEach(input => { input.addEventListener('input', function() { this.value = this.value.toUpperCase(); }); });
 
+            atualizarControlesRetornoCliente();
             if (podeConfigEsteiraBackoffice) {
                 setEsteiraMenuItemVisivel('li-config-esteira-wpp', true);
                 setEsteiraMenuItemVisivel('li-config-pend-cliente-wpp', true);
                 setEsteiraMenuItemVisivel('li-nio-reagendamento-massa', true);
+                setEsteiraMenuItemVisivel('li-reagendar-cliente', true);
+                const btnReagCliente = document.getElementById('btn-reagendar-cliente');
+                if (btnReagCliente) btnReagCliente.style.display = 'inline-flex';
                 const btnSync = document.getElementById('btn-sync-status-pap');
                 if (btnSync) btnSync.style.display = 'inline-flex';
                 const btnNioMassa = document.getElementById('btn-nio-reagendamento-massa');
@@ -3107,8 +3197,14 @@ min-width: 100%;
                 const ativo = document.querySelector('#abas-esteira-datas .nav-link.active');
                 if (ativo) partes.push(ativo.textContent.trim());
             }
+            if (filtroStatusEsteiraAtual) {
+                const selS = document.getElementById('filtro-status-esteira');
+                const optS = selS && selS.selectedOptions && selS.selectedOptions[0];
+                partes.push(optS && optS.textContent ? optS.textContent.replace(/\s*\(\d+\)\s*$/, '').trim() : 'status');
+            }
             if (filtroTipoPendenciaAtual) partes.push(filtroTipoPendenciaAtual);
             if (filtroMotivoPendenciaAtual) partes.push('motivo');
+            if (filtroRetornoClienteAtual) partes.push('retorno: ' + (RETORNO_CLIENTE_ROTULOS[filtroRetornoClienteAtual] || filtroRetornoClienteAtual));
             if (filtroTurnoAtual) partes.push(filtroTurnoAtual === 'MANHA' ? 'Manhã' : 'Tarde');
             if (filtroStatusAgendamentoAtual) {
                 const sel = document.getElementById('filtro-status-agendamento');
@@ -4104,8 +4200,13 @@ min-width: 100%;
                 atualizarContadoresAbas({
                     todos: data.todos || 0,
                     pendentes: data.pendentes || 0,
+                    agendados: data.agendados,
                     datas: data.datas || {},
                 });
+                _statusTodosNaEsteira = Array.isArray(data.status_todos) ? data.status_todos : [];
+                popularSelectFiltroStatusEsteira();
+                _retornoClienteContagem = data.retorno_cliente || {};
+                popularSelectRetornoCliente();
                 atualizarMotivosPendenciaNaEsteira(data);
                 atualizarStatusAgendamentoNaEsteira(data);
                 if (deveExibirAbasDeDataEsteira()) {
@@ -4119,7 +4220,7 @@ min-width: 100%;
         function montarUrlEsteiraPrincipal(busca, timestamp) {
             const params = new URLSearchParams();
             params.set('flow', 'esteira');
-            params.set('page_size', String(ESTEIRA_PAGE_SIZE));
+            params.set('page_size', String(esteiraPageSize));
             params.set('page', String(esteiraPaginaAtual));
             params.set('_t', String(timestamp));
             if (busca) params.set('search', busca);
@@ -4152,6 +4253,12 @@ min-width: 100%;
             ) {
                 params.set('motivo_pendencia', filtroMotivoPendenciaAtual);
             }
+            if (filtroAtual === 'TODOS' && filtroStatusEsteiraAtual) {
+                params.set('status_esteira_id', filtroStatusEsteiraAtual);
+            }
+            if (filtroRetornoClienteAtual && abaPermiteConsultaStatusPap()) {
+                params.set('reagendar_cliente', filtroRetornoClienteAtual);
+            }
             return `/crm/vendas/?${params.toString()}`;
         }
 
@@ -4168,9 +4275,23 @@ min-width: 100%;
             bar.style.display = 'inline-flex';
             const total = esteiraPaginacaoMeta.count || 0;
             const totalPages = Math.max(1, esteiraPaginacaoMeta.totalPages || 1);
-            const ini = total ? ((esteiraPaginaAtual - 1) * ESTEIRA_PAGE_SIZE) + 1 : 0;
-            const fim = Math.min(esteiraPaginaAtual * ESTEIRA_PAGE_SIZE, total);
+            const ini = total ? ((esteiraPaginaAtual - 1) * esteiraPageSize) + 1 : 0;
+            const fim = Math.min(esteiraPaginaAtual * esteiraPageSize, total);
             const multiPagina = totalPages > 1;
+            const inputPag = document.getElementById('esteira-pag-input');
+            if (inputPag) {
+                inputPag.value = String(esteiraPaginaAtual);
+                inputPag.max = String(totalPages);
+                inputPag.disabled = !multiPagina;
+            }
+            const totalPagEl = document.getElementById('esteira-pag-total');
+            if (totalPagEl) totalPagEl.textContent = String(totalPages);
+            const selSize = document.getElementById('esteira-pag-size');
+            if (selSize) selSize.value = String(esteiraPageSize);
+            const btnPrimeira = document.getElementById('btn-esteira-pag-primeira');
+            const btnUltima = document.getElementById('btn-esteira-pag-ultima');
+            if (btnPrimeira) btnPrimeira.disabled = !multiPagina || esteiraPaginaAtual <= 1;
+            if (btnUltima) btnUltima.disabled = !multiPagina || esteiraPaginaAtual >= totalPages;
             if (info) {
                 info.textContent = total ? `${ini}–${fim}/${total}` : '0';
                 info.title = total
@@ -4179,24 +4300,34 @@ min-width: 100%;
                         : `Todos os ${total} registros nesta página`)
                     : 'Nenhum registro';
             }
-            if (btnAnt) {
-                btnAnt.disabled = !multiPagina || esteiraPaginaAtual <= 1;
-                btnAnt.style.visibility = multiPagina ? 'visible' : 'hidden';
-                btnAnt.title = multiPagina ? 'Página anterior' : 'Só há uma página';
-            }
-            if (btnProx) {
-                btnProx.disabled = !multiPagina || esteiraPaginaAtual >= totalPages;
-                btnProx.style.visibility = multiPagina ? 'visible' : 'hidden';
-                btnProx.title = multiPagina ? 'Próxima página' : 'Só há uma página';
-            }
+            if (btnAnt) btnAnt.disabled = !multiPagina || esteiraPaginaAtual <= 1;
+            if (btnProx) btnProx.disabled = !multiPagina || esteiraPaginaAtual >= totalPages;
         }
 
         function mudarPaginaEsteira(delta) {
+            irParaPaginaEsteira(esteiraPaginaAtual + delta);
+        }
+
+        function irParaPaginaEsteira(pagina) {
             if (!usaPaginacaoServerEsteira()) return;
             const totalPages = Math.max(1, esteiraPaginacaoMeta.totalPages || 1);
-            const nova = esteiraPaginaAtual + delta;
-            if (nova < 1 || nova > totalPages || nova === esteiraPaginaAtual) return;
+            let nova = parseInt(pagina, 10);
+            if (!Number.isFinite(nova)) nova = esteiraPaginaAtual;
+            nova = Math.min(Math.max(1, nova), totalPages);
+            if (nova === esteiraPaginaAtual) {
+                renderPaginacaoEsteira();
+                return;
+            }
             esteiraPaginaAtual = nova;
+            carregarVendas();
+        }
+
+        function mudarTamanhoPaginaEsteira(valor) {
+            const n = Number(valor);
+            if (!ESTEIRA_PAGE_SIZES.includes(n) || n === esteiraPageSize) return;
+            esteiraPageSize = n;
+            localStorage.setItem(LS_ESTEIRA_PAGE_SIZE, String(n));
+            esteiraPaginaAtual = 1;
             carregarVendas();
         }
 
@@ -4221,7 +4352,9 @@ min-width: 100%;
             const vendasTotaisTab = document.querySelector('#abas-esteira a[data-tab="VENDAS_TOTAIS"]');
 
             if (todosTab) todosTab.textContent = `Todos (${contagem.todos || 0})`;
-            const totalAgendados = Object.values(contagem.datas || {}).reduce((acc, val) => acc + val, 0);
+            const totalAgendados = contagem.agendados != null
+                ? contagem.agendados
+                : Object.values(contagem.datas || {}).reduce((acc, val) => acc + val, 0);
             if (agendadosTab) agendadosTab.textContent = `Agendados (${totalAgendados})`;
             if (pendentesTab) pendentesTab.textContent = `Pendentes (${contagem.pendentes || 0})`;
             if (vendasTotaisTab) vendasTotaisTab.textContent = 'Vendas Totais';
@@ -4321,7 +4454,7 @@ min-width: 100%;
                     const total = vendasRes.count || vendas.length;
                     esteiraPaginacaoMeta = {
                         count: total,
-                        totalPages: Math.max(1, Math.ceil(total / ESTEIRA_PAGE_SIZE)),
+                        totalPages: Math.max(1, Math.ceil(total / esteiraPageSize)),
                     };
                 } else {
                     esteiraPaginacaoMeta = { count: vendas.length, totalPages: 1 };
@@ -4380,6 +4513,7 @@ min-width: 100%;
                         atualizarContadoresAbas({
                             todos: esteiraContadores.todos || 0,
                             pendentes: esteiraContadores.pendentes || 0,
+                            agendados: esteiraContadores.agendados,
                             datas: esteiraContadores.datas || {},
                         });
                         if (deveExibirAbasDeDataEsteira()) {
@@ -4718,6 +4852,8 @@ min-width: 100%;
                         listaAgend = '<span class="badge bg-info text-dark" title="' + listaAgendTitle + '">' + respLista + (v.vendedor_lista_agendamento_resposta.length > 40 ? '…' : '') + '</span>';
                     }
 
+                    const retornoCliente = montarCelulaRetornoCliente(v);
+
                     {
                         const adCnpjTexto = v.flag_adiant_cnpj
                             ? 'realizado'
@@ -4829,6 +4965,7 @@ min-width: 100%;
                             <td data-esteira-col="posso_antecip" class="esteira-col-posso-antecip small" data-label="Posso antecipar?">${possoAntecip}</td>
                             <td data-esteira-col="posso_reagendar" class="esteira-col-posso-reagendar small" data-label="Posso reagendar?">${possoReagendar}</td>
                             <td data-esteira-col="lista_agendamento" class="esteira-col-lista-agendamento small" data-label="Resp. lista agend.">${listaAgend}</td>
+                            <td data-esteira-col="reagendar_cliente" class="esteira-col-reagendar-cliente small" data-label="Retorno cliente">${retornoCliente}</td>
                             <td data-esteira-col="resp" class="esteira-col-resp" data-label="Resp. alteração"><small class="text-muted fw-bold">${alteradoPor}</small></td>
                             <td data-esteira-col="comissao" class="esteira-col-comissao-cb text-center" data-label="Comissão">${carregarInstaladas ? checkboxComissao : '-'}</td>
                         </tr>
@@ -4844,10 +4981,6 @@ min-width: 100%;
                 });
                 if (carregarInstaladas && contadorCabecalhoEl) contadorCabecalhoEl.textContent = `${totalVisivelPosCabecalho}`;
                 if (carregarAgendados && contadorAgendadosCabecalhoEl) contadorAgendadosCabecalhoEl.textContent = `${totalVisivelPosCabecalho}`;
-                if (carregarAgendados) {
-                    const agendadosTab = document.querySelector('#abas-esteira a[data-tab="AGENDADO"]');
-                    if (agendadosTab) agendadosTab.textContent = `Agendados (${totalVisivelPosCabecalho})`;
-                }
                 if (carregarVendasTotais && contadorVendasTotaisCabecalhoEl) contadorVendasTotaisCabecalhoEl.textContent = `${totalVisivelPosCabecalho}`;
                 if (carregarVendasTotais) {
                     const vendasTotaisTab = document.querySelector('#abas-esteira a[data-tab="VENDAS_TOTAIS"]');
@@ -5045,6 +5178,14 @@ min-width: 100%;
                 filtroTipoPendenciaAtual = '';
                 filtroMotivoPendenciaAtual = '';
             }
+            const exibirStatus = exibir && filtroAtual === 'TODOS';
+            const wrapStatus = document.getElementById('filtro-status-esteira-wrap');
+            if (wrapStatus) wrapStatus.style.display = exibirStatus ? '' : 'none';
+            if (!exibirStatus) {
+                filtroStatusEsteiraAtual = '';
+                const selStatus = document.getElementById('filtro-status-esteira');
+                if (selStatus) selStatus.value = '';
+            }
             document.querySelectorAll('#filtro-tipo-pendencia-container .btn-group .btn').forEach(btn => {
                 btn.classList.remove('active', 'btn-primary');
                 btn.classList.add('btn-outline-secondary');
@@ -5103,6 +5244,141 @@ min-width: 100%;
             esteiraPaginaAtual = 1;
             atualizarResumoFiltrosEsteira();
             carregarVendas();
+        }
+
+        function popularSelectFiltroStatusEsteira() {
+            const select = document.getElementById('filtro-status-esteira');
+            if (!select) return;
+            const valorAtual = filtroStatusEsteiraAtual || '';
+            let html = '<option value="">Todos os status</option>';
+            _statusTodosNaEsteira.forEach(s => {
+                html += `<option value="${s.id}">${s.nome} (${s.count || 0})</option>`;
+            });
+            select.innerHTML = html;
+            const aindaValido = [...select.options].some(o => o.value === String(valorAtual));
+            select.value = aindaValido ? String(valorAtual) : '';
+            filtroStatusEsteiraAtual = select.value;
+        }
+
+        function filtrarStatusEsteira(valor) {
+            filtroStatusEsteiraAtual = (valor || '').trim();
+            esteiraPaginaAtual = 1;
+            atualizarResumoFiltrosEsteira();
+            carregarVendas();
+        }
+
+        function montarCelulaRetornoCliente(v) {
+            const st = String(v.cliente_reagendar_status || '').toUpperCase();
+            if (!st) return '-';
+            const titulo = [
+                v.cliente_reagendar_enviado_em ? ('Enviado em ' + new Date(v.cliente_reagendar_enviado_em).toLocaleString('pt-BR')) : '',
+                v.cliente_reagendar_respondido_em ? ('Respondido em ' + new Date(v.cliente_reagendar_respondido_em).toLocaleString('pt-BR')) : '',
+            ].filter(Boolean).join(' | ').replace(/"/g, '&quot;');
+            let texto = RETORNO_CLIENTE_ROTULOS[st] || st;
+            if (st === 'DEFINIDO') {
+                const data = v.cliente_reagendar_data ? formatarDataSemFuso(v.cliente_reagendar_data) : '';
+                const turno = v.cliente_reagendar_turno === 'MANHA' ? 'Manhã' : (v.cliente_reagendar_turno === 'TARDE' ? 'Tarde' : '');
+                texto = 'Sim — ' + [data, turno].filter(Boolean).join(' ');
+            }
+            const cor = {
+                ENVIADO: 'bg-warning text-dark',
+                SIM: 'bg-info text-dark',
+                DEFINIDO: 'bg-success',
+                NAO: 'bg-secondary',
+                ATENDENTE: 'bg-primary',
+                FALHA_ENVIO: 'bg-danger',
+            }[st] || 'bg-light text-dark';
+            return `<span class="badge ${cor}" title="${titulo}">${texto}</span>`;
+        }
+
+        function popularSelectRetornoCliente() {
+            const select = document.getElementById('filtro-retorno-cliente');
+            if (!select) return;
+            let html = '<option value="">Retorno cliente</option>';
+            Object.keys(RETORNO_CLIENTE_ROTULOS).forEach(k => {
+                const n = _retornoClienteContagem[k] || 0;
+                if (!n && k !== filtroRetornoClienteAtual) return;
+                html += `<option value="${k}">${RETORNO_CLIENTE_ROTULOS[k]} (${n})</option>`;
+            });
+            select.innerHTML = html;
+            select.value = filtroRetornoClienteAtual || '';
+        }
+
+        function atualizarControlesRetornoCliente() {
+            const permitido = abaPermiteConsultaStatusPap();
+            const select = document.getElementById('filtro-retorno-cliente');
+            if (select) select.style.display = permitido ? '' : 'none';
+            if (!permitido && filtroRetornoClienteAtual) {
+                filtroRetornoClienteAtual = '';
+                if (select) select.value = '';
+            }
+            const btn = document.getElementById('btn-reagendar-cliente');
+            if (btn) btn.disabled = !permitido;
+        }
+
+        function filtrarRetornoCliente(valor) {
+            filtroRetornoClienteAtual = (valor || '').trim();
+            esteiraPaginaAtual = 1;
+            atualizarResumoFiltrosEsteira();
+            carregarVendas();
+        }
+
+        function urlLoteReagendarCliente() {
+            const busca = (document.getElementById('filtro-busca')?.value || '').trim();
+            const url = new URL(montarUrlEsteiraPrincipal(busca, Date.now()), window.location.origin);
+            if (filtroAtual === 'AGENDADO') {
+                if (filtroAgendadosAplicado.vendedor_id) url.searchParams.set('consultor_id', filtroAgendadosAplicado.vendedor_id);
+                if (filtroAgendadosAplicado.data_inicio) url.searchParams.set('data_inicio', filtroAgendadosAplicado.data_inicio);
+                if (filtroAgendadosAplicado.data_fim) url.searchParams.set('data_fim', filtroAgendadosAplicado.data_fim);
+            }
+            ['page', 'page_size', '_t'].forEach(k => url.searchParams.delete(k));
+            return '/crm/vendas/reagendar-cliente-lote/?' + url.searchParams.toString();
+        }
+
+        function mensagemErroApi(e) {
+            const raw = (e && e.message) ? e.message : String(e);
+            try { return JSON.parse(raw).detail || raw; } catch (_) { return raw; }
+        }
+
+        async function iniciarReagendarCliente() {
+            if (!podeConfigEsteiraBackoffice) return;
+            if (!abaPermiteConsultaStatusPap()) {
+                alert('Reagendar com o cliente disponível em Todos, Agendados, Pendentes ou em uma data específica.');
+                return;
+            }
+            const endpoint = urlLoteReagendarCliente();
+            const btn = document.getElementById('btn-reagendar-cliente');
+            if (btn) btn.disabled = true;
+            try {
+                const previa = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ confirmar: false }) });
+                if (!previa) return;
+                const linhas = [
+                    `Aba/filtros: ${rotuloFiltrosConsultaStatusPap(montarFiltrosConsultaStatusPap())}${filtroRetornoClienteAtual ? ' · retorno: ' + RETORNO_CLIENTE_ROTULOS[filtroRetornoClienteAtual] : ''}`,
+                    '',
+                    `Pedidos na lista: ${previa.total}`,
+                    `Vão receber o WhatsApp: ${previa.a_enviar}`,
+                ];
+                if (previa.aguardando_resposta) linhas.push(`Já aguardando resposta (enviado < 72h, não reenvia): ${previa.aguardando_resposta}`);
+                if (previa.sem_telefone) linhas.push(`Sem telefone (não envia): ${previa.sem_telefone}`);
+                if (Object.keys(montarFiltrosColunasEsteira()).length) linhas.push('', 'Atenção: filtros digitados nas colunas da tabela não entram no envio.');
+                if (!previa.a_enviar) {
+                    alert(linhas.join('\n') + '\n\nNenhum cliente a enviar.');
+                    return;
+                }
+                if (previa.a_enviar > previa.limite) {
+                    alert(linhas.join('\n') + `\n\nMáximo de ${previa.limite} envios por vez. Refine os filtros.`);
+                    return;
+                }
+                linhas.push('', 'Mensagem: "Podemos reagendar a sua instalação?" (Sim, pode reagendar | Não quero mais | Falar com atendente)', '', 'Confirmar o envio?');
+                if (!confirm(linhas.join('\n'))) return;
+                const res = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ confirmar: true }) });
+                alert(`Envio iniciado para ${res.a_enviar} cliente(s). As respostas aparecem na coluna "Retorno cliente".`);
+                setTimeout(() => { carregarContadoresEsteira(); carregarVendas(true); }, 5000);
+            } catch (e) {
+                alert('Erro: ' + mensagemErroApi(e));
+            } finally {
+                if (btn) btn.disabled = !abaPermiteConsultaStatusPap();
+            }
         }
 
         function montarEnderecoCompletoVenda(v) {
@@ -5724,6 +6000,7 @@ min-width: 100%;
                     ? 'Consultar PAP na aba atual (sua matrícula)'
                     : 'Consulta PAP só em Todos / Agendados / Pendentes / data';
             }
+            atualizarControlesRetornoCliente();
 
             function restaurarAbasDeDataEsteira() {
                 if (esteiraContadores && esteiraContadores.datas) {

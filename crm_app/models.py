@@ -621,6 +621,52 @@ class Venda(models.Model):
         verbose_name="Data/hora resposta reagendar consultor",
     )
 
+    # --- Reagendar com o cliente (template WhatsApp disparado em lote pela esteira) ---
+    REAGENDAR_CLIENTE_ENVIADO = 'ENVIADO'
+    REAGENDAR_CLIENTE_FALHA_ENVIO = 'FALHA_ENVIO'
+    REAGENDAR_CLIENTE_SIM = 'SIM'
+    REAGENDAR_CLIENTE_DEFINIDO = 'DEFINIDO'
+    REAGENDAR_CLIENTE_NAO = 'NAO'
+    REAGENDAR_CLIENTE_ATENDENTE = 'ATENDENTE'
+    REAGENDAR_CLIENTE_CHOICES = [
+        (REAGENDAR_CLIENTE_ENVIADO, 'Aguardando resposta'),
+        (REAGENDAR_CLIENTE_FALHA_ENVIO, 'Falha no envio'),
+        (REAGENDAR_CLIENTE_SIM, 'Sim (escolhendo data)'),
+        (REAGENDAR_CLIENTE_DEFINIDO, 'Sim (data e turno definidos)'),
+        (REAGENDAR_CLIENTE_NAO, 'Não quer mais'),
+        (REAGENDAR_CLIENTE_ATENDENTE, 'Falar com atendente'),
+    ]
+    cliente_reagendar_status = models.CharField(
+        max_length=20,
+        choices=REAGENDAR_CLIENTE_CHOICES,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name="Retorno do cliente (reagendar)",
+    )
+    cliente_reagendar_data = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Data preferida pelo cliente (reagendar)",
+    )
+    cliente_reagendar_turno = models.CharField(
+        max_length=10,
+        choices=[('MANHA', 'Manhã'), ('TARDE', 'Tarde')],
+        blank=True,
+        default='',
+        verbose_name="Turno preferido pelo cliente (reagendar)",
+    )
+    cliente_reagendar_enviado_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data/hora envio reagendar cliente",
+    )
+    cliente_reagendar_respondido_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data/hora resposta reagendar cliente",
+    )
+
     # --- Lista diária de agendamentos (ciência / pedido de reagendar via WhatsApp) ---
     STATUS_LISTA_AGENDAMENTO_CIENTE = 'CIENTE'
     STATUS_LISTA_AGENDAMENTO_REAGENDAR = 'REAGENDAR'
@@ -912,6 +958,55 @@ class PossoReagendarConsultorSessao(models.Model):
         db_table = 'crm_posso_reagendar_consultor_sessao'
         verbose_name = "Sessão posso reagendar consultor"
         verbose_name_plural = "Sessões posso reagendar consultor"
+        ordering = ['-criado_em']
+
+
+class ReagendamentoClienteSessao(models.Model):
+    """Fluxo WhatsApp 'Podemos reagendar?' com o cliente final (disparo em lote da esteira)."""
+    ETAPA_SIM_NAO = 'SIM_NAO'
+    ETAPA_DATA = 'DATA'
+    ETAPA_TURNO = 'TURNO'
+    ETAPA_CONCLUIDO = 'CONCLUIDO'
+    ETAPA_RECUSADO = 'RECUSADO'
+    ETAPA_ATENDENTE = 'ATENDENTE'
+    ETAPA_CHOICES = [
+        (ETAPA_SIM_NAO, 'Aguardando resposta'),
+        (ETAPA_DATA, 'Aguardando data'),
+        (ETAPA_TURNO, 'Aguardando turno'),
+        (ETAPA_CONCLUIDO, 'Concluído'),
+        (ETAPA_RECUSADO, 'Não quer mais'),
+        (ETAPA_ATENDENTE, 'Falar com atendente'),
+    ]
+
+    telefone = models.CharField(max_length=20, db_index=True, help_text="Telefone do cliente (dígitos normalizados)")
+    venda = models.ForeignKey(Venda, on_delete=models.CASCADE, related_name='reagendamento_cliente_sessoes')
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reagendamento_cliente_enviados',
+    )
+    etapa = models.CharField(max_length=16, choices=ETAPA_CHOICES, default=ETAPA_SIM_NAO, db_index=True)
+    whatsapp_message_id = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    canal = models.CharField(max_length=10, blank=True, default='', help_text="template ou texto")
+    datas_opcoes_json = models.CharField(max_length=128, blank=True, default='')
+    data_escolhida = models.DateField(null=True, blank=True)
+    periodo_escolhido = models.CharField(
+        max_length=10,
+        choices=[('MANHA', 'Manhã'), ('TARDE', 'Tarde')],
+        blank=True,
+        default='',
+    )
+    criado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    respondido_em = models.DateTimeField(null=True, blank=True)
+    finalizado_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'crm_reagendamento_cliente_sessao'
+        verbose_name = "Sessão reagendar com cliente"
+        verbose_name_plural = "Sessões reagendar com cliente"
         ordering = ['-criado_em']
 
 
