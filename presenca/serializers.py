@@ -10,7 +10,6 @@ class UsuarioPresencaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
         fields = ['id', 'username', 'first_name', 'last_name', 'perfil_nome', 'supervisor_nome']
-# site-record/presenca/serializers.py
 
 class MotivoAusenciaSerializer(serializers.ModelSerializer):
     class Meta:

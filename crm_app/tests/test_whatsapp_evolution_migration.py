@@ -362,7 +362,7 @@ class TestN8nOutboundProvider(SimpleTestCase):
         )
 
     @override_settings(
-        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/nova-velox-enviar-mensagem",
+        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/site-rosso-enviar-mensagem",
     )
     @patch("crm_app.services.whatsapp.n8n_outbound_provider.requests.post")
     def test_enviar_texto_via_n8n(self, mock_post) -> None:
@@ -455,7 +455,7 @@ class TestN8nOutboundProvider(SimpleTestCase):
         self.assertIn("fallback_error", resp)
 
     @override_settings(
-        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/nova-velox-enviar-mensagem",
+        N8N_OUTBOUND_WEBHOOK_URL="https://n8n.example/webhook/site-rosso-enviar-mensagem",
     )
     @patch("crm_app.services.whatsapp.n8n_outbound_provider.requests.post")
     def test_enviar_pdf_url_via_n8n(self, mock_post) -> None:
@@ -492,7 +492,7 @@ class TestVerificacaoNumeroEvolution(SimpleTestCase):
     @override_settings(
         EVOLUTION_API_URL="https://evo.example",
         EVOLUTION_API_KEY="key-evo",
-        EVOLUTION_INSTANCE_NAME="site_gm_zap",
+        EVOLUTION_INSTANCE_NAME="site_rosso_zap",
     )
     def test_evolution_pode_verificar_com_credenciais(self) -> None:
         provider = EvolutionProvider()

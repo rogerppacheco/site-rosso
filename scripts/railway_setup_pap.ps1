@@ -1,4 +1,4 @@
-# Cria/configura serviço Railway "site-record-pap" (worker Playwright dedicado).
+# Cria/configura serviço Railway "site-rosso-pap" (worker Playwright dedicado).
 # Pré-requisito: railway login
 #
 # Uso: powershell -ExecutionPolicy Bypass -File scripts\railway_setup_pap.ps1
@@ -8,9 +8,9 @@ $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RepoRoot
 
 $ProjectId = if ($env:RAILWAY_PROJECT_ID) { $env:RAILWAY_PROJECT_ID } else { "7171eee1-2c6e-446a-b7a9-880d3786c51a" }
-$WebService = if ($env:RAILWAY_WEB_SERVICE) { $env:RAILWAY_WEB_SERVICE } else { "site-record" }
-$PapService = if ($env:RAILWAY_PAP_SERVICE) { $env:RAILWAY_PAP_SERVICE } else { "site-record-pap" }
-$GitHubRepo = "rogerppacheco/site-record"
+$WebService = if ($env:RAILWAY_WEB_SERVICE) { $env:RAILWAY_WEB_SERVICE } else { "site-rosso" }
+$PapService = if ($env:RAILWAY_PAP_SERVICE) { $env:RAILWAY_PAP_SERVICE } else { "site-rosso-pap" }
+$GitHubRepo = "rogerppacheco/site-rosso"
 
 Write-Host "=== Railway: servico PAP ($PapService) ===" -ForegroundColor Cyan
 railway whoami 2>&1 | Out-Null

@@ -97,22 +97,18 @@ def validar_token_webhook_whatsatende(
 def montar_url_webhook_whatsatende(site_url: Optional[str] = None) -> str:
     """URL sugerida para cadastrar na WhatsAtende (com token no path, se houver)."""
     base = (site_url or getattr(settings, "SITE_URL", "") or "").rstrip("/")
-    if not base:
-        base = "https://site-bn-production.up.railway.app"
     token = get_whatsatende_webhook_token()
     if token:
         return f"{base}/api/crm/webhook-whatsapp/{token}/"
     return f"{base}/api/crm/webhook-whatsapp/"
 
 
-# Injetado de site-clickup
 def get_whatsatende_webhook_token() -> str:
     return (
         getattr(settings, "WHATSATENDE_WEBHOOK_TOKEN", None)
         or ""
     ).strip()
 
-# Injetado de site-clickup
 def extrair_token_webhook(
     request: HttpRequest,
     path_token: Optional[str] = None,
@@ -148,7 +144,6 @@ def extrair_token_webhook(
 
     return "", ""
 
-# Injetado de site-clickup
 def validar_token_webhook_whatsatende(
     request: HttpRequest,
     path_token: Optional[str] = None,
@@ -188,12 +183,9 @@ def validar_token_webhook_whatsatende(
 
     return True, None
 
-# Injetado de site-clickup
 def montar_url_webhook_whatsatende(site_url: Optional[str] = None) -> str:
     """URL sugerida para cadastrar na WhatsAtende (com token no path, se houver)."""
     base = (site_url or getattr(settings, "SITE_URL", "") or "").rstrip("/")
-    if not base:
-        base = "https://site-clickup-production.up.railway.app"
     token = get_whatsatende_webhook_token()
     if token:
         return f"{base}/api/crm/webhook-whatsapp/{token}/"

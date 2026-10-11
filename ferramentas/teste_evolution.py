@@ -28,13 +28,13 @@ def main() -> int:
     existe = svc.verificar_numero_existe(telefone)
     print(f"  exists={existe!r}")
 
-    msg = os.environ.get("TESTE_WPP_MENSAGEM", "Teste Evolution site-clickup")
+    msg = os.environ.get("TESTE_WPP_MENSAGEM", "Teste Evolution site-rosso")
     if os.environ.get("TESTE_WPP_ENVIAR", "").lower() in ("1", "true", "sim"):
         ok, resp = svc.enviar_mensagem_texto(telefone, msg, variar=False)
         print(f"  envio ok={ok} resp={resp}")
 
     base = os.environ.get("EVOLUTION_API_URL", "").rstrip("/")
-    inst = os.environ.get("EVOLUTION_INSTANCE_NAME", "site_clickup_zap")
+    inst = os.environ.get("EVOLUTION_INSTANCE_NAME", "site_rosso_zap")
     key = os.environ.get("EVOLUTION_API_KEY", "")
     if base and key:
         url = f"{base}/instance/connectionState/{inst}"

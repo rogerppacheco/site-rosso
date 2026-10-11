@@ -17,7 +17,7 @@ import time
 # DDD fixo 31 (região de BH/Contagem)
 DDD_CREDITO = "31"
 
-# Sem e-mail próprio da BN: não usar o da Record. Mailinator entra como fallback.
+# Sem e-mail padrão no código: usa CREDITO_EMAILS ou Mailinator como fallback.
 CREDITO_EMAIL_BASE = ""
 
 # Domínios de email conhecidos para gerar endereços (uso alternativo)

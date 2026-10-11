@@ -1,4 +1,4 @@
-"""Diagnóstico rápido da fila PAP (rodar com railway run -s site-bn-pap)."""
+"""Diagnóstico rápido da fila PAP (rodar com railway run -s site-rosso-pap)."""
 import os
 import django
 

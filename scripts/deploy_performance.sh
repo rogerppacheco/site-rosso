@@ -4,7 +4,7 @@
 
 echo "=========================================="
 echo "Deploy de Melhorias de Performance"
-echo "Site Record - PostgreSQL"
+echo "Site Rosso - PostgreSQL"
 echo "=========================================="
 echo ""
 

@@ -17,17 +17,16 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     'testserver',
-    'www.recordpap.com.br',
-    'recordpap.com.br',
-    'site-record-production.up.railway.app',
-    'site-record.up.railway.app',
-    'pleasing-recreation.up.railway.app',
     'healthcheck.railway.app',
     # Permite qualquer subdomínio do Railway
     '.up.railway.app',
     # Teste local: ngrok (ex.: d021-177-137-82-21.ngrok-free.app)
     '.ngrok-free.app',
     '.ngrok.io',
+]
+ALLOWED_HOSTS += [
+    h.strip() for h in config('EXTRA_ALLOWED_HOSTS', default='').split(',')
+    if h.strip() and h.strip() not in ALLOWED_HOSTS
 ]
 
 INSTALLED_APPS = [
@@ -231,15 +230,13 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'https://www.recordpap.com.br',
-    'https://recordpap.com.br',
+    'https://site-rosso-production.up.railway.app',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'https://www.recordpap.com.br',
-    'https://recordpap.com.br',
+    'https://site-rosso-production.up.railway.app',
 ]
 
 SESSION_COOKIE_SECURE = not DEBUG
@@ -248,25 +245,28 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
-# --- CONFIGURAÇÕES DE E-MAIL (UOL Host — bo@recordpap.com.br) ---
+# --- CONFIGURAÇÕES DE E-MAIL (SMTP; remetente e conta vêm do .env) ---
 # SMTP: smtps.uhserver.com:465 SSL. Credenciais vêm do .env (não versionar senha).
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='smtps.uhserver.com')
 EMAIL_PORT = config('EMAIL_PORT', default=465, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=False, cast=bool)
 EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='bo@recordpap.com.br')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Record PAP <bo@recordpap.com.br>')
+DEFAULT_FROM_EMAIL = config(
+    'DEFAULT_FROM_EMAIL',
+    default=f'Rosso Telecom <{EMAIL_HOST_USER}>' if EMAIL_HOST_USER else 'Rosso Telecom <webmaster@localhost>',
+)
 
 # --- CLOUDFLARE R2 (armazenamento de arquivos) ---
 CLOUDFLARE_R2_ACCOUNT_ID = config('CLOUDFLARE_R2_ACCOUNT_ID', default='')
 CLOUDFLARE_R2_ACCESS_KEY_ID = config('CLOUDFLARE_R2_ACCESS_KEY_ID', default='')
 CLOUDFLARE_R2_SECRET_ACCESS_KEY = config('CLOUDFLARE_R2_SECRET_ACCESS_KEY', default='')
-CLOUDFLARE_R2_BUCKET_NAME = config('CLOUDFLARE_R2_BUCKET_NAME', default='site-record-midia')
+CLOUDFLARE_R2_BUCKET_NAME = config('CLOUDFLARE_R2_BUCKET_NAME', default='')
 CLOUDFLARE_R2_PUBLIC_URL = config('CLOUDFLARE_R2_PUBLIC_URL', default='')
 # Prefixo raiz no bucket; cada funcionalidade usa subpasta própria (Record_Apoia, CDOI, etc.)
-R2_FOLDER_ROOT = config('R2_FOLDER_ROOT', default='CDOI_Record_Vertical')
+R2_FOLDER_ROOT = config('R2_FOLDER_ROOT', default='Rosso')
 
 # --- WHATSAPP: Z-API (legado), Evolution API ou WhatsAtende ---
 WHATSAPP_PROVIDER = config('WHATSAPP_PROVIDER', default='zapi').strip().lower()
@@ -278,7 +278,7 @@ EVOLUTION_API_URL = config(
     default='https://evolution-api-production-8bbb.up.railway.app',
 )
 EVOLUTION_API_KEY = config('EVOLUTION_API_KEY', default='')
-EVOLUTION_INSTANCE_NAME = config('EVOLUTION_INSTANCE_NAME', default='site_record_zap')
+EVOLUTION_INSTANCE_NAME = config('EVOLUTION_INSTANCE_NAME', default='site_rosso_zap')
 # WhatsAtende (SouChat): token da conexão + ID em Conexões
 WHATSATENDE_API_URL = config(
     'WHATSATENDE_API_URL',
@@ -318,20 +318,30 @@ N8N_WEBHOOK_URL = config('N8N_WEBHOOK_URL', default='')
 OUTBOUND_WEBHOOK_URL = config('OUTBOUND_WEBHOOK_URL', default='')
 # Teams: Django → n8n → Incoming Webhook do canal Teams
 N8N_TEAMS_WEBHOOK_URL = config('N8N_TEAMS_WEBHOOK_URL', default='')
-SITE_URL = config('SITE_URL', default='https://www.recordpap.com.br')
-SITE_BRAND = config('SITE_BRAND', default='Record PAP')
-# Prefixo dos módulos (Record Vendas, Record Apoia…). Default preserva a Record.
-SITE_MODULE_PREFIX = config('SITE_MODULE_PREFIX', default='Record')
-# True = mostra o nome da marca no header em vez do logo.png da Record.
-SITE_TEXT_LOGO = config('SITE_TEXT_LOGO', default=False, cast=bool)
-SITE_CONTACT_PHONE = config('SITE_CONTACT_PHONE', default='(31) 99458-8810')
-SITE_CONTACT_EMAIL = config('SITE_CONTACT_EMAIL', default='suporte@recordpap.com.br')
+SITE_URL = config('SITE_URL', default='')
+SITE_BRAND = config('SITE_BRAND', default='Rosso Telecom')
+# Nome da marca em textos ao cliente (mensagens, landing, exportações). Padrão = SITE_BRAND.
+SITE_BRAND_NAME = config('SITE_BRAND_NAME', default=SITE_BRAND)
+# Prefixo dos módulos (Rosso Vendas, Rosso Apoia…).
+SITE_MODULE_PREFIX = config('SITE_MODULE_PREFIX', default='Rosso')
+# True = mostra o nome da marca no header em vez do static/logo.png (que ainda é a arte antiga, não da Rosso).
+SITE_TEXT_LOGO = config('SITE_TEXT_LOGO', default=True, cast=bool)
+SITE_CONTACT_PHONE = config('SITE_CONTACT_PHONE', default='')
+SITE_CONTACT_EMAIL = config('SITE_CONTACT_EMAIL', default='')
 _site_origin = str(SITE_URL).rstrip('/')
 if _site_origin.startswith('http://') or _site_origin.startswith('https://'):
     if _site_origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(_site_origin)
     if _site_origin not in CORS_ALLOWED_ORIGINS:
         CORS_ALLOWED_ORIGINS.append(_site_origin)
+    _site_host = _site_origin.split('://', 1)[1].split('/', 1)[0].split(':', 1)[0]
+    if _site_host and _site_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_site_host)
+# PDV da Rosso na Nio (máscara de acionamento de reparo).
+SITE_PDV_CODIGO = config('SITE_PDV_CODIGO', default='1009270')
+SITE_PDV_NOME = config('SITE_PDV_NOME', default='ROSSO TELECOM')
+# Identificador curto do projeto (origem em integrações n8n/Teams, health check).
+SITE_SLUG = config('SITE_SLUG', default='site-rosso')
 # Descarta webhooks Z-API irrelevantes (grupo, fromMe, etc.) antes do handler pesado
 WHATSAPP_WEBHOOK_FASTPATH = config('WHATSAPP_WEBHOOK_FASTPATH', default=True, cast=bool)
 
@@ -474,7 +484,7 @@ VTOP_HEADLESS = config(
     default=False,
     cast=lambda v: str(v).lower() in ('true', '1', 'yes'),
 )
-VTOP_CODIGO_SAP = config('VTOP_CODIGO_SAP', default='1068561')
+VTOP_CODIGO_SAP = config('VTOP_CODIGO_SAP', default=SITE_PDV_CODIGO)
 # Emergência: True bloqueia QUALQUER criação de obra (só reabre se achar na lista/banco).
 # Fluxo normal: sempre tenta criar, MAS só depois do inventário confirmar que
 # o mesmo complemento ainda não existe no endereço (senão reusa a obra).
@@ -502,7 +512,7 @@ VTOP_ANEXO_OBRIGATORIO = config(
 # Sessão Google Forms (Inclusão/Viabilidade). Gere com:
 #   .venv\Scripts\python.exe scripts\salvar_sessao_google_form.py
 # Login da sessão = GOOGLE_FORM_LOGIN_EMAIL (ex. roggerio@gmail.com).
-# Campo e-mail do form = GOOGLE_FORM_EMAIL (ex. comunicacao@recordpap.com.br).
+# Campo e-mail do form = GOOGLE_FORM_EMAIL (e-mail comercial da Rosso).
 # Em produção, aponte para volume persistente (ex.: /data/google_form_state.json)
 # ou use GOOGLE_FORM_STORAGE_STATE_B64.
 GOOGLE_FORM_STORAGE_STATE = config(
@@ -513,7 +523,8 @@ GOOGLE_FORM_STORAGE_STATE = config(
 # (gerar localmente com scripts/salvar_sessao_google_form.py e colar no Railway).
 GOOGLE_FORM_STORAGE_STATE_B64 = config('GOOGLE_FORM_STORAGE_STATE_B64', default='')
 GOOGLE_FORM_LOGIN_EMAIL = config('GOOGLE_FORM_LOGIN_EMAIL', default='roggerio@gmail.com')
-GOOGLE_FORM_EMAIL = config('GOOGLE_FORM_EMAIL', default='comunicacao@recordpap.com.br')
+GOOGLE_FORM_EMAIL = config('GOOGLE_FORM_EMAIL', default='comunicacao@rossotelecom.com.br')
+INCLUSAO_EMPRESA_VENDAS = config('INCLUSAO_EMPRESA_VENDAS', default='ROSSO')
 
 # --- CONFIGURAÇÕES DE ARQUIVOS ESTÁTICOS E MÍDIA ---
 # Para upload de PDFs das faturas M-10
@@ -664,7 +675,10 @@ PRESENCA_LEMBRETES_ATIVOS = config(
 PRESENCA_FALTA_AUTOMATICA_12H_ATIVA = config(
     'PRESENCA_FALTA_AUTOMATICA_12H_ATIVA', default=True, cast=lambda v: str(v).lower() in ('true', '1', 'yes')
 )
-PRESENCA_URL_SITE = config('PRESENCA_URL_SITE', default='https://www.recordpap.com.br/presenca/')
+PRESENCA_URL_SITE = config(
+    'PRESENCA_URL_SITE',
+    default=f'{str(SITE_URL).rstrip("/")}/presenca/' if SITE_URL else '',
+)
 PRESENCA_IMAGEM_ALERTA_SUPERVISOR = config(
     'PRESENCA_IMAGEM_ALERTA_SUPERVISOR', default='presenca/assets/alerta_supervisor.png'
 )
@@ -681,7 +695,7 @@ INCLUSAO_R2_FOLDER = config(
 # --- Análise de crédito via WhatsApp: e-mails para o PAP/Nio ---
 # O Nio valida o e-mail (envia teste). Use um dos dois:
 # CREDITO_EMAILS: lista de e-mails reais separados por vírgula; o sistema escolhe um aleatório a cada análise.
-#   Ex: comunicacao@recordpap.com.br,suporte@recordpap.com.br,vendas@recordpap.com.br
+#   Ex: comunicacao@<dominio>,suporte@<dominio>,vendas@<dominio>
 # CREDITO_EMAIL_MAILINATOR: se true, gera endereços @mailinator.com (aceitam envio; Nio pode bloquear o domínio).
 CREDITO_EMAILS = config('CREDITO_EMAILS', default='')
 CREDITO_EMAIL_MAILINATOR = config('CREDITO_EMAIL_MAILINATOR', default=True, cast=lambda v: str(v).lower() in ('true', '1', 'yes'))

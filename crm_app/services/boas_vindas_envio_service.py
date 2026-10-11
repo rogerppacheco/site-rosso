@@ -206,7 +206,6 @@ def tentar_agendar_ao_instalar(
         return {"ok": True, "agendado": False, "detail": "Status não é INSTALADA."}
     return agendar_boas_vindas_venda(venda, usuario=usuario)
 
-# Injetado de site-clickup
 def _normalizar_telefone_chave(telefone: str) -> str:
     if not telefone:
         return ""
@@ -215,7 +214,6 @@ def _normalizar_telefone_chave(telefone: str) -> str:
         tel = tel[2:]
     return tel
 
-# Injetado de site-clickup
 def montar_texto_fallback_boas_vindas(
     nome_cliente: str,
     *,
@@ -226,7 +224,7 @@ def montar_texto_fallback_boas_vindas(
     despedida = "boa tarde!" if agora.hour >= 12 else "bom dia!"
     return (
         f"Olá {saudacao}, {nome_cliente} tudo bem?\n\n"
-        f"Me chamo {especialista}, sou especialista de qualidade da {getattr(settings, 'SITE_BRAND', 'ClickUp')}, "
+        f"Me chamo {especialista}, sou especialista de qualidade da {getattr(settings, 'SITE_BRAND', 'Rosso Telecom')}, "
         "parceiro Oficial da Nio Fibra.\n\n"
         "Estou entrando em contato para informar que estamos à sua disposição, "
         "caso você precise tirar dúvidas sobre seu plano e faturas.\n\n"
@@ -244,7 +242,6 @@ def montar_texto_fallback_boas_vindas(
         f"Obrigado e tenha um {despedida}"
     )
 
-# Injetado de site-clickup
 def enviar_boas_vindas_venda(
     venda,
     *,
@@ -323,7 +320,6 @@ def enviar_boas_vindas_venda(
     )
     return resultado
 
-# Injetado de site-clickup
 def agendar_boas_vindas_venda(
     venda,
     *,
@@ -384,7 +380,6 @@ def agendar_boas_vindas_venda(
     )
     return resultado
 
-# Injetado de site-clickup
 def tentar_agendar_ao_instalar(
     venda,
     *,

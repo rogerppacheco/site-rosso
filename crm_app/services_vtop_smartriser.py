@@ -65,7 +65,7 @@ VTOP_LOGIN_URL = (
 )
 
 # Código parceiro SAP (mesmo padrão Inclusão / PDV BN)
-CODIGO_SAP_PADRAO = "1068561"
+CODIGO_SAP_PADRAO = getattr(settings, "SITE_PDV_CODIGO", "") or "1009270"
 # Pré-venda por obra = teto de 18% dos HPs do bloco (regra BN / SmartRiser)
 PRE_VENDA_PCT_BLOCO = 0.18
 
@@ -150,11 +150,11 @@ def _headless() -> bool:
 # blocos[].nome / andares / aptos        →  Cadastro: BLOCOS / ANDARES / texto características
 # link_carta_sindico (R2)                →  Cadastro: CARTA DE AUTORIZAÇÃO (upload)
 # link_fotos_fachada (R2)                →  Cadastro: FOTOS DA FACHADA (upload)
-# id (CDOI)                              →  Obra: CDOI (código interno Record — conferir regra)
+# id (CDOI)                              →  Obra: CDOI (código interno — conferir regra)
 # —                                      →  Obra: COD SURVEY (vazio / manual se necessário)
 # —                                      →  Obra: ESTAÇÃO / CÉLULA (vazio até termos regra)
 # —                                      →  Obra: MÊS (default: mês atual no portal)
-# —                                      →  Cadastro: CÓDIGO DO PARCEIRO (SAP) = 1068561
+# —                                      →  Cadastro: CÓDIGO DO PARCEIRO (SAP) = settings.VTOP_CODIGO_SAP
 # complemento (montado dos blocos)       →  Obra: COMPLEMENTO
 
 
@@ -2376,7 +2376,6 @@ def get_vtop_service() -> VtopSmartRiserService:
         return _service
 
 
-# Injetado de site-clickup
 def calcular_pre_venda_bloco(hps: int) -> int:
     """Retorna ceil(18% × HPs do bloco). Ex.: 16→3, 18→4."""
     hps_i = int(hps or 0)
@@ -2384,7 +2383,6 @@ def calcular_pre_venda_bloco(hps: int) -> int:
         return 0
     return max(1, int(math.ceil(hps_i * PRE_VENDA_PCT_BLOCO)))
 
-# Injetado de site-clickup
 def _storage_state_path() -> str:
     path = getattr(
         settings,
@@ -2394,7 +2392,6 @@ def _storage_state_path() -> str:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     return path
 
-# Injetado de site-clickup
 def _garantir_storage_state_arquivo() -> bool:
     """
     Garante arquivo de sessão Playwright.
@@ -2426,11 +2423,9 @@ def _garantir_storage_state_arquivo() -> bool:
         logger.exception("[VTOP] Falha ao materializar VTOP_STORAGE_STATE_B64")
         return False
 
-# Injetado de site-clickup
 def _headless() -> bool:
     return bool(getattr(settings, "VTOP_HEADLESS", False))
 
-# Injetado de site-clickup
 class VtopStatus(str, Enum):
     IDLE = "idle"
     STARTING = "starting"
@@ -2448,7 +2443,6 @@ class VtopStatus(str, Enum):
     ERROR = "error"
     PAUSED = "paused"
 
-# Injetado de site-clickup
 @dataclass
 class VtopJobState:
     cdoi_id: Optional[int] = None
@@ -2479,7 +2473,6 @@ class VtopJobState:
             "needs_vtop_login": self.error == "needs_vtop_login",
         }
 
-# Injetado de site-clickup
 def _norm_nome_bloco(nome: str) -> str:
     """Normaliza nome de bloco/complemento para comparação (BLOCO 05 → BLOCO 5)."""
     s = (nome or "").strip().upper()
@@ -2500,7 +2493,6 @@ def _norm_nome_bloco(nome: str) -> str:
         .replace("Ú", "U")
     )
 
-# Injetado de site-clickup
 def _bloco_equiv(a: str, b: str) -> bool:
     """True se os nomes representarem o mesmo complemento (tolera truncamento não-numérico)."""
     na, nb = _norm_nome_bloco(a), _norm_nome_bloco(b)
@@ -2520,7 +2512,6 @@ def _bloco_equiv(a: str, b: str) -> bool:
         return True
     return False
 
-# Injetado de site-clickup
 def vtop_criar_permitido(payload: Optional[Dict[str, Any]] = None) -> bool:
     """
     Criação liberada por padrão.
@@ -2539,7 +2530,6 @@ def vtop_criar_permitido(payload: Optional[Dict[str, Any]] = None) -> bool:
         return False
     return True
 
-# Injetado de site-clickup
 def ler_etapa_obra_page(page) -> Optional[int]:
     """Lê obra.etapa no JS da página; None se indisponível."""
     try:
@@ -2552,7 +2542,6 @@ def ler_etapa_obra_page(page) -> Optional[int]:
     except Exception:
         return None
 
-# Injetado de site-clickup
 def persistir_vtop_obra_bloco(
     cdoi_id: Optional[int],
     nome_bloco: str,
@@ -2630,7 +2619,6 @@ def persistir_vtop_obra_bloco(
         )
         return False
 
-# Injetado de site-clickup
 def montar_payload_cdoi(cdoi) -> Dict[str, Any]:
     """Converte CdoiSolicitacao (+ blocos) no dict base (ainda sem escolher 1 bloco)."""
     blocos = list(cdoi.blocos.all().order_by("nome_bloco"))
@@ -2693,7 +2681,6 @@ def montar_payload_cdoi(cdoi) -> Dict[str, Any]:
         "aptos": 0,
     }
 
-# Injetado de site-clickup
 def baixar_anexo_temporario(url: str, prefix: str = "vtop_") -> Optional[str]:
     """
     Obtém arquivo local para upload.
@@ -2721,7 +2708,6 @@ def baixar_anexo_temporario(url: str, prefix: str = "vtop_") -> Optional[str]:
         logger.exception("[VTOP] Falha ao baixar anexo %s: %s", url, exc)
         return None
 
-# Injetado de site-clickup
 class VtopSmartRiserService:
     """
     Singleton por processo: mantém o browser aberto entre passos.
@@ -4497,7 +4483,6 @@ class VtopSmartRiserService:
             self._gravar_vinculo_obra(obra_id, etapa=etapa)
         self._set(VtopStatus.VALIDATING, f"Etapa validada (obra.etapa={etapa}).", step="validar")
 
-# Injetado de site-clickup
 def get_vtop_service() -> VtopSmartRiserService:
     global _service
     with _service_lock:

@@ -81,6 +81,13 @@ class WhatsAppService:
             sucesso=bool(ok),
             resposta=resp,
         )
+        self._registrar_atendimento(
+            telefone=telefone,
+            texto=mensagem or "",
+            tipo="SESSAO",
+            sucesso=bool(ok),
+            resposta=resp,
+        )
         return ok, resp
 
     def enviar_mensagem_com_botoes_reply(
@@ -92,6 +99,13 @@ class WhatsAppService:
         self._registrar_custo_oficial(
             telefone=telefone,
             tipo_envio="BOTOES",
+            sucesso=bool(ok),
+            resposta=resp,
+        )
+        self._registrar_atendimento(
+            telefone=telefone,
+            texto=mensagem or "",
+            tipo="SESSAO",
             sucesso=bool(ok),
             resposta=resp,
         )
@@ -118,6 +132,13 @@ class WhatsAppService:
         self._registrar_custo_oficial(
             telefone=telefone,
             tipo_envio="BOTOES",
+            sucesso=bool(ok),
+            resposta=resp,
+        )
+        self._registrar_atendimento(
+            telefone=telefone,
+            texto=mensagem or "",
+            tipo="SESSAO",
             sucesso=bool(ok),
             resposta=resp,
         )
@@ -164,6 +185,16 @@ class WhatsAppService:
             resposta=resp,
             template_name=template_name or "",
         )
+        from crm_app.services.whatsapp.atendimento_service import texto_modelo
+
+        self._registrar_atendimento(
+            telefone=telefone,
+            texto=texto_modelo(template_name or "", body_params or template_params),
+            tipo="MODELO",
+            sucesso=bool(ok),
+            resposta=resp,
+            template_name=template_name or "",
+        )
         return ok, resp
 
     def _registrar_custo_oficial(
@@ -191,6 +222,33 @@ class WhatsAppService:
             )
         except Exception as exc:
             logger.debug("[WhatsAppService] Custo não registrado: %s", exc)
+
+    def _registrar_atendimento(
+        self,
+        *,
+        telefone,
+        texto: str,
+        tipo: str,
+        sucesso: bool,
+        resposta=None,
+        template_name: str = "",
+    ) -> None:
+        """Histórico do inbox só no número do cliente. Falha de log não impede o envio."""
+        if self.purpose != PURPOSE_CLIENTE:
+            return
+        try:
+            from crm_app.services.whatsapp.atendimento_service import registrar_saida_cliente
+
+            registrar_saida_cliente(
+                telefone=str(telefone or ""),
+                texto=texto or "",
+                tipo=tipo,
+                sucesso=sucesso,
+                resposta=resposta,
+                template_name=template_name,
+            )
+        except Exception as exc:
+            logger.debug("[WhatsAppService] Atendimento não registrado: %s", exc)
 
     def listar_templates(self):
         fn = getattr(self._provider, "listar_templates", None)

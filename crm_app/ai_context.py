@@ -34,7 +34,7 @@ _MAX_CHARS_SCHEMA = _limite_chars("IA_MAX_CHARS_SCHEMA", 3_000)
 
 def _prompt_base() -> str:
     """Instruções fixas do bot: comandos e regras de resposta."""
-    brand = getattr(settings, "SITE_BRAND_NAME", "Futura Telecom")
+    brand = settings.SITE_BRAND_NAME
     return f"""
 Você é um assistente do sistema interno (CRM/gestão) usado por vendedores da operadora de internet.
 O bot do WhatsApp oferece estes comandos e fluxos:
@@ -178,7 +178,7 @@ def get_contexto_sistema(reduzido: bool = False, contexto_externo: bool = False)
     contexto_externo=True: prompt curto para contatos não cadastrados (número externo); resposta acolhedora e profissional.
     """
     if contexto_externo:
-        brand = getattr(settings, "SITE_BRAND_NAME", "Futura Telecom")
+        brand = settings.SITE_BRAND_NAME
         return f"""
 Você é o atendimento da {brand}, parceiro da Nio Fibra. Esta mensagem veio de um contato externo (número não cadastrado como vendedor interno no sistema).
 

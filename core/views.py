@@ -38,7 +38,7 @@ class RegraAutomacaoViewSet(viewsets.ModelViewSet):
 # --- SUAS VIEWS DE TEMPLATE ---
 class HomeView(TemplateView):
     """
-    Landing pública Futura Telecom.
+    Landing pública do site.
 
     Planos vêm do context processor planos_landing (GDP vigente).
     Aceita ?cidade=&uf=&ibge= para segmentação regional.

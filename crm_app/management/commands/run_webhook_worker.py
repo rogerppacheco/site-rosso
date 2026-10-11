@@ -2,7 +2,7 @@
 Worker dedicado para webhooks WhatsApp (fila PostgreSQL).
 
 Uso: python manage.py run_webhook_worker
-Railway: serviço nova-velox-webhook com WHATSAPP_WORKER_MODE=true
+Railway: serviço site-rosso-webhook com WHATSAPP_WORKER_MODE=true
 """
 from __future__ import annotations
 

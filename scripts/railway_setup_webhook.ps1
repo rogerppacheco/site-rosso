@@ -1,4 +1,4 @@
-# Cria/configura serviço Railway "site-record-webhook" (worker WhatsApp dedicado).
+# Cria/configura serviço Railway "site-rosso-webhook" (worker WhatsApp dedicado).
 # Pré-requisito: railway login
 #
 # Uso: powershell -ExecutionPolicy Bypass -File scripts\railway_setup_webhook.ps1
@@ -8,8 +8,8 @@ $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $RepoRoot
 
 $ProjectId = if ($env:RAILWAY_PROJECT_ID) { $env:RAILWAY_PROJECT_ID } else { "7171eee1-2c6e-446a-b7a9-880d3786c51a" }
-$WebService = if ($env:RAILWAY_WEB_SERVICE) { $env:RAILWAY_WEB_SERVICE } else { "site-record" }
-$WebhookService = if ($env:RAILWAY_WEBHOOK_SERVICE) { $env:RAILWAY_WEBHOOK_SERVICE } else { "site-record-webhook" }
+$WebService = if ($env:RAILWAY_WEB_SERVICE) { $env:RAILWAY_WEB_SERVICE } else { "site-rosso" }
+$WebhookService = if ($env:RAILWAY_WEBHOOK_SERVICE) { $env:RAILWAY_WEBHOOK_SERVICE } else { "site-rosso-webhook" }
 
 Write-Host "=== Railway: servico webhook ($WebhookService) ===" -ForegroundColor Cyan
 railway whoami 2>&1 | Out-Null
@@ -67,7 +67,7 @@ railway variables --set "WHATSAPP_WEBHOOK_ASYNC=True" --skip-deploys
 Write-Host ""
 Write-Host "Configure via GraphQL ou painel Railway:" -ForegroundColor Yellow
 Write-Host "  Servico $WebhookService -> Config-as-code -> /railway.webhook.toml"
-Write-Host "  Repo: rogerppacheco/site-record"
+Write-Host "  Repo: rogerppacheco/site-rosso"
 Write-Host ""
 Write-Host "Deploy: railway up --detach -s $WebhookService" -ForegroundColor Cyan
 Write-Host "Concluido." -ForegroundColor Green

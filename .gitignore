@@ -36,7 +36,6 @@ venv/
 backups/
 data/
 downloads/
-site-record.git/
 
 # Sessões PAP (cookies/JWT do Playwright — nunca versionar)
 pap_sessions/*.json
@@ -44,7 +43,7 @@ pap_sessions/*.json
 # Perfil temporário Chrome/CDP (nunca versionar)
 .chrome_cdp_tmp/
 
-# Relatórios/dados operacionais da Record — não versionar na Rosso
+# Relatórios/dados operacionais — não versionar
 relatorio_churn_*.md
 diff_ids.csv
 .railway/

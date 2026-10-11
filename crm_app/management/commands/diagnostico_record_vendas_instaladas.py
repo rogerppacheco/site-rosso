@@ -1,5 +1,5 @@
 """
-Diagnóstico venda por venda das divergências de "Instaladas" no módulo Record Vendas.
+Diagnóstico venda por venda das divergências de "Instaladas" no módulo Vendas.
 
 Compara, para um vendedor e mês:
 1) Visão de Equipe > Instalados (endpoint relatorios/performance-vendas)

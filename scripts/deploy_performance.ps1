@@ -3,7 +3,7 @@
 
 Write-Host "==========================================`n" -ForegroundColor Cyan
 Write-Host "Deploy de Melhorias de Performance" -ForegroundColor Cyan
-Write-Host "Site Record - PostgreSQL" -ForegroundColor Cyan
+Write-Host "Site Rosso - PostgreSQL" -ForegroundColor Cyan
 Write-Host "==========================================`n" -ForegroundColor Cyan
 
 # 1. Verificar ambiente

@@ -1776,11 +1776,9 @@ def get_vendas_ids_desconto_churn_mes(ano, mes):
             ids_marcar.append(v.id)
     return ids_marcar
 
-# Injetado de nova-velox
 def _sufixo_tipo_cliente(tipo_cliente: str) -> str:
     return 'PAP' if tipo_cliente == 'CPF' else 'CNPJ'
 
-# Injetado de nova-velox
 def chave_agrupamento_folha(venda, tipo_cliente: str | None = None) -> str:
     """Agrupa a folha pelo plano cadastrado, não pela grade fixa 500/700/1GB."""
     if tipo_cliente is None:
@@ -1794,7 +1792,6 @@ def chave_agrupamento_folha(venda, tipo_cliente: str | None = None) -> str:
         return f'plano_{int(plano_id)}_{sufixo}'
     return f'sem_plano_{sufixo}'
 
-# Injetado de nova-velox
 def label_plano_folha(venda, tipo_cliente: str | None = None) -> str:
     """Rótulo do resumo/extrato: nome do plano cadastrado + PAP/CNPJ."""
     if tipo_cliente is None:
@@ -1806,13 +1803,11 @@ def label_plano_folha(venda, tipo_cliente: str | None = None) -> str:
     nome = (getattr(plano, 'nome', None) or '').strip() or 'SEM PLANO'
     return f'{nome} {sufixo}'
 
-# Injetado de nova-velox
 def _safe_min_max_faixa(regra) -> tuple[int, int]:
     min_v = regra.min_vendas if getattr(regra, 'min_vendas', None) is not None else 0
     max_v = regra.max_vendas if getattr(regra, 'max_vendas', None) is not None else (10 ** 9)
     return int(min_v), int(max_v)
 
-# Injetado de nova-velox
 def encontrar_faixa_comissao(
     consultor,
     qtd_vendas: int,
@@ -1842,7 +1837,6 @@ def encontrar_faixa_comissao(
             return regra
     return None
 
-# Injetado de nova-velox
 def carregar_contexto_estimativa_comissao(ano: int | None = None, mes: int | None = None) -> dict:
     """Faixas COMISSAO, configs do mês e matriz faixa×plano para estimativa do dashboard."""
     from crm_app.performance_helpers import carregar_contexto_faixas_comissao
@@ -1853,7 +1847,6 @@ def carregar_contexto_estimativa_comissao(ano: int | None = None, mes: int | Non
     ctx['matriz_cache'] = MatrizComissaoCache.carregar(config_ids)
     return ctx
 
-# Injetado de nova-velox
 def estimar_comissao_instaladas(consultor, vendas, contexto: dict | None = None) -> float:
     """
     Soma a comissão configurada das vendas instaladas (faixas/matriz/cadastro do plano).

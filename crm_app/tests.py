@@ -1,4 +1,3 @@
-# site-record/crm_app/tests.py
 
 from rest_framework.test import APITestCase
 from rest_framework import status

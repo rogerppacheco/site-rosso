@@ -133,10 +133,8 @@ from rest_framework.views import APIView
 from rest_framework import status
 
 # --- RESTAURAÇÃO: WebhookWhatsAppView ---
-# URL de produção: https://www.recordpap.com.br/api/crm/webhook-whatsapp/
-# URL alternativa: https://site-record-production.up.railway.app/api/crm/webhook-whatsapp/
-# Configurar webhook: Z-API ou Evolution (instancia site_record_zap)
-# URL: https://www.recordpap.com.br/api/crm/webhook-whatsapp/
+# URL de produção: {SITE_URL}/api/crm/webhook-whatsapp/
+# Configurar webhook: Z-API ou Evolution (instancia EVOLUTION_INSTANCE_NAME, padrão site_rosso_zap)
 # WhatsAtende (com segredo): .../api/crm/webhook-whatsapp/<WHATSATENDE_WEBHOOK_TOKEN>/
 class WebhookWhatsAppView(APIView):
     permission_classes = [AllowAny]  # Permite acesso sem autenticação para webhooks
@@ -222,6 +220,17 @@ class WebhookWhatsAppView(APIView):
             return Response(status_resp, status=200)
 
         data = normalizar_webhook(data)
+
+        try:
+            from crm_app.services.whatsapp.atendimento_service import (
+                registrar_entrada_webhook,
+            )
+
+            registrar_entrada_webhook(data)
+        except Exception:
+            logger_webhook.exception(
+                "[WebhookWhatsAppView] Falha ao gravar atendimento WhatsApp"
+            )
 
         # Fallback: normalizador converteu status que o extrator do raw não viu.
         status_resp = processar_webhook_status(data if isinstance(data, dict) else {})
@@ -4809,7 +4818,6 @@ class ListaVendedoresView(APIView):
         vendedores = User.objects.filter(is_active=True).values('id', 'username', 'autorizar_venda_automatica').order_by('username')
         return Response(list(vendedores))
 
-# Em site-record/crm_app/views.py
 
 class FolhaComissionamentoView(APIView):
     """GET comissionamento/folha/?ano=AAAA&mes=M&vendedor_id=opcional - Folha no formato Excel."""
@@ -9700,7 +9708,7 @@ class NominatimProxyView(APIView):
             url = f"https://nominatim.openstreetmap.org/search?{urllib.parse.urlencode(params)}"
             req = urllib.request.Request(
                 url,
-                headers={'User-Agent': 'ClickUpCRM/1.0'}
+                headers={'User-Agent': 'RossoCRM/1.0'}
             )
             with urllib.request.urlopen(req, timeout=8) as response:
                 data = json.loads(response.read().decode('utf-8'))
@@ -10519,7 +10527,6 @@ class VerificarPermissaoGestaoView(APIView):
         eh_gestao = is_member(request.user, ['Diretoria', 'Admin'])
         return Response({'eh_gestao': eh_gestao})
 
-# Em site-record/crm_app/views.py
 
 class ImportacaoLegadoView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -12792,7 +12799,7 @@ def page_validacao_recompra(request):
 
 
 def page_record_apoia(request):
-    """View para renderizar a página HTML do Futura Telecom Apoia"""
+    """View para renderizar a página HTML do Apoia"""
     return render(request, 'record_apoia.html')
 
 
@@ -17175,7 +17182,7 @@ def _mensagem_padrao_reparo(os_num, endereco, data_inst_fmt, observacao_reparo):
         f"- *NOME DO CLIENTE:* {nome_cliente}\n"
         f"- *ENDEREÇO COMPLETO:* {endereco}\n"
         f"- *CONTATO DO CLIENTE:* {contato_cliente}\n"
-        "- *PDV:* 1068561 - RECORD PAP\n"
+        f"- *PDV:* {getattr(settings, 'SITE_PDV_CODIGO', '')} - {getattr(settings, 'SITE_PDV_NOME', '')}\n"
         f"- *GC:* {gc_nome}\n"
         f"- *DATA INSTALAÇÃO:* {data_inst_fmt}\n"
         "- *DATA E HORÁRIO AGENDADO COM O CLIENTE:*\n"
@@ -17192,7 +17199,7 @@ def _mensagem_padrao_instalacao_fisica(os_num, endereco, data_fisica_fmt, descri
         "*SINALIZAÇÃO - INSTALAÇÃO FÍSICA / PENDÊNCIA NO SISTEMA:*\n\n"
         f"- *OS:* {os_num}\n"
         f"- *ENDEREÇO COMPLETO:* {endereco}\n"
-        f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'ClickUp').upper()}\n"
+        f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso').upper()}\n"
         f"- *DATA INSTALAÇÃO FÍSICA (NO CLIENTE):* {data_fisica_fmt}\n"
         "- *CONTEXTO:* Houve instalação física; o pedido segue com pendência na esteira.\n"
         f"- *DESCRIÇÃO DETALHADA:* {descricao}"
@@ -17343,7 +17350,7 @@ class SolicitarAnteciparInstalacaoView(APIView):
                 "*MÁSCARA PADRÃO DE ACIONAMENTO - GRUPO ELITE:*\n\n"
                 f"- *OS:* {os_num}\n"
                 f"- *ENDEREÇO COMPLETO:* {endereco}\n"
-                f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'ClickUp').upper()}\n"
+                f"- *NOME DO PDV:* {getattr(settings, 'SITE_MODULE_PREFIX', 'Rosso').upper()}\n"
                 f"- *DATA AGENDADA:* {data_ag_fmt} - {turno}\n"
                 f"- *DESCRIÇÃO DETALHADA DA SOLICITAÇÃO:* {descricao}"
             )
@@ -19351,7 +19358,6 @@ class AtuacaoCampoDiarioView(APIView):
             'dados': list(dados)
         })
 
-# Injetado de site-gm
 def _resposta_canal_cliente_indisponivel():
     from crm_app.services.whatsapp_config_service import (
         canal_cliente_pronto,
@@ -19368,7 +19374,6 @@ def _resposta_canal_cliente_indisponivel():
         status=status.HTTP_409_CONFLICT,
     )
 
-# Injetado de site-gm
 def _payload_canal_cliente() -> dict:
     from crm_app.services.whatsapp_config_service import (
         canal_cliente_pronto,

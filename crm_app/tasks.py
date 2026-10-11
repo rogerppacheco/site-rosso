@@ -399,6 +399,66 @@ def processar_envio_performance():
                     pass
 
 
+_ITENS_SYNC_LOTE_MAX = 40
+
+
+def _metricas_sync_lote_sonax(**extra) -> dict:
+    base = {
+        "verificadas": 0,
+        "atualizadas": 0,
+        "gravacoes": 0,
+        "ignoradas": 0,
+        "erros": 0,
+        "gravacoes_falhas": 0,
+        "itens_omitidos": 0,
+        "motivo": "",
+        "itens": [],
+    }
+    base.update(extra)
+    return base
+
+
+def _anexar_item_sync_lote(metrics: dict, item: dict) -> None:
+    itens = metrics.setdefault("itens", [])
+    if len(itens) < _ITENS_SYNC_LOTE_MAX:
+        itens.append(item)
+        return
+    metrics["itens_omitidos"] = int(metrics.get("itens_omitidos") or 0) + 1
+
+
+def _filtro_sem_gravacao_arquivada():
+    sem_arquivo = (
+        Q(link_gravacao_onedrive__isnull=True)
+        | Q(link_gravacao_onedrive="")
+        | Q(link_gravacao_onedrive__icontains="sharepoint")
+        | Q(link_gravacao_onedrive__icontains="onedrive")
+        | Q(link_gravacao_onedrive__icontains="1drv.ms")
+    )
+    ja_no_r2 = Q(link_gravacao_onedrive__icontains="r2.dev") | Q(
+        link_gravacao_onedrive__icontains="cloudflarestorage.com"
+    )
+    return sem_arquivo & ~ja_no_r2
+
+
+def _motivo_lote_sonax_vazio(base_qs) -> str:
+    total = base_qs.count()
+    if not total:
+        return (
+            "Nenhuma ligação Sonax encontrada. Este botão atualiza o status e baixa a gravação "
+            "das ligações feitas na auditoria. Ele não importa vendas do PAP."
+        )
+    sem_gravacao = base_qs.filter(_filtro_sem_gravacao_arquivada()).count()
+    em_andamento = base_qs.filter(status__in=["INICIADA", "PROCESSANDO", "ERRO"]).count()
+    if sem_gravacao == 0 and em_andamento == 0:
+        return (
+            f"Nada pendente. As {total} ligações Sonax já estão finalizadas e com gravação arquivada."
+        )
+    return (
+        f"Nenhuma ligação entrou neste lote. Sonax: {total}. "
+        f"Em andamento ou com erro: {em_andamento}. Sem gravação arquivada: {sem_gravacao}."
+    )
+
+
 def processar_fallback_auditoria_ligacoes_sonax(
     *,
     limite: int = 15,
@@ -414,13 +474,17 @@ def processar_fallback_auditoria_ligacoes_sonax(
     try:
         from crm_app.sonax_voice_service import SonaxVoiceService
         from crm_app.auditoria_ligacoes_api import (
+            _cliente_nome_cpf_da_venda,
             _finalizada_por_status,
             _parse_provider_datetime,
             _upload_bytes_to_r2,
         )
+        from crm_app.services.auditoria_gravacao_sync_service import ligacao_precisa_arquivar_r2
     except Exception:
         logger.exception("Falha ao importar dependências do fallback Sonax (auditoria).")
-        return {"verificadas": 0, "atualizadas": 0, "gravacoes": 0}
+        return _metricas_sync_lote_sonax(
+            motivo="Falha interna ao preparar a sincronização. Nada foi alterado."
+        )
 
     now = timezone.now()
     cutoff = now - timedelta(seconds=max(10, int(grace_seconds)))
@@ -430,35 +494,75 @@ def processar_fallback_auditoria_ligacoes_sonax(
     pending_q = Q(status__in=["INICIADA", "PROCESSANDO"], criado_em__lte=cutoff)
     if include_finalizadas_sem_gravacao:
         # Também força nova tentativa para chamadas já finalizadas/arquivadas sem link no R2.
-        pending_q = pending_q | Q(
-            status__in=["FINALIZADA", "ARQUIVADA", "APROVADA"],
-            link_gravacao_onedrive__isnull=True,
+        # Link vazio ("") não é NULL e antes ficava de fora do lote.
+        pending_q = pending_q | Q(status="ERRO", criado_em__lte=cutoff) | (
+            Q(status__in=["FINALIZADA", "ARQUIVADA"]) & _filtro_sem_gravacao_arquivada()
         )
 
-    rows = base_qs.filter(pending_q).order_by("criado_em")[: max(1, int(limite))]
+    rows = list(
+        base_qs.filter(pending_q)
+        .select_related("venda", "venda__cliente")
+        .order_by("criado_em")[: max(1, int(limite))]
+    )
     if not rows:
-        return {"verificadas": 0, "atualizadas": 0, "gravacoes": 0}
+        return _metricas_sync_lote_sonax(motivo=_motivo_lote_sonax_vazio(base_qs))
 
     svc = SonaxVoiceService()
     if not svc.is_recording_download_configured:
         logger.warning("Fallback Sonax auditoria: status/gravacao não configurados (SONAX_ID_CLIENTE/token).")
-        return {"verificadas": len(rows), "atualizadas": 0, "gravacoes": 0}
+        return _metricas_sync_lote_sonax(
+            verificadas=len(rows),
+            motivo=(
+                f"Encontrei {len(rows)} ligação(ões) para consultar, mas a integração com a Sonax "
+                "não está configurada neste ambiente. Nada foi atualizado."
+            ),
+        )
 
-    metrics = {"verificadas": len(rows), "atualizadas": 0, "gravacoes": 0}
+    metrics = _metricas_sync_lote_sonax(verificadas=len(rows))
 
     for ligacao in rows:
+        nome, cpf = _cliente_nome_cpf_da_venda(ligacao.venda)
         cid = str(ligacao.provider_call_id or "").strip()
+        item_base = {
+            "id": ligacao.id,
+            "venda_id": ligacao.venda_id,
+            "cliente": (nome or "").strip() or "—",
+            "cpf": cpf or "",
+            "call_id": cid,
+        }
         if not cid.isdigit():
+            metrics["ignoradas"] += 1
+            _anexar_item_sync_lote(
+                metrics,
+                {
+                    **item_base,
+                    "resultado": "ignorada",
+                    "gravacao": "nao_aplicavel",
+                    "status": ligacao.status,
+                    "detalhe": "ID da chamada não é numérico. A Sonax não consulta esse registro.",
+                },
+            )
             continue
 
         try:
             st = svc.fetch_call_status(cid)
         except Exception as exc:
+            metrics["erros"] += 1
             logger.warning(
                 "Fallback Sonax auditoria: status_chamada falhou. ligacao_id=%s call_id=%s err=%s",
                 ligacao.id,
                 cid,
                 exc,
+            )
+            _anexar_item_sync_lote(
+                metrics,
+                {
+                    **item_base,
+                    "resultado": "erro",
+                    "gravacao": "nao_aplicavel",
+                    "status": ligacao.status,
+                    "detalhe": f"Falha ao consultar a Sonax: {exc}"[:180],
+                },
             )
             continue
 
@@ -504,21 +608,68 @@ def processar_fallback_auditoria_ligacoes_sonax(
             ligacao.save(update_fields=list(dict.fromkeys(update_fields + ["atualizado_em"])))
             metrics["atualizadas"] += 1
 
-        if finalizada and not ligacao.link_gravacao_onedrive:
+        gravacao = "nao_aplicavel"
+        detalhe_gravacao = ""
+        if finalizada and ligacao_precisa_arquivar_r2(ligacao):
+            backup_link = ligacao.link_gravacao_onedrive
             try:
                 content, ext = svc.download_recording(cid)
                 _upload_bytes_to_r2(ligacao, content, ext)
                 metrics["gravacoes"] += 1
+                gravacao = "baixada"
                 logger.info(
                     "Fallback Sonax auditoria: gravação arquivada. ligacao_id=%s call_id=%s",
                     ligacao.id,
                     cid,
                 )
             except Exception as exc:
+                metrics["gravacoes_falhas"] += 1
+                gravacao = "falhou"
+                detalhe_gravacao = f" Falha ao baixar a gravação: {exc}"[:160]
+                if backup_link and ligacao.link_gravacao_onedrive != backup_link:
+                    ligacao.link_gravacao_onedrive = backup_link
+                    ligacao.save(update_fields=["link_gravacao_onedrive", "atualizado_em"])
                 logger.warning(
                     "Fallback Sonax auditoria: falha ao arquivar gravação. ligacao_id=%s call_id=%s err=%s",
                     ligacao.id,
                     cid,
                     exc,
                 )
+        elif not ligacao_precisa_arquivar_r2(ligacao):
+            gravacao = "ja_arquivada"
+
+        if finalizada:
+            detalhe = "Status atualizado para finalizada."
+        else:
+            detalhe = "Chamada ainda em andamento. Status atualizado para processando."
+        if status_chamada:
+            detalhe = f"{detalhe} Sonax: {status_chamada}."
+        detalhe = f"{detalhe}{detalhe_gravacao}"
+
+        _anexar_item_sync_lote(
+            metrics,
+            {
+                **item_base,
+                "resultado": "atualizada" if update_fields else "ignorada",
+                "gravacao": gravacao,
+                "status": ligacao.status,
+                "detalhe": detalhe[:220],
+            },
+        )
+
+    if metrics["atualizadas"] or metrics["gravacoes"]:
+        metrics["motivo"] = (
+            f"Sincronização concluída. {metrics['verificadas']} verificada(s), "
+            f"{metrics['atualizadas']} atualizada(s), {metrics['gravacoes']} gravação(ões) baixada(s)."
+        )
+    elif metrics["erros"]:
+        metrics["motivo"] = (
+            f"Consultei {metrics['verificadas']} ligação(ões), mas nenhuma foi atualizada. "
+            f"{metrics['erros']} falha(s) ao falar com a Sonax."
+        )
+    else:
+        metrics["motivo"] = (
+            f"Consultei {metrics['verificadas']} ligação(ões). "
+            "Nenhuma mudança de status ou gravação nova."
+        )
     return metrics

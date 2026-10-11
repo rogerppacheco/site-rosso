@@ -7630,6 +7630,13 @@ def processar_webhook_whatsapp(data, request=None):
     from crm_app.whatsapp_webhook_normalizer import normalizar_webhook
     data = normalizar_webhook(data)
 
+    try:
+        from crm_app.services.whatsapp.atendimento_service import registrar_entrada_webhook
+
+        registrar_entrada_webhook(data)
+    except Exception:
+        logger.exception("[Webhook] Falha ao gravar atendimento WhatsApp")
+
     if getattr(django_settings, 'WHATSAPP_WEBHOOK_FASTPATH', True):
         from crm_app.whatsapp_webhook_fastpath import avaliar_fastpath_zapi
         rapido = avaliar_fastpath_zapi(data)
@@ -8614,7 +8621,7 @@ def processar_webhook_whatsapp(data, request=None):
         return {'status': 'ok', 'mensagem': 'Usuário não autorizado a chamar no bot'}
 
     def _enviar_material_record_apoia_da_sessao(caption=None):
-        """Envia material Record Apoia da sessão com legenda (sem mensagem de texto separada)."""
+        """Envia material do Apoia da sessão com legenda (sem mensagem de texto separada)."""
         if not sessao:
             return False
         try:
@@ -9058,8 +9065,8 @@ def processar_webhook_whatsapp(data, request=None):
             resposta = ''.join(linhas_menu)
             return _enviar_resposta_e_retornar(_com_prefixo_primeira_mensagem(resposta))
 
-        # Mensagem livre na etapa inicial: pode ser busca de material (Record Apoia) ou dúvida (IA).
-        # Se parecer pergunta/dúvida ou pedido de planos Nio, tentar a IA primeiro; senão tentar Record Apoia e depois IA como fallback.
+        # Mensagem livre na etapa inicial: pode ser busca de material (Apoia) ou dúvida (IA).
+        # Se parecer pergunta/dúvida ou pedido de planos Nio, tentar a IA primeiro; senão tentar o Apoia e depois IA como fallback.
         _mensagem_strip = (mensagem_texto or "").strip()
         _msg_lower = _mensagem_strip.lower()
         _parece_pergunta = (
@@ -9101,15 +9108,15 @@ def processar_webhook_whatsapp(data, request=None):
                     return _enviar_resposta_e_retornar(_com_prefixo_primeira_mensagem(resposta_fallback))
             except Exception as e:
                 logger.warning("[Webhook] Fallback IA (pergunta) falhou: %s", e)
-        # Busca direta por tag do Record Apoia (sem precisar digitar Material/Apoia)
+        # Busca direta por tag do Apoia (sem precisar digitar Material/Apoia)
         if etapa_atual == 'inicial' and mensagem_texto and len(mensagem_texto.strip()) >= 2:
             try:
-                logger.info(f"[Webhook] Busca direta por tag Record Apoia: \"{mensagem_texto.strip()}\"")
+                logger.info(f"[Webhook] Busca direta por tag Apoia: \"{mensagem_texto.strip()}\"")
                 resposta_busca = _buscar_record_apoia_por_texto(mensagem_texto.strip(), sessao)
                 if resposta_busca is not None:
                     return _enviar_resposta_e_retornar(_com_prefixo_primeira_mensagem(resposta_busca))
             except Exception as e:
-                logger.exception("[Webhook] Erro na busca direta Record Apoia: %s", e)
+                logger.exception("[Webhook] Erro na busca direta Apoia: %s", e)
         
         # === PROCESSAMENTO POR ETAPA ===
         elif etapa_atual.startswith('roubo_'):
@@ -11406,10 +11413,8 @@ def processar_webhook_whatsapp(data, request=None):
         logger.exception(f"[Webhook] Erro ao processar mensagem: {e}")
         return {'status': 'erro', 'mensagem': str(e)}
 
-# Injetado de nova-velox
 def _site_brand() -> str:
-    return getattr(settings, "SITE_BRAND_NAME", "Futura Telecom")
+    return settings.SITE_BRAND_NAME
 
-# Injetado de nova-velox
 def _site_brand_apoia() -> str:
     return f"{_site_brand()} Apoia"

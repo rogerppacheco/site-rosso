@@ -608,7 +608,11 @@ class AuditoriaLigacaoSincronizarLoteView(APIView):
             include_finalizadas_sem_gravacao=True,
         ) or {"verificadas": 0, "atualizadas": 0, "gravacoes": 0}
         
-        detail = f"Verificadas: {metrics.get('verificadas', 0)} | Atualizadas: {metrics.get('atualizadas', 0)} | Gravações baixadas: {metrics.get('gravacoes', 0)}"
+        detail = metrics.get("motivo") or (
+            f"Verificadas: {metrics.get('verificadas', 0)} | "
+            f"Atualizadas: {metrics.get('atualizadas', 0)} | "
+            f"Gravações baixadas: {metrics.get('gravacoes', 0)}"
+        )
         return Response({"detail": detail, "limite": limite, "metrics": metrics})
 
 

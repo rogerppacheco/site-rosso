@@ -13,6 +13,7 @@ from crm_app.models import (
     StatusCRM,
     Plano,
     FormaPagamento,
+    HistoricoAlteracaoVenda,
     HistoricoPapPedido
 )
 from crm_app.historico_pap import map_pedido_api
@@ -181,6 +182,33 @@ def sincronizar_pedido_pap_para_venda(pedido_id: int) -> dict:
     # Regra 3: Evitar duplicidade
     if Venda.objects.filter(pedido_pap=pedido_pap).exists():
         return {"sucesso": False, "mensagem": f"Venda com pedido {pedido_pap} já existe."}
+
+    # Venda digitada manualmente (sem pedido PAP) com a mesma O.S. é o mesmo pedido:
+    # vincula o pedido PAP a ela em vez de criar uma duplicada na auditoria.
+    os_pap = str(dados_mapeados.get("os_instalacao") or "").strip()
+    if os_pap:
+        mesma_os = Venda.objects.filter(ativo=True, ordem_servico=os_pap)
+        existente = (
+            mesma_os.filter(status_esteira__isnull=False).order_by("-id").first()
+            or mesma_os.order_by("-id").first()
+        )
+        if existente:
+            vinculou = not (existente.pedido_pap or "").strip()
+            if vinculou:
+                Venda.objects.filter(pk=existente.pk).update(pedido_pap=pedido_pap)
+                HistoricoAlteracaoVenda.objects.create(
+                    venda=existente,
+                    usuario=None,
+                    alteracoes={
+                        "pedido_pap": pedido_pap,
+                        "motivo": f"Pedido PAP vinculado automaticamente pela O.S. {os_pap}.",
+                    },
+                )
+            sufixo = f"; pedido {pedido_pap} vinculado" if vinculou else ""
+            return {
+                "sucesso": False,
+                "mensagem": f"Venda com O.S. {os_pap} já existe (#{existente.id}){sufixo}.",
+            }
 
     cpf_limpo = _somente_numeros(dados_mapeados.get("cpf") or "")
     if not cpf_limpo:

@@ -54,7 +54,7 @@ def responder_cliente_com_contexto_pedido(
 
     primeiro_nome = (nome_cliente or "Cliente").split()[0]
     system = f"""
-Você atende um cliente da Nio Fibra pelo WhatsApp ({getattr(settings, 'SITE_BRAND', 'ClickUp')}).
+Você atende um cliente da Nio Fibra pelo WhatsApp ({getattr(settings, 'SITE_BRAND', 'Rosso Telecom')}).
 Responda em português, tom cordial e profissional (sem abreviações: use "você", não "vc").
 Use APENAS os dados do pedido abaixo. Se a informação não estiver nos dados, diga que um especialista retornará.
 Não invente datas, status nem valores. Respostas curtas (ideal para WhatsApp).

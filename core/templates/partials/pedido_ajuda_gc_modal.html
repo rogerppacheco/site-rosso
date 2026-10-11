@@ -37,7 +37,7 @@
 
                     <div class="alert alert-info small mb-3 py-2">
                         Envia a máscara padrão ao <strong>e-mail</strong> e ao <strong>WhatsApp</strong> do GC cadastrado em Antecipar Instalação.
-                        PDV fixo: <strong>1068561</strong>.
+                        PDV fixo: <strong>{{ SITE_PDV_CODIGO }}</strong>.
                     </div>
 
                     <div class="row g-2">
@@ -47,7 +47,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold mb-1">PDV</label>
-                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-pdv" value="1068561" readonly>
+                            <input type="text" class="form-control form-control-sm" id="ajuda-gc-pdv" value="{{ SITE_PDV_CODIGO }}" readonly>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold mb-1">Login BO <span class="text-danger">*</span></label>
@@ -213,7 +213,7 @@
         if (form) form.reset();
         document.getElementById('ajuda-gc-origem').value = origemNorm;
         document.getElementById('ajuda-gc-venda-id').value = vendaId || '';
-        document.getElementById('ajuda-gc-pdv').value = '1068561';
+        document.getElementById('ajuda-gc-pdv').value = '{{ SITE_PDV_CODIGO|escapejs }}';
         document.getElementById('ajuda-gc-tipo').value = 'abrir_chamado_ti';
 
         try {
@@ -226,7 +226,7 @@
             if (!res.ok) throw new Error(data.detail || 'Erro ao carregar contexto');
 
             document.getElementById('ajuda-gc-nome').value = data.nome_gc || '';
-            document.getElementById('ajuda-gc-pdv').value = data.pdv || '1068561';
+            document.getElementById('ajuda-gc-pdv').value = data.pdv || '{{ SITE_PDV_CODIGO|escapejs }}';
             document.getElementById('ajuda-gc-login-bo').value = data.login_bo_sugerido || '';
             document.getElementById('ajuda-gc-login-vendedor').value = '';
             document.getElementById('ajuda-gc-cpf-cnpj').value = data.cpf_cnpj_cliente || '';

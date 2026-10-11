@@ -154,7 +154,7 @@ class N8nOutboundProvider(WhatsAppProvider):
         payload = {
             "phone_number": phone,
             "message_body": mensagem or "",
-            "source": "nova-velox",
+            "source": settings.SITE_SLUG,
         }
         ok, resp = self._dispatch_n8n(payload, timeout=10)
         if ok:
@@ -193,7 +193,7 @@ class N8nOutboundProvider(WhatsAppProvider):
             "media_url": pdf_url,
             "media_mimetype": "application/pdf",
             "media_file_name": nome_arquivo,
-            "source": "nova-velox",
+            "source": settings.SITE_SLUG,
         }
         ok, resposta = self._dispatch_n8n(payload, timeout=30)
         if ok:

@@ -1,4 +1,3 @@
-# site-bn/usuarios/permissions.py
 
 from rest_framework import permissions
 

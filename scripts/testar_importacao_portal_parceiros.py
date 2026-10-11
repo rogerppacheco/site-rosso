@@ -19,7 +19,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core_config.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gestao_equipes.settings')
 os.environ.setdefault('SECRET_KEY', 'local-dev-test-portal-parceiros-import')
 os.environ.setdefault('DEBUG', 'True')
 

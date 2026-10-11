@@ -4,6 +4,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from usuarios.models import Usuario
 from django.conf import settings
+from django.utils import timezone
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import uuid
@@ -1765,7 +1766,7 @@ class Comunicado(models.Model):
         return f"{self.titulo} - {self.get_status_display()}"
     
     class Meta:
-        verbose_name = "Comunicado (Futura Telecom Informa)"
+        verbose_name = "Comunicado (Informa)"
         verbose_name_plural = "Comunicados"
         ordering = ['-data_programada', '-hora_programada']
 
@@ -2524,7 +2525,7 @@ class PedidoAjudaGc(models.Model):
     nome_gc = models.CharField(max_length=100, blank=True, default='')
     email_gc = models.EmailField(max_length=254, blank=True, default='')
     telefone_gc = models.CharField(max_length=20, blank=True, default='')
-    pdv = models.CharField(max_length=20, default='1068561')
+    pdv = models.CharField(max_length=20, default='1009270')
     login_bo = models.CharField(max_length=100, blank=True, default='')
     login_vendedor = models.CharField(max_length=100, blank=True, default='')
     cpf_cnpj_cliente = models.CharField(max_length=20, blank=True, default='')
@@ -3134,7 +3135,6 @@ class NioReagendamentoItem(models.Model):
         return f"Nio item #{self.id} venda={self.venda_id} — {self.status}"
 
 
-# No arquivo site-record/crm_app/models.py
 
 class CdoiSolicitacao(models.Model):
     STATUS_CHOICES = [
@@ -3230,7 +3230,7 @@ class LinkPublicoPreVenda(models.Model):
             base_url = request.build_absolute_uri('/')[:-1]
         else:
             from django.conf import settings
-            base_url = getattr(settings, 'SITE_URL', 'https://site-clickup-production.up.railway.app')
+            base_url = (getattr(settings, 'SITE_URL', '') or '').rstrip('/')
         return f"{base_url}/prevenda-publica/{self.codigo_unico}/"
 
 
@@ -4355,7 +4355,6 @@ class LogImportacaoGdpPreco(models.Model):
         return f'{self.nome_arquivo} - {self.status} ({self.iniciado_em.strftime("%d/%m/%Y %H:%M")})'
 
 
-# Injetado de nova-velox
 class GdpPrecoMunicipioQuerySet(models.QuerySet):
     """Consultas eficientes para preços GDP vigentes."""
 
@@ -4395,7 +4394,6 @@ class GdpPrecoMunicipioQuerySet(models.QuerySet):
         return qs
 
 
-# Injetado de nova-velox
 class GdpPrecoMunicipioQuerySet(models.QuerySet):
     """Consultas eficientes para preços GDP vigentes."""
 
@@ -4434,7 +4432,6 @@ class GdpPrecoMunicipioQuerySet(models.QuerySet):
             qs = qs.filter(uf=uf_norm)
         return qs
 
-# Injetado de nova-velox
 class GdpPrecoMunicipioManager(models.Manager):
     def get_queryset(self) -> GdpPrecoMunicipioQuerySet:
         return GdpPrecoMunicipioQuerySet(self.model, using=self._db)
@@ -4545,7 +4542,7 @@ class LogImportacaoRecompra(models.Model):
 
 
 class RecordApoia(models.Model):
-    """Repositório de arquivos Futura Telecom Apoia - Acesso público para todos os usuários"""
+    """Repositório de arquivos do Apoia - Acesso público para todos os usuários"""
     
     TIPO_ARQUIVO_CHOICES = [
         ('PDF', 'PDF'),
@@ -4626,8 +4623,8 @@ class RecordApoia(models.Model):
     )
     
     class Meta:
-        verbose_name = "Arquivo Futura Telecom Apoia"
-        verbose_name_plural = "Arquivos Futura Telecom Apoia"
+        verbose_name = "Arquivo Apoia"
+        verbose_name_plural = "Arquivos Apoia"
         ordering = ['-data_upload']
         indexes = [
             models.Index(fields=['tipo_arquivo']),
@@ -5236,6 +5233,85 @@ class WhatsAppTelefoneSemIa(models.Model):
         super().save(*args, **kwargs)
 
 
+class MensagemWhatsAppAtendimento(models.Model):
+    """Histórico do atendimento WhatsApp no número do cliente (Cloud API).
+
+    Guarda texto de sessão e o registro dos modelos enviados pelo CRM,
+    ligados ao telefone e, quando existir, ao pedido.
+    """
+
+    DIRECAO_ENTRADA = "ENTRADA"
+    DIRECAO_SAIDA = "SAIDA"
+    DIRECAO_CHOICES = (
+        (DIRECAO_ENTRADA, "Recebida"),
+        (DIRECAO_SAIDA, "Enviada"),
+    )
+
+    TIPO_SESSAO = "SESSAO"
+    TIPO_MODELO = "MODELO"
+    TIPO_CHOICES = (
+        (TIPO_SESSAO, "Sessão"),
+        (TIPO_MODELO, "Modelo"),
+    )
+
+    ORIGEM_WEBHOOK = "WEBHOOK"
+    ORIGEM_OPERADOR = "OPERADOR"
+    ORIGEM_CRM = "CRM"
+    ORIGEM_CANAL = "CANAL"
+
+    telefone = models.CharField(
+        max_length=20,
+        db_index=True,
+        help_text="Telefone normalizado, somente dígitos, sem DDI 55.",
+    )
+    venda = models.ForeignKey(
+        "Venda",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mensagens_whatsapp_atendimento",
+    )
+    direcao = models.CharField(max_length=10, choices=DIRECAO_CHOICES, db_index=True)
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default=TIPO_SESSAO)
+    texto = models.TextField(blank=True, default="")
+    template_name = models.CharField(max_length=120, blank=True, default="")
+    message_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    origem = models.CharField(max_length=20, blank=True, default=ORIGEM_CRM)
+    sucesso = models.BooleanField(default=True)
+    erro = models.TextField(blank=True, default="")
+    enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mensagens_whatsapp_atendimento_enviadas",
+    )
+    data_hora = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        db_table = "crm_mensagem_whatsapp_atendimento"
+        verbose_name = "Mensagem de atendimento WhatsApp"
+        verbose_name_plural = "Mensagens de atendimento WhatsApp"
+        ordering = ["data_hora", "id"]
+        indexes = [
+            models.Index(fields=["telefone", "-data_hora"], name="crm_wa_atend_tel_dt_idx"),
+            models.Index(
+                fields=["telefone", "direcao", "-data_hora"],
+                name="crm_wa_atend_tel_dir_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message_id", "direcao"],
+                condition=~models.Q(message_id=""),
+                name="uniq_wa_atend_msgid_dir",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.telefone} {self.direcao} {self.data_hora:%d/%m/%Y %H:%M}"
+
+
 class SessaoTratamento(models.Model):
     """Cronômetro server-side do tempo que um usuário gasta tratando uma venda.
 
@@ -5459,7 +5535,6 @@ class QualidadeFocoTratamento(models.Model):
         return f'{self.usuario_id} {self.indicador} {seg}'
 
 
-# Injetado de nova-velox
 class GdpPrecoMunicipioManager(models.Manager):
     def get_queryset(self) -> GdpPrecoMunicipioQuerySet:
         return GdpPrecoMunicipioQuerySet(self.model, using=self._db)

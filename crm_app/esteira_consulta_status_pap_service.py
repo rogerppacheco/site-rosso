@@ -1124,7 +1124,6 @@ def criar_e_iniciar_consulta_aba(*, usuario, filtros: Dict[str, Any]) -> Tuple[O
     t.start()
     return execucao.id, None, total
 
-# Injetado de site-record
 def mensagem_erro_consulta_pap_para_usuario(msg: str) -> str:
     """Traduz erro técnico do job para texto exibível na Esteira."""
     raw = (msg or '').strip()

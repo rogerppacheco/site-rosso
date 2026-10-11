@@ -12,7 +12,7 @@ from crm_app.services.whatsapp.phone_utils import destino_evolution, formatar_te
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_INSTANCE = "nova_velox_zap"
+DEFAULT_INSTANCE = "site_rosso_zap"
 
 
 class EvolutionProvider(WhatsAppProvider):
@@ -362,7 +362,6 @@ class EvolutionProvider(WhatsAppProvider):
             return b64
         return None
 
-# Injetado de site-gm
 def _evo_cfg(name: str, default: str = "") -> str:
     val = ""
     if django_settings is not None:

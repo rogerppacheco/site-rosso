@@ -10,7 +10,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_INSTANCE = "site_bn_zap"
+DEFAULT_INSTANCE = "site_rosso_zap"
 
 
 class EvolutionConnectionError(Exception):

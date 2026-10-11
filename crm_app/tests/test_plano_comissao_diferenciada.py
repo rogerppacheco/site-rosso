@@ -227,7 +227,6 @@ class ComissaoCidadeEspecialServiceTest(SimpleTestCase):
         self.assertIn(('SP', 'CAMPINAS'), CIDADES_OFERTA_ESPECIAL)
         self.assertIn(('PR', 'LONDRINA'), CIDADES_OFERTA_ESPECIAL)
 
-# Injetado de nova-velox
 class AgrupamentoPlanoCadastradoTest(SimpleTestCase):
     def test_plano_fora_da_grade_excel_ainda_agrupa(self) -> None:
         plano = MagicMock()

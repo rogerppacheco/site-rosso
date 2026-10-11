@@ -28,10 +28,11 @@ except ImportError:
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScnXtSMB3EMutB88IfAg3ihGxUj60nAM6BZqmt4m24TsyPoAw/viewform"
 
 # Valores fixos do formulário
-CODIGO_SAP = "1068561"
+CODIGO_SAP = getattr(settings, "SITE_PDV_CODIGO", "") or "1009270"
 EXECUTIVO = "ROGERIO PEREIRA PACHECO"
 TIPO_CANAL = "PAP"
-EMPRESA_VENDAS = "CLICKUP"
+# Precisa existir como opção no dropdown "Empresa" do formulário da Nio.
+EMPRESA_VENDAS = getattr(settings, "INCLUSAO_EMPRESA_VENDAS", "") or "ROSSO"
 
 # Mapeamento UF (sigla ViaCEP) -> nome completo (Google Forms)
 UF_SIGLA_PARA_NOME = {
@@ -75,7 +76,7 @@ def _env_ou_decouple(chave: str, default: str = "") -> str:
 
 def _email_formulario() -> str:
     """E-mail preenchido no *campo* do Google Forms (não é a conta de login)."""
-    return _env_ou_decouple("GOOGLE_FORM_EMAIL", "comunicacao@futuratelecom.com.br")
+    return _env_ou_decouple("GOOGLE_FORM_EMAIL", getattr(settings, "GOOGLE_FORM_EMAIL", ""))
 
 
 def _email_login_google() -> str:
@@ -265,7 +266,7 @@ def buscar_coordenadas(endereco_completo: str) -> Optional[dict]:
     endereco_completo: ex "Rua X, 123, Cidade - UF, Brasil"
     """
     try:
-        headers = {'User-Agent': 'ClickUpCRM_Inclusao/1.0'}
+        headers = {'User-Agent': 'RossoCRM_Inclusao/1.0'}
         params = {'q': endereco_completo, 'format': 'json', 'limit': 1}
         resp = requests.get(
             "https://nominatim.openstreetmap.org/search",

@@ -38,7 +38,7 @@ def _tunnel_db_and_creds(matricula_preferida: str = "TT731913"):
     os.chdir(BASE_DIR)
     d = json.loads(
         subprocess.run(
-            [railway, "variable", "list", "--service", "site-gm", "--json"],
+            [railway, "variable", "list", "--service", "site-rosso", "--json"],
             capture_output=True,
             text=True,
             encoding="utf-8",

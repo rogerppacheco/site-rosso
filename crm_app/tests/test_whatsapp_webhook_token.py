@@ -48,17 +48,16 @@ class TestWebhookTokenWhatsAtende(SimpleTestCase):
 
     @override_settings(
         WHATSATENDE_WEBHOOK_TOKEN="abc123",
-        SITE_URL="https://site-bn-production.up.railway.app",
+        SITE_URL="https://site-rosso-production.up.railway.app",
     )
     def test_montar_url_com_token(self) -> None:
         url = montar_url_webhook_whatsatende()
         self.assertEqual(
             url,
-            "https://site-bn-production.up.railway.app/api/crm/webhook-whatsapp/abc123/",
+            "https://site-rosso-production.up.railway.app/api/crm/webhook-whatsapp/abc123/",
         )
 
 
-# Injetado de site-clickup
 class TestWebhookTokenWhatsAtende(SimpleTestCase):
     def setUp(self) -> None:
         self.factory = RequestFactory()
@@ -98,11 +97,11 @@ class TestWebhookTokenWhatsAtende(SimpleTestCase):
 
     @override_settings(
         WHATSATENDE_WEBHOOK_TOKEN="abc123",
-        SITE_URL="https://site-clickup-production.up.railway.app",
+        SITE_URL="https://site-rosso-production.up.railway.app",
     )
     def test_montar_url_com_token(self) -> None:
         url = montar_url_webhook_whatsatende()
         self.assertEqual(
             url,
-            "https://site-clickup-production.up.railway.app/api/crm/webhook-whatsapp/abc123/",
+            "https://site-rosso-production.up.railway.app/api/crm/webhook-whatsapp/abc123/",
         )

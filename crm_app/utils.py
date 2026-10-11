@@ -148,7 +148,7 @@ def buscar_coordenadas_viacep_nominatim(cep, numero):
         # Ex: "Rua das Flores, 123, Belo Horizonte - MG, Brasil"
         query = f"{logradouro}, {numero}, {cidade} - {uf}, Brasil"
         
-        headers = {'User-Agent': 'RecordPAP_System/2.0'}
+        headers = {'User-Agent': 'RossoCRM/2.0'}
         url_geo = "https://nominatim.openstreetmap.org/search"
         # O '1' no limit tenta pegar o mais preciso
         params = {'q': query, 'format': 'json', 'limit': 1}
@@ -931,7 +931,7 @@ def alertar_status_agendamento_pap_nao_mapeado(
         return False
     os_txt = (os_num or "").strip() or "?"
     venda_txt = f"#{venda_id}" if venda_id else "?"
-    brand = getattr(settings, "SITE_BRAND", "ClickUp")
+    brand = getattr(settings, "SITE_BRAND", "Rosso Telecom")
     msg = (
         f"⚠️ *Status de agendamento não mapeado no CRM {brand}*\n\n"
         f"*Texto no PAP:* {texto_pap}\n"

@@ -2,7 +2,7 @@
 Worker dedicado para automações Playwright/PAP (fila PostgreSQL).
 
 Uso: python manage.py run_pap_worker
-Railway: serviço nova-velox-pap com PAP_WORKER_MODE=true
+Railway: serviço site-rosso-pap com PAP_WORKER_MODE=true
 """
 from __future__ import annotations
 

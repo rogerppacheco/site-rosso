@@ -9,4 +9,5 @@ def branding(request):
         "SITE_URL": getattr(settings, "SITE_URL", ""),
         "SITE_CONTACT_PHONE": getattr(settings, "SITE_CONTACT_PHONE", ""),
         "SITE_CONTACT_EMAIL": getattr(settings, "SITE_CONTACT_EMAIL", ""),
+        "SITE_PDV_CODIGO": getattr(settings, "SITE_PDV_CODIGO", ""),
     }

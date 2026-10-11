@@ -3012,7 +3012,7 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
 
 def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
     """
-    Fluxo alinhado ao site-record (Bearer + cookies-first + API direta),
+    Fluxo padrão do PAP (Bearer + cookies-first + API direta),
     com reúso de sessão para reduzir logins na Nio.
 
     Só invalida storage state se a API rejeitar o token (401/invalid signature),

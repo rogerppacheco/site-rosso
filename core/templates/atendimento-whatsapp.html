@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Atendimento WhatsApp - {{ SITE_BRAND }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .wa-inbox { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .wa-layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; min-height: 70vh; }
+    .wa-lista, .wa-chat { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); display: flex; flex-direction: column; min-height: 560px; }
+    .wa-lista-head, .wa-chat-head { padding: 14px 16px; border-bottom: 1px solid var(--border-color); }
+    .wa-busca { width: 100%; }
+    .wa-conversas { overflow-y: auto; flex: 1; }
+    .wa-item { padding: 12px 14px; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+    .wa-item:hover, .wa-item.ativo { background: var(--bg-secondary); }
+    .wa-item .nome { font-weight: 600; }
+    .wa-item .preview { color: var(--text-muted, #6c757d); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wa-msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; background: var(--bg-secondary); }
+    .wa-bubble { max-width: 80%; border-radius: 10px; padding: 8px 12px; }
+    .wa-bubble.entrada { align-self: flex-start; background: color-mix(in srgb, var(--color-info, #0d6efd) 16%, var(--bg-card)); }
+    .wa-bubble.saida { align-self: flex-end; background: color-mix(in srgb, var(--color-success, #198754) 16%, var(--bg-card)); }
+    .wa-bubble .meta { font-size: 0.75rem; opacity: 0.8; margin-bottom: 4px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .wa-bubble .corpo { white-space: pre-wrap; word-break: break-word; }
+    .wa-composer { padding: 12px 16px; border-top: 1px solid var(--border-color); }
+    .wa-vazio { padding: 24px; color: var(--text-muted, #6c757d); }
+    .wa-falha { font-size: 0.75rem; color: var(--color-danger, #dc3545); }
+    @media (max-width: 860px) {
+        .wa-layout { grid-template-columns: 1fr; }
+        .wa-lista { min-height: 280px; max-height: 360px; }
+    }
+</style>
+{% endblock %}
+
+{% block header_nav %}
+    <li><a href="/area-interna/" class="nav-button">Área Interna</a></li>
+    <li><a href="/boas-vindas/" class="nav-button">Boas Vindas</a></li>
+    <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
+{% endblock %}
+
+{% block content %}
+<div class="wa-inbox">
+    <h2 class="mb-1"><i class="bi bi-whatsapp text-success"></i> Atendimento WhatsApp</h2>
+    <p class="text-muted mb-3">Todas as mensagens recebidas e enviadas no número oficial. Texto livre só dentro da janela de 24 horas da Meta.</p>
+    <div class="wa-layout">
+        <section class="wa-lista">
+            <div class="wa-lista-head">
+                <input type="search" id="busca" class="form-control wa-busca" placeholder="Buscar cliente ou telefone">
+            </div>
+            <div id="lista-conversas" class="wa-conversas">
+                <div class="wa-vazio">Carregando conversas…</div>
+            </div>
+        </section>
+        <section class="wa-chat">
+            <div class="wa-chat-head" id="chat-head">
+                <strong>Selecione uma conversa</strong>
+                <div class="small text-muted">Direção, horário e se a mensagem foi modelo ou sessão aparecem no histórico.</div>
+            </div>
+            <div id="chat-msgs" class="wa-msgs">
+                <div class="wa-vazio">Nenhuma conversa aberta.</div>
+            </div>
+            <div class="wa-composer" id="composer" hidden>
+                <div id="aviso-janela" class="alert alert-warning py-2 small" hidden></div>
+                <div id="janela-aberta" class="small text-success mb-2" hidden></div>
+                <div id="aviso-canal" class="alert alert-info py-2 small" hidden></div>
+                <div class="d-flex gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-assumir">Assumir conversa</button>
+                    <span class="small text-muted align-self-center" id="bot-status"></span>
+                </div>
+                <div class="input-group">
+                    <textarea id="texto-resposta" class="form-control" rows="2" placeholder="Escreva a resposta" maxlength="4000"></textarea>
+                    <button type="button" class="btn btn-success" id="btn-enviar"><i class="bi bi-send"></i> Enviar</button>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script>
+    if (!localStorage.getItem('accessToken')) { window.location.href = '/'; }
+    const API = '/api/crm/atendimento-whatsapp';
+    let telefoneAberto = null;
+    let timer = null;
+
+    function api(path, opts = {}) {
+        const token = localStorage.getItem('accessToken');
+        const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+        if (token) headers.Authorization = 'Bearer ' + token;
+        return fetch(API + path, { ...opts, headers }).then(async (r) => {
+            if (r.status === 401) { logout(); throw new Error('Sessão expirada'); }
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                const err = new Error(body.detail || 'Não foi possível concluir.');
+                err.status = r.status;
+                err.body = body;
+                throw err;
+            }
+            return body;
+        });
+    }
+
+    function esc(valor) {
+        return String(valor ?? '').replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    function hora(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderLista(items) {
+        const el = document.getElementById('lista-conversas');
+        if (!items.length) {
+            el.innerHTML = '<div class="wa-vazio">Nenhuma conversa ainda. As mensagens do número oficial aparecem aqui conforme chegam e são enviadas pelo CRM.</div>';
+            return;
+        }
+        el.innerHTML = items.map((item) => `
+            <div class="wa-item ${item.telefone === telefoneAberto ? 'ativo' : ''}" data-tel="${esc(item.telefone)}">
+                <div class="d-flex justify-content-between gap-2">
+                    <span class="nome">${esc(item.cliente || item.telefone_exibicao)}</span>
+                    <span class="small text-muted">${hora(item.ultima_em)}</span>
+                </div>
+                <div class="small text-muted">${esc(item.telefone_exibicao)}${item.venda_id ? ' · Pedido #' + item.venda_id : ''}</div>
+                <div class="preview">${item.ultima_tipo === 'MODELO' ? 'Modelo' : 'Sessão'} · ${esc(item.ultima_mensagem || '')}</div>
+                <div class="mt-1">${item.janela_aberta ? '<span class="badge bg-success">Janela 24h aberta</span>' : '<span class="badge bg-secondary">Janela 24h fechada</span>'}</div>
+            </div>
+        `).join('');
+        el.querySelectorAll('.wa-item').forEach((node) => {
+            node.onclick = () => abrir(node.dataset.tel);
+        });
+    }
+
+    function renderChat(data) {
+        const head = document.getElementById('chat-head');
+        const msgs = document.getElementById('chat-msgs');
+        const composer = document.getElementById('composer');
+        const aviso = document.getElementById('aviso-janela');
+        const aberta = document.getElementById('janela-aberta');
+        const campo = document.getElementById('texto-resposta');
+        const enviar = document.getElementById('btn-enviar');
+        const bot = document.getElementById('bot-status');
+        const btnAssumir = document.getElementById('btn-assumir');
+
+        composer.hidden = false;
+        const titulo = data.cliente || data.telefone_exibicao;
+        const pedido = data.venda_id ? `Pedido #${data.venda_id}` : 'Sem pedido vinculado';
+        head.innerHTML = `<strong>${esc(titulo)}</strong>
+            <div class="small text-muted">${esc(data.telefone_exibicao)} · ${esc(pedido)}</div>`;
+
+        if (!data.mensagens.length) {
+            msgs.innerHTML = '<div class="wa-vazio">Esta conversa ainda não tem mensagens.</div>';
+        } else {
+            msgs.innerHTML = data.mensagens.map((m) => `
+                <div class="wa-bubble ${m.direcao === 'ENTRADA' ? 'entrada' : 'saida'}">
+                    <div class="meta">
+                        <span>${esc(m.direcao_label)}</span>
+                        <span>${esc(m.tipo_label)}</span>
+                        <span>${hora(m.data_hora)}</span>
+                        ${m.enviado_por ? `<span>${esc(m.enviado_por)}</span>` : ''}
+                    </div>
+                    <div class="corpo">${esc(m.texto || '')}</div>
+                    ${m.sucesso ? '' : `<div class="wa-falha">Não enviada${m.erro ? ': ' + esc(m.erro) : ''}</div>`}
+                </div>
+            `).join('');
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        if (data.janela_aberta) {
+            aviso.hidden = true;
+            aviso.textContent = '';
+            aberta.hidden = false;
+            aberta.textContent = 'Janela de 24 horas aberta até ' + hora(data.janela_ate) + '. Texto livre permitido pela Cloud API.';
+            campo.disabled = false;
+            enviar.disabled = false;
+        } else {
+            aberta.hidden = true;
+            aviso.hidden = false;
+            aviso.textContent = data.aviso_janela || 'A janela de 24 horas está fechada. Só um modelo aprovado pode reabrir a conversa.';
+            campo.disabled = true;
+            enviar.disabled = true;
+            campo.value = '';
+        }
+
+        const avisoCanal = document.getElementById('aviso-canal');
+        if (data.janela_aberta && data.canal_oficial_pronto === false) {
+            avisoCanal.hidden = false;
+            avisoCanal.textContent = data.aviso_canal || 'O número oficial ainda não está liberado para envio a clientes.';
+            campo.disabled = true;
+            enviar.disabled = true;
+        } else {
+            avisoCanal.hidden = true;
+            avisoCanal.textContent = '';
+        }
+
+        if (data.bot_pausado) {
+            bot.textContent = 'Bot pausado neste número.';
+            btnAssumir.disabled = true;
+            btnAssumir.textContent = 'Conversa assumida';
+        } else {
+            bot.textContent = 'O bot ainda pode responder neste número.';
+            btnAssumir.disabled = false;
+            btnAssumir.textContent = 'Assumir conversa';
+        }
+    }
+
+    async function carregarLista() {
+        const q = document.getElementById('busca').value.trim();
+        const r = await api('/conversas/' + (q ? ('?q=' + encodeURIComponent(q)) : ''));
+        renderLista(r.items || []);
+    }
+
+    async function abrir(telefone, silencioso) {
+        telefoneAberto = telefone;
+        document.querySelectorAll('.wa-item').forEach((node) => {
+            node.classList.toggle('ativo', node.dataset.tel === telefone);
+        });
+        try {
+            const data = await api('/conversas/' + encodeURIComponent(telefone) + '/');
+            renderChat(data);
+        } catch (e) {
+            if (!silencioso) alert(e.message || e);
+        }
+    }
+
+    document.getElementById('btn-enviar').onclick = async () => {
+        if (!telefoneAberto) return;
+        const campo = document.getElementById('texto-resposta');
+        const texto = campo.value.trim();
+        if (!texto) return;
+        const btn = document.getElementById('btn-enviar');
+        btn.disabled = true;
+        try {
+            const r = await api('/conversas/' + encodeURIComponent(telefoneAberto) + '/responder/', {
+                method: 'POST',
+                body: JSON.stringify({ texto }),
+            });
+            campo.value = '';
+            if (r.conversa) renderChat(r.conversa);
+            else await abrir(telefoneAberto, true);
+            await carregarLista();
+        } catch (e) {
+            if (e.body && e.body.conversa) renderChat(e.body.conversa);
+            alert(e.message || e);
+        } finally {
+            if (!document.getElementById('janela-aberta').hidden && document.getElementById('aviso-canal').hidden) {
+                btn.disabled = false;
+            }
+        }
+    };
+
+    document.getElementById('btn-assumir').onclick = async () => {
+        if (!telefoneAberto) return;
+        try {
+            const r = await api('/conversas/' + encodeURIComponent(telefoneAberto) + '/assumir/', { method: 'POST', body: '{}' });
+            if (r.conversa) renderChat(r.conversa);
+        } catch (e) {
+            alert(e.message || e);
+        }
+    };
+
+    let buscaTimer = null;
+    document.getElementById('busca').addEventListener('input', () => {
+        clearTimeout(buscaTimer);
+        buscaTimer = setTimeout(() => carregarLista().catch((e) => alert(e.message || e)), 300);
+    });
+
+    carregarLista().catch((e) => {
+        document.getElementById('lista-conversas').innerHTML = '<div class="wa-vazio">' + esc(e.message || e) + '</div>';
+    });
+    timer = setInterval(() => {
+        carregarLista().catch(() => {});
+        if (telefoneAberto) abrir(telefoneAberto, true);
+    }, 12000);
+</script>
+{% endblock %}

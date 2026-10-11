@@ -15,7 +15,7 @@ from crm_app.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
 
-PDV_PADRAO = '1068561'
+PDV_PADRAO = getattr(settings, 'SITE_PDV_CODIGO', '') or '1009270'
 
 ETAPAS_PADRAO_AUDITORIA: list[tuple[str, int]] = [
     ('Etapa 1: Identificação PDV', 1),

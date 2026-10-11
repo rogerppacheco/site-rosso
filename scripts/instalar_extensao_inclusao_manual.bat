@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-set EXT=C:\site-record\chrome_extension_inclusao_forms
+set EXT=C:\Projeto_Sysr\site-rosso\chrome_extension_inclusao_forms
 
 echo.
 echo ========================================
-echo  Instalacao da extensao Record Inclusao
+echo  Instalacao da extensao Rosso Inclusao
 echo ========================================
 echo.
 echo O Chrome 150 bloqueia instalacao automatica.

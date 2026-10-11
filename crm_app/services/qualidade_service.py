@@ -2534,7 +2534,7 @@ def montar_mensagem_cobranca_roteiro1(
     nome_atendente: str = '_________',
 ) -> str:
     """Monta texto do Roteiro 1 da Jornada de Cobrança (2ª via + barras + PIX)."""
-    parceiro = (nome_parceiro or getattr(settings, 'SITE_BRAND', 'ClickUp')).strip() or 'ClickUp'
+    parceiro = (nome_parceiro or getattr(settings, 'SITE_BRAND', 'Rosso Telecom')).strip() or 'Rosso Telecom'
     nome_cliente = (contrato.cliente_nome or 'cliente').strip()
     saudacao = _saudacao_periodo()
     codigo_barras = (fatura.codigo_barras or '').strip() or '(código de barras indisponível)'

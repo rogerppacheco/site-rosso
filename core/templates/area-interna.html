@@ -186,6 +186,11 @@
                 <span class="app-title">Boas Vindas</span>
             </a>
 
+            <a href="/atendimento-whatsapp/" class="app-card card-modern" id="card-atendimento-whatsapp">
+                <i class="bi bi-whatsapp app-icon icon-bonus"></i>
+                <span class="app-title">Atendimento WhatsApp</span>
+            </a>
+
             <!-- Q -->
             <a href="{% url 'page_qualidade' %}" class="app-card card-modern" id="card-qualidade">
                 <i class="bi bi-shield-check app-icon icon-auditoria"></i>
@@ -312,11 +317,11 @@
                 'Admin': 'all',
 
                 // Acesso Backoffice (inclui Qualidade)
-                'BackOffice': ['card-antecipar', 'card-boas-vindas', 'card-vendas', 'card-informa', 'card-esteira', 'card-auditoria', 'card-performance', 'card-importacoes', 'card-cdoi', 'card-apoia', 'card-conhecimento-ia', 'card-qualidade', 'card-controle-tts', 'card-whatsapp-config'],
+                'BackOffice': ['card-antecipar', 'card-boas-vindas', 'card-atendimento-whatsapp', 'card-vendas', 'card-informa', 'card-esteira', 'card-auditoria', 'card-performance', 'card-importacoes', 'card-cdoi', 'card-apoia', 'card-conhecimento-ia', 'card-qualidade', 'card-controle-tts', 'card-whatsapp-config'],
 
                 // Qualidade (sem valores de bônus R$ — só Diretoria/Admin na API)
-                'Qualidade': ['card-qualidade', 'card-esteira', 'card-auditoria', 'card-boas-vindas', 'card-vendas', 'card-informa', 'card-importacoes', 'card-apoia', 'card-conhecimento-ia'],
-                'Auditoria': ['card-qualidade', 'card-esteira', 'card-auditoria', 'card-boas-vindas', 'card-vendas', 'card-informa', 'card-importacoes', 'card-apoia', 'card-conhecimento-ia'],
+                'Qualidade': ['card-qualidade', 'card-esteira', 'card-auditoria', 'card-boas-vindas', 'card-atendimento-whatsapp', 'card-vendas', 'card-informa', 'card-importacoes', 'card-apoia', 'card-conhecimento-ia'],
+                'Auditoria': ['card-qualidade', 'card-esteira', 'card-auditoria', 'card-boas-vindas', 'card-atendimento-whatsapp', 'card-vendas', 'card-informa', 'card-importacoes', 'card-apoia', 'card-conhecimento-ia'],
 
                 // Gerente de Contas — somente leitura (Performance, Esteira, Auditoria, FPD)
                 'Gerente de Contas': ['card-performance', 'card-esteira', 'card-auditoria', 'card-qualidade'],

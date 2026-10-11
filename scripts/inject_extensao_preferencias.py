@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 EXT_ID = "cgmpkggpemhfojadajkcofmjmbhbihla"
-EXT_DIR = Path(r"C:\site-bn\chrome_extension_inclusao_forms").resolve()
+EXT_DIR = Path(r"C:\Projeto_Sysr\site-rosso\chrome_extension_inclusao_forms").resolve()
 PREFS = Path(os.environ["LOCALAPPDATA"]) / "Google" / "Chrome" / "User Data" / "Default" / "Preferences"
 EDGE_PREFS = [
     Path(os.environ["LOCALAPPDATA"]) / "Microsoft" / "Edge" / "User Data" / "Default" / "Preferences",
@@ -39,8 +39,8 @@ def inject(prefs_path: Path) -> None:
             "explicit_host": list(manifest.get("host_permissions") or []),
             "manifest_permissions": [],
             "scriptable_host": [
-                "https://site-clickup-production.up.railway.app/*",
-                "https://site-clickup-production.up.railway.app/*",
+                "https://site-rosso-production.up.railway.app/*",
+                "https://site-rosso-production.up.railway.app/*",
                 "http://localhost:8000/*",
                 "http://127.0.0.1:8000/*",
                 "https://docs.google.com/forms/*",
@@ -56,8 +56,8 @@ def inject(prefs_path: Path) -> None:
             "explicit_host": list(manifest.get("host_permissions") or []),
             "manifest_permissions": [],
             "scriptable_host": [
-                "https://site-clickup-production.up.railway.app/*",
-                "https://site-clickup-production.up.railway.app/*",
+                "https://site-rosso-production.up.railway.app/*",
+                "https://site-rosso-production.up.railway.app/*",
                 "http://localhost:8000/*",
                 "http://127.0.0.1:8000/*",
                 "https://docs.google.com/forms/*",

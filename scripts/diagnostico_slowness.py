@@ -25,7 +25,7 @@ import time
 from collections import defaultdict
 
 print("=" * 80)
-print("DIAGNÓSTICO DE PERFORMANCE - RECORDPAP")
+print("DIAGNÓSTICO DE PERFORMANCE - ROSSO")
 print("=" * 80)
 
 # 1. Habilitar logging de SQL

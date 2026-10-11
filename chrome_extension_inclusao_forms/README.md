@@ -7,7 +7,7 @@ Preenche o Google Forms de Inclusão a partir da aba **Auditoria → Inclusão**
 1. Abra `chrome://extensions`
 2. Ative **Modo do desenvolvedor**
 3. **Carregar sem compactação** → selecione esta pasta (`chrome_extension_inclusao_forms`)
-4. Faça login no Record PAP e no Google (conta que abre o formulário)
+4. Faça login no sistema Rosso Telecom e no Google (conta que abre o formulário)
 5. Em Auditoria, aba **Inclusão**, clique em **Abrir no Forms**
 
 ## Fluxo

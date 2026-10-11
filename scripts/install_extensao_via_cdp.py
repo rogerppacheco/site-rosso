@@ -13,7 +13,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-EXT_DIR = str(Path(r"C:\site-bn\chrome_extension_inclusao_forms").resolve())
+EXT_DIR = str(Path(r"C:\Projeto_Sysr\site-rosso\chrome_extension_inclusao_forms").resolve())
 
 
 def cdp_http(port: int, path: str) -> dict | list:
@@ -57,7 +57,7 @@ def launch(browser: str, exe: Path, port: int) -> None:
         str(exe),
         f"--remote-debugging-port={port}",
         "--enable-unsafe-extension-debugging",
-        "https://site-clickup-production.up.railway.app/auditoria/",
+        "https://site-rosso-production.up.railway.app/auditoria/",
         "chrome://extensions/" if browser == "chrome" else "edge://extensions/",
     ]
     subprocess.Popen(args)

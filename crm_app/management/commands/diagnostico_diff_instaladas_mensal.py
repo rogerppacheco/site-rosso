@@ -1,6 +1,6 @@
 """
 Diagnóstico: diferença entre contagem de INSTALADAS (mensal) na tela Performance,
-na exportação Excel (aba Mês Atual) e no Dashboard (Record Vendas).
+na exportação Excel (aba Mês Atual) e no Dashboard (Vendas).
 
 Replica as regras atuais de crm_app/views.py (PainelPerformanceView,
 ExportarPerformanceExcelView, DashboardResumoView) sem alterar dados.
@@ -221,7 +221,7 @@ class Command(BaseCommand):
         self.stdout.write(
             f'Painel Performance instaladas — MÊS FECHADO [início, próximo_mês): {len(ids_tela_mes_fechado)}'
         )
-        self.stdout.write(f'Dashboard (Record Vendas) instaladas — OSAB mês fechado: {len(ids_dashboard)}')
+        self.stdout.write(f'Dashboard (Vendas) instaladas — OSAB mês fechado: {len(ids_dashboard)}')
         self.stdout.write(f'Export aba "Mês Atual" — total de linhas (todas): {len(ids_export_aba)}')
         self.stdout.write(f'Export aba "Mês Atual" — só status INSTALADA: {len(ids_export_instaladas)}')
         self.stdout.write('')

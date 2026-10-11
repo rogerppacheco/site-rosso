@@ -1,5 +1,5 @@
 """
-Publica .playwright_vtop_state.json no Railway (site-bn + scheduler)
+Publica .playwright_vtop_state.json no Railway (site-rosso + scheduler)
 como VTOP_STORAGE_STATE_B64.
 
 Fluxo:
@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / ".playwright_vtop_state.json"
-SERVICES = ("site-bn", "site-bn-scheduler")
+SERVICES = ("site-rosso", "site-rosso-scheduler")
 
 
 def _set_vars(service: str, b64: str) -> None:
@@ -69,7 +69,6 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-# Injetado de site-clickup
 def _set_vars(service: str, b64: str) -> None:
     pairs = [
         "VTOP_STORAGE_STATE=/app/.playwright_vtop_state.json",
@@ -95,7 +94,6 @@ def _set_vars(service: str, b64: str) -> None:
         print(">", " ".join(args[:5]), "...")
         subprocess.check_call(args)
 
-# Injetado de site-clickup
 def main() -> int:
     if not STATE.is_file() or STATE.stat().st_size < 50:
         print(f"Arquivo inválido/ausente: {STATE}")
