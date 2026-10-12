@@ -431,6 +431,49 @@ class LoginMicrosoftSemRepetirSenhaTests(SimpleTestCase):
         pap._publicar_tela_login.assert_called()
         self.assertTrue(any("não reconhecida" in linha for linha in logs.output))
 
+    def test_tipo_de_conta_escolhe_corporativa(self) -> None:
+        texto = (
+            "Estamos com problemas para localizar sua conta. Que tipo de conta deseja usar?\n"
+            "Conta corporativa ou de estudante\nCriado por seu departamento de TI\n"
+            "tt713110@vtalcorp.onmicrosoft.com\nConta pessoal\nCriado por você"
+        )
+        self.assertEqual(
+            classificar_tela_microsoft(
+                url="https://login.microsoftonline.com/tenant/saml2?sso_reload=true",
+                texto=texto,
+                email_visivel=False,
+                senha_visivel=False,
+            ),
+            "tipo_conta",
+        )
+        pagina = _PaginaMicrosoft()
+        pagina.texto = texto
+        pagina.email_visivel = False
+        consulta_original = pagina.query_selector
+        pagina.query_selector = (  # type: ignore[method-assign]
+            lambda s: _Campo(True) if s == "#aadTile" and pagina.texto == texto else consulta_original(s)
+        )
+        clique_original = pagina.click
+
+        def click(seletor: str, timeout: int = 0) -> None:
+            if seletor == "#aadTile":
+                pagina.clicks.append(seletor)
+                pagina.url = "https://pap.niointernet.com.br/administrativo/historico"
+                pagina.texto = "Histórico"
+                return None
+            clique_original(seletor, timeout)
+
+        pagina.click = click  # type: ignore[method-assign]
+        pap = PAPNioAutomation("TT713110", "senha-teste")
+        pap.page = pagina  # type: ignore[assignment]
+        pap._mfa_espera_segundos = 3
+
+        ok, _msg = pap._fazer_login_microsoft()
+
+        self.assertTrue(ok)
+        self.assertEqual(pagina.clicks, ["#aadTile"])
+        self.assertEqual(pagina.fills, [])
+
     def test_escolha_uma_conta(self) -> None:
         estado = classificar_tela_microsoft(
             url="https://login.microsoftonline.com/tenant/saml2",

@@ -47,6 +47,13 @@ _CADASTRO = (
     "escaneie o codigo qr",
 )
 
+_TIPO_CONTA = (
+    "que tipo de conta deseja usar",
+    "which type of account do you want to use",
+    "conta corporativa ou de estudante",
+    "work or school account",
+)
+
 _ESCOLHER_CONTA = (
     "pick an account",
     "escolha uma conta",
@@ -132,6 +139,8 @@ def classificar_tela_microsoft(
         return "kmsi"
     if any(sinal in visivel for sinal in _CADASTRO):
         return "cadastro"
+    if any(sinal in visivel for sinal in _TIPO_CONTA):
+        return "tipo_conta"
     if any(sinal in visivel for sinal in _ESCOLHER_CONTA):
         return "escolher_conta"
     if any(sinal in visivel for sinal in _MFA):

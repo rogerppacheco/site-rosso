@@ -1390,6 +1390,28 @@ class PAPNioAutomation:
             logger.info("[PAP] Escolher conta Microsoft falhou: %s", type(exc).__name__)
         return False
 
+    def _escolher_conta_corporativa(self) -> bool:
+        """'Que tipo de conta deseja usar?': a matrícula é conta corporativa (Entra ID), nunca a pessoal."""
+        if not self.page:
+            return False
+        for seletor in ("#aadTile", "#aadTileTitle"):
+            try:
+                if self.page.query_selector(seletor):
+                    self.page.click(seletor, timeout=5000)
+                    logger.info("[PAP] Escolhida conta corporativa para %s.", self.matricula_pap)
+                    return True
+            except Exception:
+                continue
+        try:
+            alvo = self.page.get_by_text(re.compile(r"conta corporativa ou de estudante|work or school account", re.I)).first
+            if alvo.count():
+                alvo.click(timeout=5000)
+                logger.info("[PAP] Escolhida conta corporativa (texto) para %s.", self.matricula_pap)
+                return True
+        except Exception as exc:
+            logger.info("[PAP] Escolher conta corporativa falhou: %s", type(exc).__name__)
+        return False
+
     def _aceitar_manter_conectado(self) -> None:
         """Marca não mostrar de novo e clica em Sim. O Não fica em #idBtn_Back."""
         if not self.page:
@@ -1448,6 +1470,12 @@ class PAPNioAutomation:
                     parado_desde = None
                 if estado == "escolher_conta":
                     if not self._escolher_conta_microsoft(email):
+                        self.page.wait_for_timeout(1000)
+                    continue
+                if estado == "tipo_conta":
+                    if self._escolher_conta_corporativa():
+                        self.page.wait_for_timeout(1500)
+                    else:
                         self.page.wait_for_timeout(1000)
                     continue
                 if senha_enviada and estado not in ("pap_ok", "erro_credencial", "cadastro"):
