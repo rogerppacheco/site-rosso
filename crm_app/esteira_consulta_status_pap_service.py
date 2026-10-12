@@ -107,13 +107,105 @@ def queryset_vendas_esteira_com_os():
     )
 
 
+CHAVES_FILTROS_CONSULTA = (
+    'status_esteira_id',
+    'tipo_pendencia',
+    'motivo_pendencia',
+    'reagendar_cliente',
+    'busca',
+    'periodo_agendamento',
+    'status_agendamento',
+)
+
+
+def normalizar_filtros_consulta(data: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """Aba + filtros da barra da Esteira (filtros digitados nas colunas não entram)."""
+    data = data if isinstance(data, dict) else {}
+    aba = str(data.get('aba') or '').strip()
+    if aba.upper() == 'TODOS':
+        aba = 'TODOS'
+    filtros = {'aba': aba}
+    for chave in CHAVES_FILTROS_CONSULTA:
+        valor = str(data.get(chave) or '').strip()
+        if valor:
+            filtros[chave] = valor
+    return filtros
+
+
+def _aplicar_filtros_tela(qs, filtros: Dict[str, Any]):
+    """Mesmos critérios da listagem da Esteira (`VendaViewSet.get_queryset`)."""
+    from crm_app.models import Venda
+
+    def _f(chave: str) -> str:
+        return str(filtros.get(chave) or '').strip()
+
+    aba = _f('aba')
+    aba_agendada = aba.upper() == 'AGENDADO' or bool(re.match(r'^\d{4}-\d{2}-\d{2}$', aba))
+    aba_pendencia = aba.upper() in ('TODOS', 'PENDEN')
+
+    status_id = _f('status_esteira_id')
+    if aba.upper() == 'TODOS' and status_id.isdigit():
+        qs = qs.filter(status_esteira_id=int(status_id))
+
+    if aba_agendada:
+        turno = _f('periodo_agendamento').upper()
+        if turno in ('MANHA', 'TARDE'):
+            qs = qs.filter(periodo_agendamento=turno)
+        status_ag = _f('status_agendamento')
+        if status_ag.upper() in ('SEM', 'NULL', 'NONE', '0'):
+            qs = qs.filter(status_agendamento__isnull=True)
+        elif status_ag.isdigit():
+            qs = qs.filter(status_agendamento_id=int(status_ag))
+
+    if aba_pendencia:
+        tipo = _f('tipo_pendencia').upper().replace('É', 'E')
+        if tipo == 'CLIENTE':
+            qs = qs.filter(
+                motivo_pendencia__isnull=False,
+                motivo_pendencia__tipo_pendencia__icontains='CLIENTE',
+            )
+        elif tipo == 'TECNICA':
+            qs = qs.filter(motivo_pendencia__isnull=False).filter(
+                Q(motivo_pendencia__tipo_pendencia__icontains='TÉCNICA')
+                | Q(motivo_pendencia__tipo_pendencia__icontains='TECNICA')
+            )
+        motivo = _f('motivo_pendencia')
+        if motivo.upper() in ('SEM', 'NULL', 'NONE', '0'):
+            qs = qs.filter(motivo_pendencia__isnull=True)
+        elif motivo.isdigit():
+            qs = qs.filter(motivo_pendencia_id=int(motivo))
+
+    retorno = _f('reagendar_cliente').upper()
+    if retorno == 'SEM':
+        qs = qs.filter(cliente_reagendar_status='')
+    elif retorno in dict(Venda.REAGENDAR_CLIENTE_CHOICES):
+        qs = qs.filter(cliente_reagendar_status=retorno)
+
+    busca = _f('busca')
+    if len(busca) >= 2:
+        digitos = re.sub(r'\D', '', busca)
+        q = (
+            Q(ordem_servico__icontains=busca)
+            | Q(cliente__nome_razao_social__icontains=busca)
+            | Q(cliente__cpf_cnpj__icontains=busca)
+            | Q(vendedor__username__icontains=busca)
+            | Q(vendedor__first_name__icontains=busca)
+            | Q(vendedor__last_name__icontains=busca)
+        )
+        if digitos:
+            q |= Q(cliente__cpf_cnpj__icontains=digitos) | Q(ordem_servico__icontains=digitos)
+        qs = qs.filter(q)
+
+    return qs
+
+
 def queryset_vendas_consulta_aba(filtros: Dict[str, Any]):
     """
     Queryset da fila de consulta PAP por aba da Esteira.
 
-    - Todos: tudo que está na aba e tem O.S. da NIO, sem nenhum outro filtro
-      (status, tipo/motivo de pendência, busca e colunas são ignorados).
-    - Agendados / Pendentes / data: apenas o status (e a data) da aba.
+    Universo: pedidos NIO com O.S. da aba (Todos / Agendados / Pendentes / data),
+    restrito pelos filtros da barra (status, tipo/motivo, turno, status do
+    agendamento, retorno do cliente e busca).
 
     Ordem = mesma da tabela (`-data_criacao`): o 1º da tela é o 1º consultado.
     """
@@ -141,7 +233,7 @@ def queryset_vendas_consulta_aba(filtros: Dict[str, Any]):
     else:
         qs = qs.none()
 
-    return qs.order_by('-data_criacao', '-id')
+    return _aplicar_filtros_tela(qs, filtros).order_by('-data_criacao', '-id')
 
 
 def _normalizar_os(os_num: str) -> str:
@@ -1068,15 +1160,12 @@ def criar_e_iniciar_consulta_aba(*, usuario, filtros: Dict[str, Any]) -> Tuple[O
     if not ok_cred:
         return None, msg_cred, 0
 
-    aba = (filtros.get('aba') or '').strip()
-    if not _aba_permitida(aba):
+    filtros = normalizar_filtros_consulta(filtros)
+    if not _aba_permitida(filtros['aba']):
         return None, (
             'Consulta PAP disponível apenas nas abas Todos, Agendados, Pendentes '
             'ou em uma data específica.'
         ), 0
-    if aba.upper() == 'TODOS':
-        aba = 'TODOS'
-    filtros = {'aba': aba}
 
     with _criacao_lock:
         if job_em_andamento():
@@ -1084,7 +1173,7 @@ def criar_e_iniciar_consulta_aba(*, usuario, filtros: Dict[str, Any]) -> Tuple[O
 
         total = len(ids_fila_consulta_aba(filtros))
         if total <= 0:
-            return None, 'Nenhum pedido NIO com O.S. na aba selecionada.', 0
+            return None, 'Nenhum pedido NIO com O.S. na aba/filtros selecionados.', 0
 
         execucao = SyncStatusEsteiraExecucao.objects.create(
             modo=SyncStatusEsteiraExecucao.MODO_CONSULTA_ABA,

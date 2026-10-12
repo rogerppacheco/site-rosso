@@ -15,6 +15,7 @@ from crm_app.esteira_consulta_status_pap_service import (
     _run_django_sync,
     ids_fila_consulta_aba,
     mensagem_erro_consulta_pap_para_usuario,
+    normalizar_filtros_consulta,
     queryset_vendas_consulta_aba,
 )
 from crm_app.esteira_sync_status_pap_service import (
@@ -77,18 +78,44 @@ class ConsultaStatusPapFilaTodosTests(TestCase):
         ids = set(queryset_vendas_consulta_aba({'aba': 'TODOS'}).values_list('id', flat=True))
         self.assertEqual(ids, {ag.id, pend.id, outro.id})
 
-    def test_todos_ignora_filtros_extras(self) -> None:
-        ag = self._venda(self.st_agendado, 'OS1')
+    def test_todos_respeita_filtro_de_status(self) -> None:
+        self._venda(self.st_agendado, 'OS1')
         outro = self._venda(self.st_outro, 'OS2')
-        filtros = {
-            'aba': 'TODOS',
-            'busca': 'nada-a-ver',
-            'tipo_pendencia': 'TECNICA',
-            'motivo_pendencia': '999',
-            'colunas': {'vendedor': 'ninguem'},
-        }
+        filtros = normalizar_filtros_consulta({'aba': 'TODOS', 'status_esteira_id': str(self.st_outro.id)})
         ids = set(queryset_vendas_consulta_aba(filtros).values_list('id', flat=True))
-        self.assertEqual(ids, {ag.id, outro.id})
+        self.assertEqual(ids, {outro.id})
+        self.assertEqual(ids_fila_consulta_aba(filtros), [outro.id])
+
+    def test_filtro_de_status_so_vale_na_aba_todos(self) -> None:
+        ag = self._venda(self.st_agendado, 'OS1')
+        filtros = {'aba': 'AGENDADO', 'status_esteira_id': str(self.st_outro.id)}
+        ids = set(queryset_vendas_consulta_aba(filtros).values_list('id', flat=True))
+        self.assertEqual(ids, {ag.id})
+
+    def test_respeita_busca_e_retorno_cliente(self) -> None:
+        alvo = self._venda(self.st_outro, 'OS-ALVO', cliente_reagendar_status='NAO')
+        self._venda(self.st_outro, 'OS-OUTRA', cliente_reagendar_status='NAO')
+        self._venda(self.st_outro, 'OS-ALVO2')
+        filtros = normalizar_filtros_consulta({'aba': 'TODOS', 'busca': 'OS-ALVO', 'reagendar_cliente': 'NAO'})
+        ids = set(queryset_vendas_consulta_aba(filtros).values_list('id', flat=True))
+        self.assertEqual(ids, {alvo.id})
+
+    def test_normalizar_descarta_colunas_e_vazios(self) -> None:
+        filtros = normalizar_filtros_consulta({
+            'aba': 'todos',
+            'busca': '  ',
+            'status_esteira_id': 7,
+            'colunas': {'vendedor': 'x'},
+        })
+        self.assertEqual(filtros, {'aba': 'TODOS', 'status_esteira_id': '7'})
+
+    def test_venda_que_muda_de_status_durante_lote_e_pulada(self) -> None:
+        venda = self._venda(self.st_outro, 'OS1')
+        filtros = {'aba': 'TODOS', 'status_esteira_id': str(self.st_outro.id)}
+        self.assertIsNotNone(_recarregar_venda_elegivel(venda.id, filtros))
+        venda.status_esteira = self.st_agendado
+        venda.save(update_fields=['status_esteira'])
+        self.assertIsNone(_recarregar_venda_elegivel(venda.id, filtros))
 
     def test_abas_especificas_continuam_restritas(self) -> None:
         ag = self._venda(self.st_agendado, 'OS1')

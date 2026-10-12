@@ -2581,11 +2581,22 @@ min-width: 100%;
             ) {
                 filtros.motivo_pendencia = String(filtroMotivoPendenciaAtual);
             }
+            if (filtros.aba === 'TODOS' && filtroStatusEsteiraAtual) {
+                filtros.status_esteira_id = String(filtroStatusEsteiraAtual);
+            }
+            if (filtroRetornoClienteAtual) {
+                filtros.reagendar_cliente = String(filtroRetornoClienteAtual);
+            }
             return filtros;
         }
 
         function rotuloFiltrosConsultaStatusPap(filtros) {
             const partes = [rotuloAbaConsultaStatusPap()];
+            if (filtros.status_esteira_id) {
+                const selS = document.getElementById('filtro-status-esteira');
+                const optS = selS && selS.selectedOptions && selS.selectedOptions[0];
+                partes.push(`Status ${optS && optS.textContent ? optS.textContent.trim() : '#' + filtros.status_esteira_id}`);
+            }
             if (filtros.periodo_agendamento === 'MANHA') partes.push('Manhã');
             if (filtros.periodo_agendamento === 'TARDE') partes.push('Tarde');
             if (filtros.status_agendamento) {
@@ -2598,6 +2609,9 @@ min-width: 100%;
                 const selM = document.getElementById('filtro-motivo-pendencia');
                 const optM = selM && selM.selectedOptions && selM.selectedOptions[0];
                 partes.push(optM && optM.textContent ? optM.textContent.trim() : `motivo #${filtros.motivo_pendencia}`);
+            }
+            if (filtros.reagendar_cliente) {
+                partes.push(`retorno: ${RETORNO_CLIENTE_ROTULOS[filtros.reagendar_cliente] || filtros.reagendar_cliente}`);
             }
             if (filtros.busca) partes.push(`busca:${filtros.busca}`);
             const col = filtros.colunas || {};
@@ -2799,16 +2813,17 @@ min-width: 100%;
                 alert('Consulta PAP disponível apenas em Todos, Agendados, Pendentes ou em uma data específica.');
                 return;
             }
-            const filtros = { aba: String(filtroAtual || 'TODOS') };
-            const rotulo = rotuloAbaConsultaStatusPap();
-            const escopoTxt = filtros.aba === 'TODOS'
-                ? 'todos os pedidos NIO da esteira com O.S., sem nenhum outro filtro'
-                : 'pedidos NIO com O.S. desta aba (filtros de tipo, motivo, busca e colunas não se aplicam)';
+            const { colunas, ...filtros } = montarFiltrosConsultaStatusPap();
+            const rotulo = rotuloFiltrosConsultaStatusPap(filtros);
+            const avisoColunas = Object.keys(colunas || {}).length
+                ? 'Atenção: filtros digitados nas colunas da tabela não entram na consulta.\n'
+                : '';
             // ETA ~47s/pedido (medido no lote de 72)
             const etaHint = 'Ritmo ~5–6 O.S./min (≈ 45–50s por pedido).';
             if (!confirm(
                 `Consultar STATUS no PAP?\n\n`
-                + `Escopo: ${rotulo} — ${escopoTxt}.\n`
+                + `Escopo: ${rotulo} — pedidos NIO com O.S. que atendem à aba e aos filtros selecionados.\n`
+                + avisoColunas
                 + '(mesma ordem da tabela — começa pelo 1º da lista; O.S. repetida é consultada uma vez)\n\n'
                 + '• Usa a conta de serviço PAP de Consulta configurada no sistema.\n'
                 + '• Deslogue do PAP em outros lugares antes de continuar.\n'
@@ -5353,7 +5368,7 @@ min-width: 100%;
                 const previa = await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({ confirmar: false }) });
                 if (!previa) return;
                 const linhas = [
-                    `Aba/filtros: ${rotuloFiltrosConsultaStatusPap(montarFiltrosConsultaStatusPap())}${filtroRetornoClienteAtual ? ' · retorno: ' + RETORNO_CLIENTE_ROTULOS[filtroRetornoClienteAtual] : ''}`,
+                    `Aba/filtros: ${rotuloFiltrosConsultaStatusPap({ ...montarFiltrosConsultaStatusPap(), colunas: {} })}`,
                     '',
                     `Pedidos na lista: ${previa.total}`,
                     `Vão receber o WhatsApp: ${previa.a_enviar}`,
