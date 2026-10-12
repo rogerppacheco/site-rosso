@@ -231,6 +231,7 @@ from .historico_pap_api import (
     FunilHistoricoPapBuscarView,
     FunilHistoricoPapConfigView,
     FunilHistoricoPapDownloadView,
+    FunilHistoricoPapExportarView,
     FunilHistoricoPapRegistrarView,
     FunilHistoricoPapStatusView,
     FunilHistoricoPapPedidosView,
@@ -313,6 +314,7 @@ urlpatterns = [
     path('funil-venda-wpp/historico-pap/download/', FunilHistoricoPapDownloadView.as_view(), name='funil-historico-pap-download'),
     path('funil-venda-wpp/historico-pap/registrar/', FunilHistoricoPapRegistrarView.as_view(), name='funil-historico-pap-registrar'),
     path('funil-venda-wpp/historico-pap/pedidos/', FunilHistoricoPapPedidosView.as_view(), name='funil-historico-pap-pedidos'),
+    path('funil-venda-wpp/historico-pap/exportar/', FunilHistoricoPapExportarView.as_view(), name='funil-historico-pap-exportar'),
     path('historico/importar-vendas/', FunilHistoricoPapImportarView.as_view(), name='historico-importar-vendas'),
     path('consultar-biometria-brpronto/', consultar_biometria_brpronto_view, name='consultar-biometria-brpronto'),
     # --- Endpoint para busca automática de fatura NIO (Bonus M-10) ---

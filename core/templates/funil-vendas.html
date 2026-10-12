@@ -149,10 +149,17 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                     <button class="btn btn-outline-primary fw-bold shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#modalBusca">
                         <i class="bi bi-search me-2"></i> Nova Busca
                     </button>
-                    <!-- Exportar Novos -->
-                    <button class="btn btn-success fw-bold shadow-sm" id="btn-baixar-excel" disabled>
-                        <i class="bi bi-file-earmark-excel me-2"></i> Exportar Novos
-                    </button>
+                    <div class="btn-group shadow-sm">
+                        <button type="button" class="btn btn-success fw-bold" id="btn-exportar-filtro" title="Exporta para Excel todos os pedidos da aba com os filtros aplicados (todas as páginas)">
+                            <i class="bi bi-file-earmark-excel me-2"></i>Exportar <span class="badge bg-light text-success ms-1" id="exportar-qtd">0</span>
+                        </button>
+                        <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais opções de exportação"></button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <li><h6 class="dropdown-header">Exportar para Excel</h6></li>
+                            <li><button type="button" class="dropdown-item" id="btn-exportar-filtro-menu"><i class="bi bi-funnel me-2"></i>Tudo que está filtrado na aba</button></li>
+                            <li><button type="button" class="dropdown-item" id="btn-baixar-excel" disabled><i class="bi bi-clock-history me-2"></i>Período da última busca</button></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -171,6 +178,9 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                         <button type="button" data-situacao="novos"><i class="bi bi-stars"></i> Novos</button>
                         <button type="button" data-situacao="base">Já na base</button>
                     </div>
+                    <select id="f-mes" class="form-select form-select-sm funil-select" aria-label="Mês da data do pedido" title="Mês pela Data do pedido">
+                        <option value="">Todos os meses</option>
+                    </select>
                     <div class="funil-periodo" title="Data do pedido no PAP">
                         <i class="bi bi-calendar3"></i>
                         <input type="date" id="f-de" class="form-control form-control-sm" aria-label="Data do pedido a partir de">
@@ -645,6 +655,80 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         sel.value = histState.status;
     }
 
+    const NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+    function limitesDoMes(mes) {
+        const [a, m] = mes.split('-').map(Number);
+        const ultimo = new Date(a, m, 0).getDate();
+        const mm = String(m).padStart(2, '0');
+        return { de: `${a}-${mm}-01`, ate: `${a}-${mm}-${String(ultimo).padStart(2, '0')}` };
+    }
+
+    function mesSelecionado() {
+        if (!histState.de || !histState.ate) return (histState.de || histState.ate) ? 'custom' : '';
+        const mes = histState.de.slice(0, 7);
+        const lim = limitesDoMes(mes);
+        return (lim.de === histState.de && lim.ate === histState.ate) ? mes : 'custom';
+    }
+
+    function renderMeses(meses) {
+        const sel = document.getElementById('f-mes');
+        const atual = mesSelecionado();
+        const lista = [...(meses || [])];
+        if (atual && atual !== 'custom' && !lista.some(m => m.mes === atual)) lista.push({ mes: atual, total: 0 });
+        lista.sort((a, b) => b.mes.localeCompare(a.mes));
+        sel.innerHTML = '<option value="">Todos os meses</option>'
+            + (atual === 'custom' ? '<option value="custom">Período personalizado</option>' : '')
+            + lista.map(m => {
+                const [a, mm] = m.mes.split('-').map(Number);
+                return `<option value="${m.mes}">${NOMES_MES[mm - 1]}/${a} (${m.total.toLocaleString('pt-BR')})</option>`;
+            }).join('');
+        sel.value = atual;
+    }
+
+    document.getElementById('f-mes').addEventListener('change', (e) => {
+        const v = e.target.value;
+        if (v === 'custom') return;
+        aplicarFiltros(v ? limitesDoMes(v) : { de: '', ate: '' });
+    });
+
+    function baixarBase64(base64, nome) {
+        const bin = atob(base64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = nome;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    async function exportarFiltrado() {
+        if (!histMeta.count) { alert('Nenhum pedido com os filtros atuais para exportar.'); return; }
+        const btn = document.getElementById('btn-exportar-filtro');
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Gerando ${histMeta.count.toLocaleString('pt-BR')}…`;
+        const params = new URLSearchParams({ tipo: histState.tipo });
+        if (currentBuscaId) params.set('busca_id', currentBuscaId);
+        ['q', 'status', 'situacao', 'de', 'ate'].forEach(k => { if (histState[k]) params.set(k, histState[k]); });
+        try {
+            const r = await fetch(API_HIST + 'exportar/?' + params.toString(), { headers: { 'Authorization': 'Bearer ' + getToken() } });
+            const data = await r.json();
+            if (!r.ok || !data.arquivo_base64) { alert(data.error || 'Não foi possível exportar.'); return; }
+            baixarBase64(data.arquivo_base64, data.nome_arquivo || 'Historico_PAP.xlsx');
+        } catch (e) {
+            alert('Erro ao exportar: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
+            document.getElementById('exportar-qtd').textContent = histMeta.count.toLocaleString('pt-BR');
+        }
+    }
+    document.getElementById('btn-exportar-filtro').addEventListener('click', exportarFiltrado);
+    document.getElementById('btn-exportar-filtro-menu').addEventListener('click', exportarFiltrado);
+
     function linhasSkeleton(qtd) {
         const cel = w => `<td class="py-3"><span class="funil-skel" style="width:${w}%"></span></td>`;
         return Array.from({ length: qtd }, () =>
@@ -687,7 +771,11 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         
         document.getElementById('btn-baixar-excel').disabled = !(s.status === 'concluido' && (s.novos || 0) > 0);
         if (s.mensagem) {
-            document.getElementById('hist-status-msg').innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${s.mensagem}`;
+            const el = document.getElementById('hist-status-msg');
+            const alerta = /ATENÇÃO/i.test(s.mensagem);
+            el.classList.toggle('text-success', !alerta);
+            el.classList.toggle('text-warning', alerta);
+            el.innerHTML = `<i class="bi ${alerta ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill'} me-1"></i> ${esc(s.mensagem)}`;
         }
     }
 
@@ -755,7 +843,10 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             histState.page = histMeta.page;
             gravarEstadoNaUrl();
             renderStatusOpcoes(data.status_opcoes);
+            renderMeses(data.meses);
             renderPaginacao();
+            document.getElementById('exportar-qtd').textContent = histMeta.count.toLocaleString('pt-BR');
+            document.getElementById('btn-exportar-filtro').disabled = !histMeta.count;
 
             const itens = data.results || [];
             if (!itens.length) {

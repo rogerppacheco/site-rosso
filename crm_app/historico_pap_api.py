@@ -218,6 +218,117 @@ class FunilHistoricoPapDownloadView(APIView):
         )
 
 
+def filtrar_pedidos_funil(qp) -> dict:
+    """Aplica os filtros da tela do Funil (busca, situação, período por Data do pedido, status).
+
+    Retorna o queryset do tipo pedido (`qs_tipo`), o queryset de todos os tipos com os
+    mesmos filtros (`base`, para as contagens das abas) e os dados auxiliares da tela.
+    """
+    from django.db.models import F, Q, TextField, Value
+    from django.db.models.fields.json import KeyTextTransform
+    from django.db.models.functions import Coalesce, NullIf
+
+    from crm_app.historico_pap_service import normalizar_pedido
+    from crm_app.models import HistoricoPapBusca, HistoricoPapPedido
+
+    busca_id = qp.get("busca_id")
+    tipo = (qp.get("tipo") or "").strip().upper()
+
+    if busca_id:
+        busca = HistoricoPapBusca.objects.filter(pk=busca_id).first()
+    else:
+        busca = HistoricoPapBusca.objects.order_by("-iniciado_em").first()
+
+    novos_set: set[str] = set()
+    novos_lookup: set[str] = set()
+    if busca and busca.novos_numeros:
+        novos_set = {normalizar_pedido(n) for n in busca.novos_numeros if n}
+        novos_lookup = novos_set | {str(n).strip() for n in busca.novos_numeros if n}
+
+    base = HistoricoPapPedido.objects.annotate(
+        status_exibicao=Coalesce(
+            NullIf(KeyTextTransform("chaveStatusPrimario", "payload"), Value("")),
+            NullIf(F("status"), Value("")),
+            NullIf(KeyTextTransform("status", "payload"), Value("")),
+            output_field=TextField(),
+        )
+    )
+
+    termo = (qp.get("q") or "").strip()
+    if termo:
+        digitos = "".join(c for c in termo if c.isdigit())
+        filtro = (
+            Q(numero_pedido__icontains=termo)
+            | Q(payload__cliente__icontains=termo)
+            | Q(payload__dadosCliente__nome__icontains=termo)
+        )
+        if len(digitos) >= 3:
+            filtro |= (
+                Q(numero_pedido__icontains=digitos)
+                | Q(payload__cpf__icontains=digitos)
+                | Q(payload__dadosCliente__cpf__icontains=digitos)
+            )
+        base = base.filter(filtro)
+
+    situacao = (qp.get("situacao") or "").strip().lower()
+    if situacao == "novos":
+        base = base.filter(numero_pedido__in=novos_lookup)
+    elif situacao == "base":
+        base = base.exclude(numero_pedido__in=novos_lookup)
+
+    data_de = _parse_date(qp.get("de"), None)
+    data_ate = _parse_date(qp.get("ate"), None)
+    if data_de:
+        base = base.filter(data_criacao_pap__date__gte=data_de)
+    if data_ate:
+        base = base.filter(data_criacao_pap__date__lte=data_ate)
+
+    qs_tipo = base.filter(tipo_venda__iexact=tipo) if tipo else base
+    status_opcoes = sorted(
+        {s for s in qs_tipo.order_by().values_list("status_exibicao", flat=True).distinct() if s},
+        key=str.lower,
+    )
+
+    status_filtro = (qp.get("status") or "").strip()
+    if status_filtro:
+        base = base.filter(status_exibicao__iexact=status_filtro)
+        qs_tipo = qs_tipo.filter(status_exibicao__iexact=status_filtro)
+
+    return {
+        "tipo": tipo,
+        "busca": busca,
+        "novos_set": novos_set,
+        "base": base,
+        "qs_tipo": qs_tipo,
+        "status_opcoes": status_opcoes,
+        "data_de": data_de,
+        "data_ate": data_ate,
+    }
+
+
+def meses_disponiveis_funil(tipo: str) -> list[dict]:
+    """Meses (pela Data do pedido) que já existem na base para o tipo, com a quantidade."""
+    from django.db.models import Count
+    from django.db.models.functions import TruncMonth
+
+    from crm_app.models import HistoricoPapPedido
+
+    qs = HistoricoPapPedido.objects.filter(data_criacao_pap__isnull=False)
+    if tipo:
+        qs = qs.filter(tipo_venda__iexact=tipo)
+    linhas = (
+        qs.annotate(mes=TruncMonth("data_criacao_pap"))
+        .values("mes")
+        .annotate(total=Count("id"))
+        .order_by("-mes")
+    )
+    return [
+        {"mes": linha["mes"].strftime("%Y-%m"), "total": linha["total"]}
+        for linha in linhas
+        if linha["mes"]
+    ]
+
+
 class FunilHistoricoPapPedidosView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -225,80 +336,19 @@ class FunilHistoricoPapPedidosView(APIView):
         if not is_member(request.user, ["Diretoria", "Admin"]):
             return Response({"detail": "Sem permissão."}, status=403)
 
-        from crm_app.historico_pap_service import map_pedido_api, normalizar_pedido
-        from crm_app.models import HistoricoPapBusca, HistoricoPapPedido
+        from django.db.models import Count, F
 
-        from django.db.models import Count, F, Q, TextField, Value
-        from django.db.models.fields.json import KeyTextTransform
-        from django.db.models.functions import Coalesce, NullIf
+        from crm_app.historico_pap_service import map_pedido_api, normalizar_pedido
+        from crm_app.models import HistoricoPapPedido
 
         qp = request.query_params
-        busca_id = qp.get("busca_id")
-        tipo = (qp.get("tipo") or "").strip().upper()
-
-        busca = None
-        novos_set: set[str] = set()
-        if busca_id:
-            busca = HistoricoPapBusca.objects.filter(pk=busca_id).first()
-        else:
-            busca = HistoricoPapBusca.objects.order_by("-iniciado_em").first()
-
-        novos_lookup: set[str] = set()
-        if busca and busca.novos_numeros:
-            novos_set = {normalizar_pedido(n) for n in busca.novos_numeros if n}
-            novos_lookup = novos_set | {str(n).strip() for n in busca.novos_numeros if n}
-
-        base = HistoricoPapPedido.objects.annotate(
-            status_exibicao=Coalesce(
-                NullIf(KeyTextTransform("chaveStatusPrimario", "payload"), Value("")),
-                NullIf(F("status"), Value("")),
-                NullIf(KeyTextTransform("status", "payload"), Value("")),
-                output_field=TextField(),
-            )
-        )
-
-        termo = (qp.get("q") or "").strip()
-        if termo:
-            digitos = "".join(c for c in termo if c.isdigit())
-            filtro = (
-                Q(numero_pedido__icontains=termo)
-                | Q(payload__cliente__icontains=termo)
-                | Q(payload__dadosCliente__nome__icontains=termo)
-            )
-            if len(digitos) >= 3:
-                filtro |= (
-                    Q(numero_pedido__icontains=digitos)
-                    | Q(payload__cpf__icontains=digitos)
-                    | Q(payload__dadosCliente__cpf__icontains=digitos)
-                )
-            base = base.filter(filtro)
-
-        situacao = (qp.get("situacao") or "").strip().lower()
-        if situacao == "novos":
-            base = base.filter(numero_pedido__in=novos_lookup)
-        elif situacao == "base":
-            base = base.exclude(numero_pedido__in=novos_lookup)
-
-        data_de = _parse_date(qp.get("de"), None)
-        data_ate = _parse_date(qp.get("ate"), None)
-        if data_de:
-            base = base.filter(data_criacao_pap__date__gte=data_de)
-        if data_ate:
-            base = base.filter(data_criacao_pap__date__lte=data_ate)
-
-        qs_tipo = base.filter(tipo_venda__iexact=tipo) if tipo else base
-        status_opcoes = sorted(
-            {s for s in qs_tipo.order_by().values_list("status_exibicao", flat=True).distinct() if s},
-            key=str.lower,
-        )
-
-        status_filtro = (qp.get("status") or "").strip()
-        if status_filtro:
-            base = base.filter(status_exibicao__iexact=status_filtro)
-            qs_tipo = qs_tipo.filter(status_exibicao__iexact=status_filtro)
+        f = filtrar_pedidos_funil(qp)
+        qs_tipo = f["qs_tipo"]
+        novos_set = f["novos_set"]
+        busca = f["busca"]
 
         contagens = {t: 0 for t, _ in HistoricoPapPedido.TIPO_CHOICES}
-        for t, n in base.order_by().values_list("tipo_venda").annotate(n=Count("id")):
+        for t, n in f["base"].order_by().values_list("tipo_venda").annotate(n=Count("id")):
             chave = (t or "").upper()
             contagens[chave] = contagens.get(chave, 0) + n
 
@@ -350,8 +400,49 @@ class FunilHistoricoPapPedidosView(APIView):
             "page_size": page_size,
             "total_pages": total_pages,
             "contagens": contagens,
-            "status_opcoes": status_opcoes,
+            "status_opcoes": f["status_opcoes"],
+            "meses": meses_disponiveis_funil(f["tipo"]),
             "busca_id": busca.id if busca else None,
+        })
+
+
+class FunilHistoricoPapExportarView(APIView):
+    """Excel com TODOS os pedidos que atendem aos filtros da tela (sem paginação)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_member(request.user, ["Diretoria", "Admin"]):
+            return Response({"detail": "Sem permissão."}, status=403)
+
+        from django.db.models import F
+
+        from crm_app.historico_pap import map_pedido_api, montar_xlsx_historico
+
+        f = filtrar_pedidos_funil(request.query_params)
+        qs = f["qs_tipo"].order_by(F("data_criacao_pap").asc(nulls_last=True), "numero_pedido")
+        linhas = []
+        for p in qs.iterator(chunk_size=500):
+            if p.payload:
+                linhas.append(map_pedido_api(p.payload, p.tipo_venda))
+            else:
+                linhas.append({"tipo_venda": p.tipo_venda, "pedido": p.numero_pedido, "status": p.status})
+        if not linhas:
+            return Response({"error": "Nenhum pedido com esses filtros para exportar."}, status=404)
+
+        partes = ["Historico_PAP", f["tipo"] or "TODOS"]
+        if f["data_de"] or f["data_ate"]:
+            partes.append(f"{f['data_de'] or 'inicio'}_a_{f['data_ate'] or 'hoje'}")
+        try:
+            blob = montar_xlsx_historico(linhas)
+        except Exception:
+            logger.exception("Falha ao montar Excel do Funil")
+            return Response({"error": "Não foi possível montar a planilha."}, status=400)
+        return Response({
+            "success": True,
+            "nome_arquivo": "_".join(partes) + ".xlsx",
+            "linhas": len(linhas),
+            "arquivo_base64": base64.b64encode(blob).decode("ascii"),
         })
 
 

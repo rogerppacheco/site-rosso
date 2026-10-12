@@ -77,3 +77,47 @@ class FunilHistoricoPapPedidosPaginacaoTests(TestCase):
         self.assertEqual(self._get(situacao='base')['count'], 58)
 
         self.assertEqual(self._get(de='2026-09-01', ate='2026-09-01')['count'], 2)
+
+    def test_meses_disponiveis_pela_data_do_pedido(self) -> None:
+        HistoricoPapPedido.objects.create(
+            numero_pedido='MARCO1', tipo_venda='VENDA',
+            data_criacao_pap=datetime(2026, 3, 31, 20, tzinfo=timezone.utc), payload={},
+        )
+        meses = self._get()['meses']
+        self.assertEqual(meses[0], {'mes': '2026-09', 'total': 60})
+        self.assertIn({'mes': '2026-03', 'total': 1}, meses)
+
+    def test_exportar_traz_todos_os_filtrados_sem_paginacao(self) -> None:
+        resp = self.client.get(
+            URL.replace('pedidos/', 'exportar/'),
+            {'tipo': 'VENDA', 'de': '2026-09-01', 'ate': '2026-09-30', 'status': 'ANALISE_BO'},
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(data['linhas'], 30)
+        self.assertEqual(data['nome_arquivo'], 'Historico_PAP_VENDA_2026-09-01_a_2026-09-30.xlsx')
+        self.assertTrue(data['arquivo_base64'])
+
+    def test_exportar_sem_resultado(self) -> None:
+        resp = self.client.get(URL.replace('pedidos/', 'exportar/'), {'tipo': 'VENDA', 'q': 'ninguem-xyz'})
+        self.assertEqual(resp.status_code, 404)
+
+
+class ReescritaUrlVendasPapTests(TestCase):
+    def test_troca_pagina_periodo_e_limit(self) -> None:
+        from urllib.parse import parse_qs, urlparse
+
+        from crm_app.historico_pap_service import _rewritar_url_vendas_periodo
+
+        url = (
+            'https://pap-api.niointernet.com.br/api/portal/vendas?dataInicio=2026-10-01T00:00:00-03:00'
+            '&dataFim=2026-10-12T23:59:59-03:00&tipoVenda=VENDA&page=1&limit=15'
+        )
+        qs = parse_qs(urlparse(_rewritar_url_vendas_periodo(url, date(2026, 3, 1), date(2026, 3, 31), page=4)).query)
+        self.assertEqual(qs['page'], ['4'])
+        self.assertEqual(qs['limit'], ['200'])
+        self.assertTrue(qs['dataInicio'][0].startswith('2026-03-01'))
+        self.assertTrue(qs['dataFim'][0].startswith('2026-03-31'))
+
+        sem_page = _rewritar_url_vendas_periodo(url, date(2026, 3, 1), date(2026, 3, 31))
+        self.assertEqual(parse_qs(urlparse(sem_page).query)['page'], ['1'])

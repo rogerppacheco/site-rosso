@@ -824,12 +824,15 @@ def _rewritar_url_vendas_periodo(
     limit: int = 200,
     tipo_api: str | None = None,
     status: str | None = ...,
+    page: int | None = None,
 ) -> str:
-    """Troca dataInicio/dataFim/limit; opcionalmente tipoVenda e status."""
+    """Troca dataInicio/dataFim/limit; opcionalmente tipoVenda, status e page."""
     from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
     parsed = urlparse(url)
     pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    if page is not None:
+        pairs = [(k, v) for k, v in pairs if k.lower() != "page"] + [("page", str(page))]
     out: list[tuple[str, str]] = []
     seen_limit = False
     seen_tipo = False
@@ -2007,6 +2010,9 @@ def _coletar_vendas_via_rede_spa(
     filtrar_s = 12.0 if periodo_curto else min(25.0, timeout_ms / 1000.0)
     erros: list[str] = []
     captured_auth = {"value": ""}
+    # Página que o próximo /vendas da SPA deve buscar. Só requests disparados pela
+    # própria SPA passam no anti-replay; XHR forjado recebe 401 "jwt malformed".
+    pagina_alvo: dict[str, int | None] = {"n": None}
     seen_urls: set[str] = set()
     tipo_api = _tipo_api_para_spa(tipo_crm) if tipo_crm else None
     status_rewrite = _status_lista_para_tipo_api(tipo_api) if tipo_api else ...
@@ -2073,14 +2079,16 @@ def _coletar_vendas_via_rede_spa(
                 limit=200,
                 tipo_api=tipo_api,
                 status=status_rewrite if tipo_api else ...,
+                page=pagina_alvo["n"],
             )
             if novo != req.url:
                 final_url = novo
                 rewrote = True
                 logger.info(
                     "[HISTORICO PAP] route.fetch reescrevendo /vendas "
-                    "(período+limit=200 tipo=%s) → %s→%s",
+                    "(período+limit=200 tipo=%s page=%s) → %s→%s",
                     tipo_api or "SPA",
+                    pagina_alvo["n"] or "SPA",
                     data_inicio,
                     data_fim,
                 )
@@ -2160,14 +2168,21 @@ def _coletar_vendas_via_rede_spa(
                     js_pack["json"],
                 )
                 matched_js = _matched()
-                if matched_js:
+                ni_js, tot_js = _contar_itens_e_total_packs(matched_js or list(collected))
+                if tot_js and ni_js < tot_js:
+                    logger.info(
+                        "[HISTORICO PAP] XHR JS trouxe %s de %s — segue para paginação pela SPA.",
+                        ni_js,
+                        tot_js,
+                    )
+                elif matched_js:
                     logger.info(
                         "[HISTORICO PAP] Coleta rápida via XHR JS (%d pacote(s), período curto=%s)",
                         len(matched_js),
                         periodo_curto,
                     )
                     return matched_js
-                if collected:
+                elif collected:
                     logger.info("[HISTORICO PAP] XHR JS ok; usando pacotes mesmo fora do match estrito")
                     return list(collected)
 
@@ -2208,28 +2223,27 @@ def _coletar_vendas_via_rede_spa(
         matched = _matched()
         # Auto-load da SPA é sempre Tipo=Venda — se pedimos Interesse/Pré-venda, força Filtrar
         auto_ok = bool(matched) and (not tipo_api or tipo_api == "VENDA")
-        if auto_ok:
-            return matched
         # Se veio /vendas (mesmo fora do período) e o rewrite falhou, ainda devolve o capturado
-        if collected and not matched and not (data_inicio and data_fim) and not tipo_api:
+        if not auto_ok and collected and not matched and not (data_inicio and data_fim) and not tipo_api:
             return list(collected)
 
-        # 2) Filtrar na UI (Tipo + datas). Limpa pacotes VENDA do auto-load se trocamos tipo.
-        if tipo_api and tipo_api != "VENDA":
-            collected.clear()
-            seen_urls.clear()
-        _tentar_clicar_filtrar(
-            page,
-            data_inicio=data_inicio,
-            data_fim=data_fim,
-            tipo_crm=tipo_crm,
-        )
-        fim = time.time() + filtrar_s
-        while time.time() < fim and not _matched():
-            if collected:
-                # rewrite pode ter falhado; se já temos pacotes no período, sai
-                break
-            page.wait_for_timeout(250 if periodo_curto else 400)
+        if not auto_ok:
+            # 2) Filtrar na UI (Tipo + datas). Limpa pacotes VENDA do auto-load se trocamos tipo.
+            if tipo_api and tipo_api != "VENDA":
+                collected.clear()
+                seen_urls.clear()
+            _tentar_clicar_filtrar(
+                page,
+                data_inicio=data_inicio,
+                data_fim=data_fim,
+                tipo_crm=tipo_crm,
+            )
+            fim = time.time() + filtrar_s
+            while time.time() < fim and not _matched():
+                if collected:
+                    # rewrite pode ter falhado; se já temos pacotes no período, sai
+                    break
+                page.wait_for_timeout(250 if periodo_curto else 400)
 
         matched = _matched()
         if not matched and collected:
@@ -2249,106 +2263,55 @@ def _coletar_vendas_via_rede_spa(
                 len(matched),
             )
 
-            def _precisa_mais() -> bool:
-                ni, tot = _contar_itens_e_total_packs(_matched() or list(collected))
-                return bool(tot is not None and ni < tot)
+            def _pagina_do_pack(pack: dict) -> int:
+                from urllib.parse import parse_qs, urlparse
 
-            for pagina_ui in range(max(0, max_paginas_ui - 1)):
-                if not _precisa_mais():
-                    break
-                nxt = None
-                for sel in (
-                    'button:has-text("Próximo")',
-                    'button:has-text("Proximo")',
-                    'button[aria-label*="next" i]',
-                    'button[aria-label*="próxima" i]',
-                    'button[aria-label*="Proxima" i]',
-                    'li.MuiPaginationItem-root[aria-label*="next" i]:not(.Mui-disabled)',
-                    'button.MuiPaginationItem-root[aria-label*="Go to next" i]',
-                    'li.ant-pagination-next:not(.ant-pagination-disabled) button',
-                    ".MuiTablePagination-actions button:last-child:not([disabled])",
-                    ".pagination button:has-text(\">\")",
-                ):
-                    try:
-                        cand = page.locator(sel).first
-                        if cand.count() == 0:
-                            continue
-                        if cand.is_visible() and cand.is_enabled():
-                            nxt = cand
-                            break
-                    except Exception:
-                        continue
-                if not nxt:
-                    break
-                antes = len(_matched() or matched)
                 try:
-                    nxt.scroll_into_view_if_needed(timeout=2000)
-                    nxt.click(timeout=4000)
-                except Exception:
-                    try:
-                        _force_click(page, nxt)
-                    except Exception:
-                        break
-                page.wait_for_timeout(2200)
-                agora = len(_matched() or list(collected))
-                if agora == antes:
-                    page.wait_for_timeout(2000)
-                if len(_matched() or list(collected)) == antes:
-                    break
-                logger.info(
-                    "[HISTORICO PAP] Paginação UI página extra #%s (pacotes=%s)",
-                    pagina_ui + 2,
-                    len(_matched() or list(collected)),
-                )
+                    qs = parse_qs(urlparse(pack.get("url") or "").query)
+                    return int((qs.get("page") or ["1"])[0] or 1)
+                except (TypeError, ValueError):
+                    return 1
 
-            # Fallback: páginas via XHR no browser (anti-replay fresco) se ainda faltar
-            if data_inicio and data_fim and _precisa_mais():
-                n_itens, total_api = _contar_itens_e_total_packs(
-                    _matched() or list(collected)
-                )
-                limite = 200
-                max_p = min(
-                    max_paginas_ui,
-                    max(1, ((total_api or n_itens) + limite - 1) // limite),
-                )
-                # Já temos page 1; buscar 2..N se limit=200 ainda incompleto, ou
-                # se API ignora limit e usa 15 — percorrer pelo total.
-                page_size = max(n_itens, 1) if n_itens else 15
-                if total_api and n_itens and n_itens < 50:
-                    # Provável page size da SPA (15)
-                    page_size = n_itens
-                max_p = min(
-                    max_paginas_ui,
-                    max(1, ((total_api or 0) + page_size - 1) // page_size),
-                )
+            def _paginas_capturadas() -> set[int]:
+                return {
+                    _pagina_do_pack(p)
+                    for p in (_matched() or list(collected))
+                    if extrair_lista_api(p.get("json"))[0]
+                }
+
+            total_paginas = min(max_paginas_ui, -(-int(total_api or 0) // 200))
+            faltando = [n for n in range(1, total_paginas + 1) if n not in _paginas_capturadas()]
+            if faltando:
                 logger.info(
-                    "[HISTORICO PAP] Completando páginas via JS: itens=%s/%s max_p=%s",
-                    n_itens,
+                    "[HISTORICO PAP] Paginando pela SPA: total_api=%s páginas=%s faltando=%s",
                     total_api,
-                    max_p,
+                    total_paginas,
+                    faltando,
                 )
-                for page_n in range(2, max_p + 1):
-                    if not _precisa_mais():
+                for alvo in faltando:
+                    for tentativa in (1, 2):
+                        if alvo in _paginas_capturadas():
+                            break
+                        pagina_alvo["n"] = alvo
+                        _tentar_clicar_filtrar(
+                            page,
+                            data_inicio=data_inicio,
+                            data_fim=data_fim,
+                            tipo_crm=tipo_crm,
+                        )
+                        fim_pg = time.time() + 25.0
+                        while time.time() < fim_pg and alvo not in _paginas_capturadas():
+                            page.wait_for_timeout(300)
+                        logger.info(
+                            "[HISTORICO PAP] Página %s/%s %s (tentativa %s).",
+                            alvo,
+                            total_paginas,
+                            "capturada" if alvo in _paginas_capturadas() else "NÃO veio",
+                            tentativa,
+                        )
+                    if alvo not in _paginas_capturadas():
                         break
-                    pack = _disparar_vendas_via_spa_js(
-                        page,
-                        data_inicio=data_inicio,
-                        data_fim=data_fim,
-                        page_n=page_n,
-                        limit=page_size,
-                    )
-                    fim_js = time.time() + 6.0
-                    antes = len(_matched() or list(collected))
-                    while time.time() < fim_js and len(_matched() or list(collected)) == antes:
-                        page.wait_for_timeout(250)
-                    if pack and len(_matched() or list(collected)) == antes:
-                        _append_pack(pack["url"], pack["status"], pack["json"])
-                    logger.info(
-                        "[HISTORICO PAP] Página JS %s → pacotes=%s itens≈%s",
-                        page_n,
-                        len(_matched() or list(collected)),
-                        _contar_itens_e_total_packs(_matched() or list(collected))[0],
-                    )
+                pagina_alvo["n"] = None
 
             final = _matched() or list(collected)
             ni, tot = _contar_itens_e_total_packs(final)
@@ -2851,7 +2814,8 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
         and busca.data_inicio == busca.data_fim
     )
     timeout_coleta = 25000 if periodo_curto else 55000
-    max_paginas = 4 if periodo_curto else 12
+    max_paginas = 10 if periodo_curto else 60
+    total_api_por_tipo: dict[str, int] = {}
     for tipo_crm in tipos_loop:
         packs = _coletar_vendas_via_rede_spa(
             page,
@@ -2863,6 +2827,9 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
         )
         if packs:
             respostas_spa.extend(packs)
+            _, tot = _contar_itens_e_total_packs(packs)
+            if tot:
+                total_api_por_tipo[tipo_crm] = tot
             logger.info(
                 "[HISTORICO PAP] Tipo %s: %d pacote(s) SPA",
                 tipo_crm,
@@ -2990,6 +2957,14 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
         if origem_coleta == "spa_rede"
         else "Busca efetuada com Authorization capturado da SPA (reconsulta de período)."
     )
+    incompletos = []
+    for tipo_crm, total_api in total_api_por_tipo.items():
+        coletados = (por_tipo.get(tipo_crm) or {}).get("encontrados", 0)
+        if total_api and coletados < total_api:
+            incompletos.append(f"{tipo_crm}: {coletados} de {total_api}")
+    if incompletos:
+        msg += " ATENÇÃO: coleta incompleta (" + "; ".join(incompletos) + ") — rode a busca de novo."
+        logger.warning("[HISTORICO PAP] Busca %s incompleta: %s", busca_id, incompletos)
     _run_django_sync(
         lambda: _atualizar(
             busca_id,
@@ -3001,7 +2976,12 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
             novos_numeros=novos_numeros,
             mensagem=msg,
             finalizado_em=timezone.now(),
-            relatorio_json={"fase": "concluido", "origem": origem_coleta, "por_tipo": por_tipo},
+            relatorio_json={
+                "fase": "concluido",
+                "origem": origem_coleta,
+                "por_tipo": por_tipo,
+                "total_api_por_tipo": total_api_por_tipo,
+            },
         )
     )
     return True, ""
