@@ -228,8 +228,13 @@ class FunilHistoricoPapPedidosView(APIView):
         from crm_app.historico_pap_service import map_pedido_api, normalizar_pedido
         from crm_app.models import HistoricoPapBusca, HistoricoPapPedido
 
-        busca_id = request.query_params.get("busca_id")
-        tipo = request.query_params.get("tipo")
+        from django.db.models import Count, F, Q, TextField, Value
+        from django.db.models.fields.json import KeyTextTransform
+        from django.db.models.functions import Coalesce, NullIf
+
+        qp = request.query_params
+        busca_id = qp.get("busca_id")
+        tipo = (qp.get("tipo") or "").strip().upper()
 
         busca = None
         novos_set: set[str] = set()
@@ -238,14 +243,84 @@ class FunilHistoricoPapPedidosView(APIView):
         else:
             busca = HistoricoPapBusca.objects.order_by("-iniciado_em").first()
 
+        novos_lookup: set[str] = set()
         if busca and busca.novos_numeros:
             novos_set = {normalizar_pedido(n) for n in busca.novos_numeros if n}
+            novos_lookup = novos_set | {str(n).strip() for n in busca.novos_numeros if n}
 
-        qs = HistoricoPapPedido.objects.all()
-        if tipo:
-            qs = qs.filter(tipo_venda__iexact=tipo)
+        base = HistoricoPapPedido.objects.annotate(
+            status_exibicao=Coalesce(
+                NullIf(KeyTextTransform("chaveStatusPrimario", "payload"), Value("")),
+                NullIf(F("status"), Value("")),
+                NullIf(KeyTextTransform("status", "payload"), Value("")),
+                output_field=TextField(),
+            )
+        )
 
-        qs = qs.order_by("-capturado_em")[:500]
+        termo = (qp.get("q") or "").strip()
+        if termo:
+            digitos = "".join(c for c in termo if c.isdigit())
+            filtro = (
+                Q(numero_pedido__icontains=termo)
+                | Q(payload__cliente__icontains=termo)
+                | Q(payload__dadosCliente__nome__icontains=termo)
+            )
+            if len(digitos) >= 3:
+                filtro |= (
+                    Q(numero_pedido__icontains=digitos)
+                    | Q(payload__cpf__icontains=digitos)
+                    | Q(payload__dadosCliente__cpf__icontains=digitos)
+                )
+            base = base.filter(filtro)
+
+        situacao = (qp.get("situacao") or "").strip().lower()
+        if situacao == "novos":
+            base = base.filter(numero_pedido__in=novos_lookup)
+        elif situacao == "base":
+            base = base.exclude(numero_pedido__in=novos_lookup)
+
+        data_de = _parse_date(qp.get("de"), None)
+        data_ate = _parse_date(qp.get("ate"), None)
+        if data_de:
+            base = base.filter(data_criacao_pap__date__gte=data_de)
+        if data_ate:
+            base = base.filter(data_criacao_pap__date__lte=data_ate)
+
+        qs_tipo = base.filter(tipo_venda__iexact=tipo) if tipo else base
+        status_opcoes = sorted(
+            {s for s in qs_tipo.order_by().values_list("status_exibicao", flat=True).distinct() if s},
+            key=str.lower,
+        )
+
+        status_filtro = (qp.get("status") or "").strip()
+        if status_filtro:
+            base = base.filter(status_exibicao__iexact=status_filtro)
+            qs_tipo = qs_tipo.filter(status_exibicao__iexact=status_filtro)
+
+        contagens = {t: 0 for t, _ in HistoricoPapPedido.TIPO_CHOICES}
+        for t, n in base.order_by().values_list("tipo_venda").annotate(n=Count("id")):
+            chave = (t or "").upper()
+            contagens[chave] = contagens.get(chave, 0) + n
+
+        if (qp.get("ordem") or "").strip().lower() == "antigos":
+            ordenacao = [F("data_criacao_pap").asc(nulls_last=True), "id"]
+        else:
+            ordenacao = [F("data_criacao_pap").desc(nulls_last=True), "-id"]
+
+        try:
+            page_size = int(qp.get("page_size") or 25)
+        except (TypeError, ValueError):
+            page_size = 25
+        page_size = max(10, min(page_size, 200))
+        total = qs_tipo.count()
+        total_pages = max(1, -(-total // page_size))
+        try:
+            page = int(qp.get("page") or 1)
+        except (TypeError, ValueError):
+            page = 1
+        page = max(1, min(page, total_pages))
+        inicio = (page - 1) * page_size
+        qs = qs_tipo.order_by(*ordenacao)[inicio:inicio + page_size]
 
         res = []
         for p in qs:
@@ -255,7 +330,7 @@ class FunilHistoricoPapPedidosView(APIView):
 
             cliente_val = mapped.get("cliente") or payload.get("cliente") or payload.get("nomeCliente") or "Desconhecido"
             doc_val = mapped.get("cpf") or mapped.get("documento") or payload.get("cpf") or payload.get("documento") or ""
-            status_val = mapped.get("status_primario") or p.status or payload.get("chaveStatusPrimario") or payload.get("status") or "Desconhecido"
+            status_val = p.status_exibicao or "Desconhecido"
 
             res.append({
                 "id": p.id,
@@ -268,7 +343,16 @@ class FunilHistoricoPapPedidosView(APIView):
                 "data_status": mapped.get("data_pedido") or "",
             })
 
-        return Response(res)
+        return Response({
+            "results": res,
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "contagens": contagens,
+            "status_opcoes": status_opcoes,
+            "busca_id": busca.id if busca else None,
+        })
 
 
 class FunilHistoricoPapImportarView(APIView):

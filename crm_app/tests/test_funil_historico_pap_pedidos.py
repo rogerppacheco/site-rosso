@@ -1,0 +1,79 @@
+from datetime import date, datetime, timedelta, timezone
+
+from django.test import TestCase
+from rest_framework.test import APIClient
+
+from crm_app.models import HistoricoPapBusca, HistoricoPapPedido
+from usuarios.models import Usuario
+
+URL = '/api/crm/funil-venda-wpp/historico-pap/pedidos/'
+
+
+class FunilHistoricoPapPedidosPaginacaoTests(TestCase):
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.client.force_authenticate(Usuario.objects.create_superuser(username='funil', password='x', email='f@x.com'))
+        base = datetime(2026, 9, 1, 10, tzinfo=timezone.utc)
+        for i in range(60):
+            HistoricoPapPedido.objects.create(
+                numero_pedido=f'2026{i:06d}',
+                tipo_venda='VENDA',
+                data_criacao_pap=base + timedelta(days=i % 30, minutes=i),
+                payload={
+                    'cliente': 'MARIA SILVA' if i == 7 else f'CLIENTE {i}',
+                    'cpf': '12345678901' if i == 7 else f'{i:011d}',
+                    'chaveStatusPrimario': 'ANALISE_BO' if i % 2 else 'PEDIDO_GERADO',
+                },
+            )
+        for i in range(3):
+            HistoricoPapPedido.objects.create(numero_pedido=f'INT{i}', tipo_venda='INTERESSE', payload={})
+        self.busca = HistoricoPapBusca.objects.create(
+            data_inicio=date(2026, 9, 1), data_fim=date(2026, 9, 30),
+            novos_numeros=['2026000001', '2026000002'],
+        )
+
+    def _get(self, **params):
+        resp = self.client.get(URL, {'tipo': 'VENDA', 'busca_id': self.busca.id, **params})
+        self.assertEqual(resp.status_code, 200, resp.content)
+        return resp.json()
+
+    def test_pagina_sem_limite_de_500_e_contagem_real(self) -> None:
+        data = self._get(page=3, page_size=25)
+        self.assertEqual(data['count'], 60)
+        self.assertEqual(data['total_pages'], 3)
+        self.assertEqual(data['page'], 3)
+        self.assertEqual(len(data['results']), 10)
+        self.assertEqual(data['contagens'], {'VENDA': 60, 'INTERESSE': 3, 'PRE_VENDA': 0})
+
+    def test_pagina_fora_do_intervalo_vai_para_ultima(self) -> None:
+        data = self._get(page=99, page_size=50)
+        self.assertEqual(data['page'], 2)
+        self.assertEqual(len(data['results']), 10)
+
+    def test_ordena_pela_data_do_pedido(self) -> None:
+        recentes = self._get(page_size=60)['results']
+        antigos = self._get(page_size=60, ordem='antigos')['results']
+        self.assertEqual([p['id'] for p in recentes], [p['id'] for p in reversed(antigos)])
+        primeiro = HistoricoPapPedido.objects.get(pk=recentes[0]['id'])
+        self.assertEqual(
+            primeiro.data_criacao_pap,
+            HistoricoPapPedido.objects.filter(tipo_venda='VENDA').order_by('-data_criacao_pap').first().data_criacao_pap,
+        )
+
+    def test_busca_por_nome_cpf_e_protocolo(self) -> None:
+        self.assertEqual([p['protocolo'] for p in self._get(q='maria')['results']], ['2026000007'])
+        self.assertEqual(self._get(q='123.456.789-01')['count'], 1)
+        self.assertEqual(self._get(q='2026000007')['count'], 1)
+
+    def test_filtros_status_situacao_e_periodo(self) -> None:
+        data = self._get(status='ANALISE_BO', page_size=100)
+        self.assertEqual(data['count'], 30)
+        self.assertEqual(data['contagens']['VENDA'], 30)
+        self.assertEqual(data['status_opcoes'], ['ANALISE_BO', 'PEDIDO_GERADO'])
+
+        novos = self._get(situacao='novos')
+        self.assertEqual(novos['count'], 2)
+        self.assertTrue(all(p['novo_nesta_busca'] for p in novos['results']))
+        self.assertEqual(self._get(situacao='base')['count'], 58)
+
+        self.assertEqual(self._get(de='2026-09-01', ate='2026-09-01')['count'], 2)

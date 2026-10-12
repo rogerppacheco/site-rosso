@@ -26,6 +26,74 @@
 .tab-res-custom { transition: all 0.2s; font-size: 0.95rem; }
 .tab-res-custom:hover { background-color: #f8f9fa; }
 .tab-res-active { background-color: white !important; border-top: 3px solid #0d6efd !important; color: #212529 !important; box-shadow: 0 -4px 10px rgba(0,0,0,0.02); }
+
+.funil-card { overflow: hidden; }
+.funil-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+    padding: 0.85rem 1rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
+    background: var(--bg-surface, #fff);
+}
+.funil-search { position: relative; flex: 1 1 260px; max-width: 380px; }
+.funil-search > .bi-search { position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--text-subtle, #8f9bb3); pointer-events: none; }
+.funil-search input { padding-left: 2.1rem; padding-right: 2rem; border-radius: 999px; }
+.funil-kbd {
+    position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
+    font-size: 0.7rem; padding: 0.05rem 0.4rem; border-radius: 4px;
+    background: var(--bg-secondary, #e8edf5); color: var(--text-secondary, #5b6b7d); border: 1px solid var(--border-color, #e4e9f2);
+}
+.funil-search input:focus ~ .funil-kbd, .funil-search input:not(:placeholder-shown) ~ .funil-kbd { display: none; }
+.funil-select { width: auto; min-width: 170px; border-radius: 999px; }
+.funil-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--bg-secondary, #e8edf5); border: 1px solid var(--border-color, #e4e9f2); }
+.funil-seg button {
+    border: 0; background: transparent; color: var(--text-secondary, #5b6b7d);
+    font-size: 0.8rem; font-weight: 600; padding: 0.3rem 0.85rem; border-radius: 999px; transition: all 0.15s ease;
+}
+.funil-seg button:hover { color: var(--text-primary, #1a2332); }
+.funil-seg button.active { background: var(--accent-primary, #0ea5e9); color: var(--text-on-accent, #fff); box-shadow: 0 2px 6px rgba(14,165,233,0.3); }
+.funil-periodo { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text-secondary, #5b6b7d); font-size: 0.8rem; }
+.funil-periodo input { width: 140px; border-radius: 999px; }
+.funil-limpar { color: var(--color-danger, #dc2626); font-weight: 600; border-radius: 999px; }
+.funil-limpar:hover { background: var(--badge-danger-bg, #fee2e2); color: var(--color-danger, #dc2626); }
+
+.funil-scroll { max-height: 65vh; overflow-y: auto; }
+.funil-th-sort {
+    border: 0; background: transparent; padding: 0; color: inherit;
+    font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer;
+}
+.funil-th-sort:hover { color: var(--accent-primary, #0ea5e9); }
+.funil-row-anim { animation: funilFade 0.18s ease-out; }
+@keyframes funilFade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.funil-skel { display: inline-block; height: 0.8rem; border-radius: 4px; background: linear-gradient(90deg, var(--skeleton-base, #e4e9f2) 25%, var(--skeleton-highlight, #f0f4fa) 50%, var(--skeleton-base, #e4e9f2) 75%); background-size: 200% 100%; animation: funilSkel 1.1s infinite linear; }
+@keyframes funilSkel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.funil-carregando tbody { opacity: 0.55; transition: opacity 0.15s; }
+mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204, 21, 0.35); color: inherit; }
+
+.funil-pag {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 0.75rem 1rem; border-top: 1px solid var(--border-color, #e4e9f2); background: var(--bg-surface, #fff);
+}
+.funil-pag-info { font-size: 0.85rem; color: var(--text-secondary, #5b6b7d); min-width: 200px; }
+.funil-pag-info strong { color: var(--text-primary, #1a2332); }
+.funil-pag-nav { display: flex; align-items: center; gap: 0.25rem; }
+.funil-pag-paginas { display: flex; align-items: center; gap: 0.25rem; }
+.funil-pag-btn {
+    min-width: 2.1rem; height: 2.1rem; padding: 0 0.55rem; border-radius: 10px;
+    border: 1px solid var(--border-color, #e4e9f2); background: var(--bg-card, #fff); color: var(--text-primary, #1a2332);
+    font-size: 0.85rem; font-weight: 600; transition: all 0.15s ease;
+}
+.funil-pag-btn:hover:not(:disabled):not(.active) { border-color: var(--accent-primary, #0ea5e9); color: var(--accent-primary, #0ea5e9); }
+.funil-pag-btn.active { background: var(--accent-primary, #0ea5e9); border-color: var(--accent-primary, #0ea5e9); color: var(--text-on-accent, #fff); box-shadow: 0 2px 8px rgba(14,165,233,0.35); cursor: default; }
+.funil-pag-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.funil-pag-gap { color: var(--text-subtle, #8f9bb3); padding: 0 0.2rem; user-select: none; }
+.funil-pag-tools { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; color: var(--text-secondary, #5b6b7d); }
+.funil-pag-ir { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; }
+.funil-pag-ir input { width: 4.5rem; border-radius: 10px; text-align: center; }
+#pag-hist-size { width: auto; border-radius: 10px; }
+@media (max-width: 768px) {
+    .funil-pag { justify-content: center; }
+    .funil-pag-info { text-align: center; width: 100%; }
+    .funil-periodo input { width: 125px; }
+}
 </style>
 {% endblock %}
 
@@ -88,9 +156,31 @@
                 </div>
             </div>
 
-            <div class="card card-modern border-top-0 shadow-sm" style="border-top-left-radius: 0;">
+            <div class="card card-modern border-top-0 shadow-sm funil-card" style="border-top-left-radius: 0;">
+                <div class="funil-toolbar">
+                    <div class="funil-search">
+                        <i class="bi bi-search"></i>
+                        <input type="search" id="f-busca" class="form-control form-control-sm" placeholder="Protocolo, cliente ou CPF" aria-label="Buscar por protocolo, cliente ou CPF" autocomplete="off">
+                        <kbd class="funil-kbd" title="Atalho: / foca a busca">/</kbd>
+                    </div>
+                    <select id="f-status" class="form-select form-select-sm funil-select" aria-label="Filtrar por status PAP">
+                        <option value="">Todos os status</option>
+                    </select>
+                    <div class="funil-seg" role="group" aria-label="Situação no CRM">
+                        <button type="button" class="active" data-situacao="">Todos</button>
+                        <button type="button" data-situacao="novos"><i class="bi bi-stars"></i> Novos</button>
+                        <button type="button" data-situacao="base">Já na base</button>
+                    </div>
+                    <div class="funil-periodo" title="Data do pedido no PAP">
+                        <i class="bi bi-calendar3"></i>
+                        <input type="date" id="f-de" class="form-control form-control-sm" aria-label="Data do pedido a partir de">
+                        <span>até</span>
+                        <input type="date" id="f-ate" class="form-control form-control-sm" aria-label="Data do pedido até">
+                    </div>
+                    <button type="button" id="f-limpar" class="btn btn-sm funil-limpar d-none"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button>
+                </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 75vh; overflow-y: auto;">
+                    <div class="table-responsive funil-scroll" id="funil-scroll">
                         <table class="table table-modern table-hover mb-0 align-middle">
                             <thead class="table-light sticky-top shadow-sm">
                                 <tr>
@@ -98,7 +188,11 @@
                                     <th class="py-3">Cliente</th>
                                     <th class="py-3">Documento</th>
                                     <th class="py-3">Status PAP</th>
-                                    <th class="py-3">Data Status</th>
+                                    <th class="py-3">
+                                        <button type="button" id="th-ordem-data" class="funil-th-sort" title="Inverter ordenação por data do pedido">
+                                            Data do pedido <i class="bi bi-sort-down" id="ic-ordem-data"></i>
+                                        </button>
+                                    </th>
                                     <th class="py-3">Situação CRM</th>
                                     <th class="text-end pe-4 py-3">Ação</th>
                                 </tr>
@@ -109,7 +203,26 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer bg-white border-0 py-3 px-4 d-flex justify-content-between align-items-center">
+                <div class="funil-pag" id="funil-pag">
+                    <div class="funil-pag-info" id="pag-hist-info" aria-live="polite">—</div>
+                    <nav class="funil-pag-nav" aria-label="Paginação">
+                        <button type="button" class="funil-pag-btn" id="pag-hist-prev" aria-label="Página anterior" title="Página anterior (←)"><i class="bi bi-chevron-left"></i></button>
+                        <div class="funil-pag-paginas" id="pag-hist-paginas"></div>
+                        <button type="button" class="funil-pag-btn" id="pag-hist-next" aria-label="Próxima página" title="Próxima página (→)"><i class="bi bi-chevron-right"></i></button>
+                    </nav>
+                    <div class="funil-pag-tools">
+                        <label class="funil-pag-ir">Ir para
+                            <input type="number" id="pag-hist-ir" class="form-control form-control-sm" min="1" aria-label="Ir para a página" title="Digite a página e pressione Enter">
+                        </label>
+                        <select id="pag-hist-size" class="form-select form-select-sm" aria-label="Itens por página" title="Itens por página">
+                            <option value="25">25 / página</option>
+                            <option value="50">50 / página</option>
+                            <option value="100">100 / página</option>
+                            <option value="200">200 / página</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-0 py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <span class="small fw-medium text-success" id="hist-status-msg"></span>
                     <span class="small text-muted" id="rodape-info"></span>
                 </div>
@@ -245,7 +358,6 @@
     
     let pageWpp = 1;
     let histPoll = null;
-    let activeTipo = 'INTERESSE';
     let currentBuscaId = null;
 
     function getToken() { return localStorage.getItem('accessToken'); }
@@ -343,32 +455,201 @@
 
     // LÓGICA DE TRATAMENTO HISTORICO PAP
     
-    // Troca de abas de resultados
+    const TIPOS_HIST = ['INTERESSE', 'PRE_VENDA', 'VENDA'];
+    const BADGE_TIPO = { INTERESSE: 'count-interesse', PRE_VENDA: 'count-prevenda', VENDA: 'count-venda' };
+    const TAMANHOS_PAGINA = [25, 50, 100, 200];
+    const LS_FUNIL_PAGE_SIZE = 'funil_hist_page_size';
+    // Chaves curtas na URL: o estado sobrevive a F5 e pode ser compartilhado por link.
+    const URL_CHAVES = { tipo: 'aba', page: 'pg', pageSize: 'pp', q: 'q', status: 'st', situacao: 'sit', de: 'de', ate: 'ate', ordem: 'ord' };
+
+    const histState = {
+        tipo: 'INTERESSE', page: 1, pageSize: 25,
+        q: '', status: '', situacao: '', de: '', ate: '', ordem: 'recentes',
+    };
+    let histMeta = { page: 1, totalPages: 1, count: 0 };
+    let histAbort = null;
+    let buscaDebounce = null;
+
+    function esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function destacar(texto) {
+        const bruto = String(texto ?? '');
+        const termo = histState.q.trim();
+        if (termo.length < 2) return esc(bruto);
+        const re = new RegExp(`(${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return bruto.split(re).map((parte, i) => (i % 2 ? `<mark class="funil-mark">${esc(parte)}</mark>` : esc(parte))).join('');
+    }
+
+    function lerEstadoDaUrl() {
+        const sp = new URLSearchParams(window.location.search);
+        const salvo = parseInt(localStorage.getItem(LS_FUNIL_PAGE_SIZE), 10);
+        if (TAMANHOS_PAGINA.includes(salvo)) histState.pageSize = salvo;
+        Object.entries(URL_CHAVES).forEach(([k, chave]) => {
+            const v = sp.get(chave);
+            if (v === null || v === '') return;
+            if (k === 'page') histState.page = Math.max(1, parseInt(v, 10) || 1);
+            else if (k === 'pageSize') { const n = parseInt(v, 10); if (TAMANHOS_PAGINA.includes(n)) histState.pageSize = n; }
+            else if (k === 'tipo') { if (TIPOS_HIST.includes(v)) histState.tipo = v; }
+            else histState[k] = v;
+        });
+    }
+
+    function gravarEstadoNaUrl() {
+        const sp = new URLSearchParams(window.location.search);
+        const padrao = { tipo: 'INTERESSE', page: 1, pageSize: 25, ordem: 'recentes' };
+        Object.entries(URL_CHAVES).forEach(([k, chave]) => {
+            const v = histState[k];
+            if (v === '' || v === null || v === undefined || v === padrao[k]) sp.delete(chave);
+            else sp.set(chave, v);
+        });
+        const qs = sp.toString();
+        history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+    }
+
+    function sincronizarControles() {
+        document.querySelectorAll('.tab-res-custom').forEach(b => {
+            b.classList.toggle('tab-res-active', b.getAttribute('data-tipo') === histState.tipo);
+        });
+        document.getElementById('f-busca').value = histState.q;
+        document.getElementById('f-de').value = histState.de;
+        document.getElementById('f-ate').value = histState.ate;
+        document.getElementById('pag-hist-size').value = String(histState.pageSize);
+        document.querySelectorAll('.funil-seg button').forEach(b => {
+            b.classList.toggle('active', b.getAttribute('data-situacao') === histState.situacao);
+        });
+        document.getElementById('ic-ordem-data').className = histState.ordem === 'antigos' ? 'bi bi-sort-up' : 'bi bi-sort-down';
+        const temFiltro = !!(histState.q || histState.status || histState.situacao || histState.de || histState.ate);
+        document.getElementById('f-limpar').classList.toggle('d-none', !temFiltro);
+    }
+
+    function aplicarFiltros(mudancas) {
+        Object.assign(histState, mudancas, { page: 1 });
+        carregarPedidos();
+    }
+
+    function irParaPagina(pagina) {
+        const n = parseInt(pagina, 10);
+        if (!Number.isFinite(n)) return;
+        const alvo = Math.min(Math.max(1, n), histMeta.totalPages || 1);
+        if (alvo === histState.page && alvo === histMeta.page) return;
+        histState.page = alvo;
+        carregarPedidos({ rolarTopo: true });
+    }
+
     document.querySelectorAll('.tab-res-custom').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.tab-res-custom').forEach(b => b.classList.remove('tab-res-active'));
-            e.currentTarget.classList.add('tab-res-active');
-            activeTipo = e.currentTarget.getAttribute('data-tipo');
-            carregarPedidos(currentBuscaId, activeTipo);
+            const tipo = e.currentTarget.getAttribute('data-tipo');
+            if (tipo === histState.tipo) return;
+            // Os status do PAP mudam entre Interesse/Pré-venda/Venda.
+            aplicarFiltros({ tipo, status: '' });
         });
     });
 
-    async function atualizarBadgesCount(busca_id) {
-        const tipos = ['INTERESSE', 'PRE_VENDA', 'VENDA'];
-        const badgeMap = { 'INTERESSE': 'count-interesse', 'PRE_VENDA': 'count-prevenda', 'VENDA': 'count-venda' };
-        
-        tipos.forEach(async (t) => {
-            try {
-                const url = API_HIST + `pedidos/?tipo=${t}` + (busca_id ? `&busca_id=${busca_id}` : '');
-                const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + getToken() } });
-                if (r.ok) {
-                    const data = await r.json();
-                    if (badgeMap[t]) {
-                        document.getElementById(badgeMap[t]).textContent = data.length;
-                    }
-                }
-            } catch(e) {}
+    document.getElementById('f-busca').addEventListener('input', (e) => {
+        clearTimeout(buscaDebounce);
+        const valor = e.target.value;
+        buscaDebounce = setTimeout(() => aplicarFiltros({ q: valor.trim() }), 350);
+    });
+    document.getElementById('f-busca').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { clearTimeout(buscaDebounce); aplicarFiltros({ q: e.target.value.trim() }); }
+        if (e.key === 'Escape' && e.target.value) { e.target.value = ''; clearTimeout(buscaDebounce); aplicarFiltros({ q: '' }); }
+    });
+    document.getElementById('f-status').addEventListener('change', (e) => aplicarFiltros({ status: e.target.value }));
+    document.querySelectorAll('.funil-seg button').forEach(b => {
+        b.addEventListener('click', () => aplicarFiltros({ situacao: b.getAttribute('data-situacao') }));
+    });
+    document.getElementById('f-de').addEventListener('change', (e) => aplicarFiltros({ de: e.target.value }));
+    document.getElementById('f-ate').addEventListener('change', (e) => aplicarFiltros({ ate: e.target.value }));
+    document.getElementById('f-limpar').addEventListener('click', () => {
+        aplicarFiltros({ q: '', status: '', situacao: '', de: '', ate: '' });
+    });
+    document.getElementById('th-ordem-data').addEventListener('click', () => {
+        aplicarFiltros({ ordem: histState.ordem === 'antigos' ? 'recentes' : 'antigos' });
+    });
+
+    document.getElementById('pag-hist-prev').addEventListener('click', () => irParaPagina(histState.page - 1));
+    document.getElementById('pag-hist-next').addEventListener('click', () => irParaPagina(histState.page + 1));
+    document.getElementById('pag-hist-paginas').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-pagina]');
+        if (b) irParaPagina(b.getAttribute('data-pagina'));
+    });
+    const inputIr = document.getElementById('pag-hist-ir');
+    inputIr.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); irParaPagina(inputIr.value); inputIr.value = ''; }
+    });
+    inputIr.addEventListener('change', () => { if (inputIr.value) { irParaPagina(inputIr.value); inputIr.value = ''; } });
+    document.getElementById('pag-hist-size').addEventListener('change', (e) => {
+        const n = parseInt(e.target.value, 10);
+        if (!TAMANHOS_PAGINA.includes(n)) return;
+        // Mantém o primeiro item visível ao trocar o tamanho da página.
+        const primeiro = (histState.page - 1) * histState.pageSize;
+        localStorage.setItem(LS_FUNIL_PAGE_SIZE, String(n));
+        histState.pageSize = n;
+        histState.page = Math.floor(primeiro / n) + 1;
+        carregarPedidos({ rolarTopo: true });
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (document.getElementById('painel-hist').classList.contains('d-none')) return;
+        if (document.querySelector('.modal.show')) return;
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (['input', 'select', 'textarea'].includes(tag) || e.target.isContentEditable) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key === '/') { e.preventDefault(); document.getElementById('f-busca').focus(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); irParaPagina(histState.page - 1); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); irParaPagina(histState.page + 1); }
+    });
+
+    function paginasVisiveis(atual, total) {
+        if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+        const set = new Set([1, total, atual - 1, atual, atual + 1]);
+        if (atual <= 3) [2, 3, 4].forEach(n => set.add(n));
+        if (atual >= total - 2) [total - 3, total - 2, total - 1].forEach(n => set.add(n));
+        const nums = [...set].filter(n => n >= 1 && n <= total).sort((a, b) => a - b);
+        const out = [];
+        nums.forEach((n, i) => {
+            if (i && n - nums[i - 1] > 1) out.push(n - nums[i - 1] === 2 ? n - 1 : null);
+            out.push(n);
         });
+        return out;
+    }
+
+    function renderPaginacao() {
+        const { page, totalPages, count } = histMeta;
+        const ini = count ? (page - 1) * histState.pageSize + 1 : 0;
+        const fim = Math.min(page * histState.pageSize, count);
+        const fmt = n => n.toLocaleString('pt-BR');
+        document.getElementById('pag-hist-info').innerHTML = count
+            ? `Mostrando <strong>${fmt(ini)}–${fmt(fim)}</strong> de <strong>${fmt(count)}</strong> pedidos`
+            : 'Nenhum pedido';
+        document.getElementById('pag-hist-prev').disabled = page <= 1;
+        document.getElementById('pag-hist-next').disabled = page >= totalPages;
+        document.getElementById('pag-hist-paginas').innerHTML = paginasVisiveis(page, totalPages).map(n => n === null
+            ? '<span class="funil-pag-gap">…</span>'
+            : `<button type="button" class="funil-pag-btn${n === page ? ' active' : ''}" data-pagina="${n}" aria-label="Página ${n}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`
+        ).join('');
+        inputIr.max = String(totalPages);
+        inputIr.placeholder = `1–${totalPages}`;
+        document.getElementById('funil-pag').classList.toggle('d-none', !count);
+    }
+
+    function renderStatusOpcoes(opcoes) {
+        const sel = document.getElementById('f-status');
+        const lista = [...(opcoes || [])];
+        if (histState.status && !lista.some(o => o.toLowerCase() === histState.status.toLowerCase())) lista.push(histState.status);
+        sel.innerHTML = '<option value="">Todos os status</option>' + lista.map(o =>
+            `<option value="${esc(o)}">${esc(o.replace(/_/g, ' '))}</option>`
+        ).join('');
+        sel.value = histState.status;
+    }
+
+    function linhasSkeleton(qtd) {
+        const cel = w => `<td class="py-3"><span class="funil-skel" style="width:${w}%"></span></td>`;
+        return Array.from({ length: qtd }, () =>
+            `<tr>${cel(70)}${cel(80)}${cel(60)}${cel(55)}${cel(50)}${cel(40)}${cel(45)}</tr>`
+        ).join('');
     }
 
     async function carregarConfigHist() {
@@ -390,12 +671,8 @@
             } else if (cfg.ultima_busca) {
                 currentBuscaId = cfg.ultima_busca.id;
                 atualizarMetricas(cfg.ultima_busca);
-                carregarPedidos(currentBuscaId, activeTipo);
-                atualizarBadgesCount(currentBuscaId);
-            } else {
-                carregarPedidos(null, activeTipo);
-                atualizarBadgesCount(null);
             }
+            carregarPedidos();
         } catch (e) {}
     }
 
@@ -414,50 +691,89 @@
         }
     }
 
-    async function carregarPedidos(busca_id, tipo) {
+    function linhaPedido(p) {
+        const [dia, hora] = String(p.data_status || '').split(' ');
+        return `
+            <tr class="funil-row-anim">
+                <td class="ps-4 fw-bold font-monospace text-primary">${destacar(p.protocolo || '-')}</td>
+                <td class="fw-medium text-dark">${destacar(p.cliente || 'Desconhecido')}</td>
+                <td class="text-muted small text-nowrap">${destacar(p.documento || '-')}</td>
+                <td><span class="badge bg-secondary badge-status">${esc((p.status_primario || 'Desconhecido').replace(/_/g, ' '))}</span></td>
+                <td class="text-muted small text-nowrap">${dia ? `${esc(dia)}${hora ? `<br><span class="opacity-75">${esc(hora)}</span>` : ''}` : '-'}</td>
+                <td>
+                    ${p.novo_nesta_busca
+                        ? '<span class="badge bg-success-subtle text-success border border-success-subtle badge-status"><i class="bi bi-stars"></i> Novo</span>'
+                        : '<span class="badge bg-light text-muted border badge-status">Já na Base</span>'}
+                </td>
+                <td class="text-end pe-4">
+                    <button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="alert('Funcionalidade de Tratamento em desenvolvimento')">Tratar</button>
+                </td>
+            </tr>`;
+    }
+
+    async function carregarPedidos({ rolarTopo = false } = {}) {
         const tbody = document.getElementById('tbody-resultados');
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div> Carregando dados...</td></tr>';
-        
+        const scroll = document.getElementById('funil-scroll');
+        sincronizarControles();
+        gravarEstadoNaUrl();
+
+        if (histAbort) histAbort.abort();
+        histAbort = new AbortController();
+        const sinal = histAbort.signal;
+
+        // Com dados na tela, só esmaece; tela vazia ganha skeleton.
+        if (tbody.querySelector('.funil-row-anim')) scroll.classList.add('funil-carregando');
+        else tbody.innerHTML = linhasSkeleton(Math.min(histState.pageSize, 8));
+
+        const params = new URLSearchParams({
+            tipo: histState.tipo,
+            page: String(histState.page),
+            page_size: String(histState.pageSize),
+            ordem: histState.ordem,
+        });
+        if (currentBuscaId) params.set('busca_id', currentBuscaId);
+        ['q', 'status', 'situacao', 'de', 'ate'].forEach(k => { if (histState[k]) params.set(k, histState[k]); });
+
         try {
-            const url = API_HIST + `pedidos/?tipo=${tipo}` + (busca_id ? `&busca_id=${busca_id}` : '');
-            const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+            const r = await fetch(API_HIST + 'pedidos/?' + params.toString(), {
+                headers: { 'Authorization': 'Bearer ' + getToken() },
+                signal: sinal,
+            });
             if (!r.ok) {
                 tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-4">Erro HTTP ${r.status} ao carregar dados.</td></tr>`;
                 return;
             }
             const data = await r.json();
-            
-            // Atualiza o badge da aba atual com a contagem real do banco
-            const badgeMap = { 'INTERESSE': 'count-interesse', 'PRE_VENDA': 'count-prevenda', 'VENDA': 'count-venda' };
-            if (badgeMap[tipo]) {
-                document.getElementById(badgeMap[tipo]).textContent = data.length;
+            if (sinal.aborted) return;
+
+            const contagens = data.contagens || {};
+            TIPOS_HIST.forEach(t => {
+                document.getElementById(BADGE_TIPO[t]).textContent = (contagens[t] || 0).toLocaleString('pt-BR');
+            });
+
+            histMeta = { page: data.page || 1, totalPages: data.total_pages || 1, count: data.count || 0 };
+            histState.page = histMeta.page;
+            gravarEstadoNaUrl();
+            renderStatusOpcoes(data.status_opcoes);
+            renderPaginacao();
+
+            const itens = data.results || [];
+            if (!itens.length) {
+                const temFiltro = !!(histState.q || histState.status || histState.situacao || histState.de || histState.ate);
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>
+                    ${temFiltro ? 'Nenhum pedido encontrado com esses filtros.' : 'Nenhum item nesta categoria.'}
+                    ${temFiltro ? '<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="document.getElementById(\'f-limpar\').click()"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button></div>' : ''}
+                </td></tr>`;
+            } else {
+                tbody.innerHTML = itens.map(linhaPedido).join('');
             }
-            
-            if (!data.length) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>Nenhum item nesta categoria.</td></tr>';
-                return;
-            }
-            
-            tbody.innerHTML = data.map(p => `
-                <tr>
-                    <td class="ps-4 fw-bold font-monospace text-primary">${p.protocolo || '-'}</td>
-                    <td class="fw-medium text-dark">${p.cliente || 'Desconhecido'}</td>
-                    <td class="text-muted small">${p.documento || '-'}</td>
-                    <td><span class="badge bg-secondary badge-status">${(p.status_primario || 'Desconhecido').replace(/_/g, ' ')}</span></td>
-                    <td class="text-muted small">${p.data_status ? p.data_status.split('T')[0].split('-').reverse().join('/') : '-'}</td>
-                    <td>
-                        ${p.novo_nesta_busca 
-                            ? '<span class="badge bg-success-subtle text-success border border-success-subtle badge-status"><i class="bi bi-stars"></i> Novo</span>' 
-                            : '<span class="badge bg-light text-muted border badge-status">Já na Base</span>'}
-                    </td>
-                    <td class="text-end pe-4">
-                        <button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="alert('Funcionalidade de Tratamento em desenvolvimento')">Tratar</button>
-                    </td>
-                </tr>
-            `).join('');
-            
+            if (rolarTopo) scroll.scrollTop = 0;
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-4">Erro ao carregar os dados: ${e.message}</td></tr>`;
+            if (e.name === 'AbortError') return;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-4">Erro ao carregar os dados: ${esc(e.message)}</td></tr>`;
+        } finally {
+            if (!sinal.aborted) scroll.classList.remove('funil-carregando');
         }
     }
 
@@ -482,9 +798,8 @@
                 document.getElementById('btn-hist-buscar').disabled = false;
                 currentBuscaId = s.id;
                 atualizarMetricas(s);
-                // Recarrega a aba ativa e atualiza todos os badges
-                await carregarPedidos(currentBuscaId, activeTipo);
-                atualizarBadgesCount(currentBuscaId);
+                histState.page = 1;
+                await carregarPedidos({ rolarTopo: true });
             }
         } catch (e) {}
     }
@@ -568,6 +883,8 @@
     });
 
     // Iniciar
+    lerEstadoDaUrl();
+    sincronizarControles();
     carregarConfigHist();
 
 </script>
