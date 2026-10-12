@@ -154,6 +154,20 @@ class JanelasPeriodoPapTests(TestCase):
         self.assertFalse(_pack_no_periodo(url, date(2026, 1, 10), date(2026, 1, 31)))
 
 
+class LimitePapTests(TestCase):
+    def test_429_recente_e_lembrado(self) -> None:
+        import time
+
+        from crm_app import historico_pap_service as svc
+
+        svc._ULTIMO_429['t'] = 0.0
+        self.assertFalse(svc._pap_limitou_recentemente())
+        svc._ULTIMO_429['t'] = time.time() - 30
+        self.assertTrue(svc._pap_limitou_recentemente())
+        self.assertFalse(svc._pap_limitou_recentemente(10))
+        svc._ULTIMO_429['t'] = 0.0
+
+
 class SessaoExpiradaHistoricoPapTests(TestCase):
     def setUp(self) -> None:
         self.login = Usuario.objects.create_user(username='ana', password='x', matricula_pap='TT1', senha_pap='s')

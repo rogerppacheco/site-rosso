@@ -658,6 +658,13 @@ def _force_click(page, btn) -> None:
 
 PAGINAS_POR_JANELA = 2
 ITENS_ALVO_JANELA = 300
+ESPERA_429_PADRAO_S = 60
+INTERVALO_MIN_VENDAS_S = 4
+_ULTIMO_429 = {"t": 0.0}
+
+
+def _pap_limitou_recentemente(segundos: int = 300) -> bool:
+    return time.time() - _ULTIMO_429["t"] < segundos
 
 
 def _dividir_periodo(ini: date, fim: date, partes: int) -> list[tuple[date, date]]:
@@ -2080,6 +2087,16 @@ def _coletar_vendas_via_rede_spa(
     pagina_alvo: dict[str, int | None] = {"n": None}
     # Sub-período do próximo /vendas: o gateway do PAP dá 504 em páginas profundas (offset ≥ 400).
     janela_alvo: dict[str, date | None] = {"ini": None, "fim": None}
+    bloqueio_ate = {"t": 0.0}
+    ultimo_disparo = {"t": 0.0}
+
+    def _respeitar_limite_pap() -> None:
+        """Pausa enquanto o PAP pede (429) e espaça os /vendas para não estourar o limite."""
+        espera = max(bloqueio_ate["t"] - time.time(), ultimo_disparo["t"] + INTERVALO_MIN_VENDAS_S - time.time())
+        fim_espera = time.time() + max(0.0, espera)
+        while time.time() < fim_espera:
+            page.wait_for_timeout(int(min(2000, (fim_espera - time.time()) * 1000)) + 1)
+        ultimo_disparo["t"] = time.time()
     # Páginas profundas com limit=200 chegam a levar >30s na API do PAP.
     fetch_pendentes = {"n": 0}
     timeout_fetch_ms = 120000
@@ -2188,6 +2205,15 @@ def _coletar_vendas_via_rede_spa(
                 except Exception:
                     body = None
 
+            if status == 429:
+                try:
+                    espera = int((api_resp.headers or {}).get("retry-after") or 0)
+                except (TypeError, ValueError):
+                    espera = 0
+                espera = min(max(espera, ESPERA_429_PADRAO_S), 300)
+                bloqueio_ate["t"] = time.time() + espera
+                _ULTIMO_429["t"] = time.time()
+                logger.warning("[HISTORICO PAP] PAP limitou as consultas (429) — pausa de %ss.", espera)
             if status < 200 or status >= 300:
                 erros.append(f"HTTP {status}: {preview}")
                 logger.warning(
@@ -2315,18 +2341,23 @@ def _coletar_vendas_via_rede_spa(
             if tipo_api and tipo_api != "VENDA":
                 collected.clear()
                 seen_urls.clear()
-            _tentar_clicar_filtrar(
-                page,
-                data_inicio=data_inicio,
-                data_fim=data_fim,
-                tipo_crm=tipo_crm,
-            )
-            fim = time.time() + filtrar_s
-            while time.time() < fim and not _matched():
-                if collected:
-                    # rewrite pode ter falhado; se já temos pacotes no período, sai
+            for pausa_429 in range(4):
+                _respeitar_limite_pap()
+                _tentar_clicar_filtrar(
+                    page,
+                    data_inicio=data_inicio,
+                    data_fim=data_fim,
+                    tipo_crm=tipo_crm,
+                    rapido=pausa_429 > 0,
+                )
+                fim = time.time() + filtrar_s
+                while time.time() < fim and not _matched():
+                    if collected or bloqueio_ate["t"] > time.time():
+                        # rewrite pode ter falhado; se já temos pacotes no período, sai
+                        break
+                    page.wait_for_timeout(250 if periodo_curto else 400)
+                if collected or bloqueio_ate["t"] <= time.time():
                     break
-                page.wait_for_timeout(250 if periodo_curto else 400)
 
         matched = _matched()
         if not matched and collected:
@@ -2372,11 +2403,20 @@ def _coletar_vendas_via_rede_spa(
                 return len(vistos)
 
             def _buscar(ini: date, fim: date, pg: int) -> dict | None:
-                for tentativa in (1, 2, 3):
+                tentativa = 0
+                pausas_429 = 0
+                while tentativa < 3:
+                    tentativa += 1
                     pack = _pack_de(ini, fim, pg)
                     if pack:
                         return pack
                     _aguardar_sem_fetch_pendente()
+                    if bloqueio_ate["t"] > time.time():
+                        pausas_429 += 1
+                        if pausas_429 > 4:
+                            return None
+                        tentativa -= 1
+                    _respeitar_limite_pap()
                     _garantir_pagina_no_pap(page)
                     janela_alvo["ini"], janela_alvo["fim"] = ini, fim
                     pagina_alvo["n"] = pg
@@ -2386,13 +2426,13 @@ def _coletar_vendas_via_rede_spa(
                         data_inicio=data_inicio,
                         data_fim=data_fim,
                         tipo_crm=tipo_crm,
-                        rapido=tentativa == 1,
+                        rapido=tentativa <= 1,
                     )
                     # Sem request → Filtrar não disparou; com request, espera a API.
-                    sem_request_s = 10 if tentativa == 1 else 20
+                    sem_request_s = 10 if tentativa <= 1 else 20
                     while not _pack_de(ini, fim, pg):
                         decorrido = time.time() - inicio_pg
-                        if decorrido > espera_fetch_s:
+                        if decorrido > espera_fetch_s or bloqueio_ate["t"] > time.time():
                             break
                         if decorrido > sem_request_s and fetch_pendentes["n"] == 0:
                             break
@@ -3032,6 +3072,11 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
             )
 
     # ─── PASSO 2: Fallback seguro — reload + Filtrar de novo (sem reusar Authorization) ─
+    if not spa_ok and _pap_limitou_recentemente(120):
+        return False, (
+            "O PAP bloqueou temporariamente as consultas desta conta por excesso de "
+            "requisições (HTTP 429). Aguarde uns 10 minutos e rode a busca de novo."
+        )
     if not spa_ok:
         origem_coleta = "spa_rede_retry"
         logger.warning(
@@ -3067,6 +3112,11 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
                     )
 
         if not spa_ok:
+            if _pap_limitou_recentemente():
+                return False, (
+                    "O PAP bloqueou temporariamente as consultas desta conta por excesso de "
+                    "requisições (HTTP 429). Aguarde uns 10 minutos e rode a busca de novo."
+                )
             return False, (
                 "Nenhum pedido obtido: a SPA não disparou /api/portal/vendas no Histórico. "
                 "Alternativa estável: exportar no PAP e enviar o arquivo no site "
@@ -3127,6 +3177,8 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
             incompletos.append(f"{tipo_crm}: {coletados} de {total_api}")
     if incompletos:
         msg += " ATENÇÃO: coleta incompleta (" + "; ".join(incompletos) + ") — rode a busca de novo."
+        if _pap_limitou_recentemente():
+            msg += " O PAP limitou as consultas (HTTP 429): espere uns 10 minutos antes."
         logger.warning("[HISTORICO PAP] Busca %s incompleta: %s", busca_id, incompletos)
     _run_django_sync(
         lambda: _atualizar(
