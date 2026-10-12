@@ -1896,8 +1896,12 @@ def _tentar_clicar_filtrar(
     data_inicio: date | None = None,
     data_fim: date | None = None,
     tipo_crm: str | None = None,
+    rapido: bool = False,
 ) -> None:
-    """Abre Filtros, escolhe Tipo (se pedido), dias no calendário, clica Filtrar DENTRO do drawer."""
+    """Abre Filtros, escolhe Tipo (se pedido), dias no calendário, clica Filtrar DENTRO do drawer.
+
+    rapido=True só reabre o drawer e clica Filtrar: o route já reescreve período/tipo/página.
+    """
     if not page:
         return
 
@@ -1937,6 +1941,13 @@ def _tentar_clicar_filtrar(
         logger.warning("[HISTORICO PAP] Drawer de filtros não ficou visível.")
 
     _abrir_drawer()
+
+    if rapido:
+        _scroll_drawer_ate_filtrar(page)
+        if _aguardar_filtrar_habilitado(page, timeout_ms=3000) and _clicar_filtrar_no_drawer(page):
+            logger.info("[HISTORICO PAP] Filtrar (rápido, sem refazer filtros) clicado.")
+            return
+        logger.info("[HISTORICO PAP] Filtrar rápido indisponível — refazendo filtros.")
 
     try:
         page.wait_for_selector(
@@ -2030,6 +2041,12 @@ def _coletar_vendas_via_rede_spa(
     # Páginas profundas com limit=200 chegam a levar >30s na API do PAP.
     fetch_pendentes = {"n": 0}
     timeout_fetch_ms = 120000
+    # Playwright 1.54 ignora route.fetch(timeout=) e usa o default do APIRequestContext (30s).
+    try:
+        req_ctx = page.context.request
+        getattr(req_ctx, "_impl_obj", req_ctx)._timeout_settings.set_default_timeout(timeout_fetch_ms)
+    except Exception as exc:
+        logger.debug("[HISTORICO PAP] timeout do request context não ajustado: %s", exc)
     seen_urls: set[str] = set()
     tipo_api = _tipo_api_para_spa(tipo_crm) if tipo_crm else None
     status_rewrite = _status_lista_para_tipo_api(tipo_api) if tipo_api else ...
@@ -2336,13 +2353,15 @@ def _coletar_vendas_via_rede_spa(
                             data_inicio=data_inicio,
                             data_fim=data_fim,
                             tipo_crm=tipo_crm,
+                            rapido=tentativa == 1,
                         )
-                        # Sem request em 20s → Filtrar não disparou; com request, espera a API.
+                        # Sem request → Filtrar não disparou; com request, espera a API.
+                        sem_request_s = 10 if tentativa == 1 else 20
                         while alvo not in _paginas_capturadas():
                             decorrido = time.time() - inicio_pg
                             if decorrido > espera_fetch_s:
                                 break
-                            if decorrido > 20 and fetch_pendentes["n"] == 0:
+                            if decorrido > sem_request_s and fetch_pendentes["n"] == 0:
                                 break
                             page.wait_for_timeout(400)
                         logger.info(

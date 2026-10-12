@@ -21,7 +21,25 @@
 .table-modern th { border-bottom: 2px solid #eaeaea; color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
 .table-modern td { vertical-align: middle; font-size: 0.9rem; border-bottom: 1px solid #f2f2f2; }
 .badge-status { font-weight: 500; padding: 0.4em 0.8em; border-radius: 6px; font-size: 0.75rem;}
-.spinner-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.7); display:flex; align-items:center; justify-content:center; z-index: 10; border-radius: 12px;}
+.hist-prog {
+    display: flex; align-items: center; gap: 1rem; margin: 0 0 0.85rem; padding: 0.9rem 1.1rem;
+    border-radius: 12px; border: 1px solid var(--border-color, #e4e9f2); border-left: 4px solid var(--accent-primary, #0ea5e9);
+    background: var(--bg-card, #fff); color: var(--text-primary, #1a2332); box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+.hist-prog .spinner-border { width: 1.6rem; height: 1.6rem; flex: 0 0 auto; color: var(--accent-primary, #0ea5e9); }
+.hist-prog-corpo { flex: 1 1 auto; min-width: 0; }
+.hist-prog-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; }
+.hist-prog-titulo { font-weight: 700; font-size: 0.95rem; }
+.hist-prog-tempo { font-size: 0.8rem; color: var(--text-secondary, #5b6b7d); font-variant-numeric: tabular-nums; }
+.hist-prog-barra { height: 8px; margin: 0.55rem 0 0.45rem; border-radius: 999px; overflow: hidden; background: rgba(148, 163, 184, 0.28); }
+.hist-prog-barra > div {
+    height: 100%; width: 0; border-radius: 999px; background: var(--accent-primary, #0ea5e9); transition: width 0.6s ease;
+}
+.hist-prog-barra.indeterminada > div { width: 35%; animation: histProgInd 1.4s infinite ease-in-out; }
+@keyframes histProgInd { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+.hist-prog-info { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; font-size: 0.82rem; color: var(--text-secondary, #5b6b7d); }
+.hist-prog-info strong { color: var(--text-primary, #1a2332); font-variant-numeric: tabular-nums; }
+.hist-prog-etapa { margin-top: 0.3rem; font-size: 0.8rem; color: var(--text-secondary, #5b6b7d); }
 
 .tab-res-custom { transition: all 0.2s; font-size: 0.95rem; }
 .tab-res-custom:hover { background-color: #f8f9fa; }
@@ -121,9 +139,17 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
 
         <!-- Resultados e Tratamento em Tela Cheia -->
         <div id="hist-resumo" class="position-relative mt-2">
-            <div id="hist-spinner" class="spinner-overlay d-none">
-                <div class="spinner-border text-primary" role="status"></div>
-                <div class="ms-3 fw-bold text-primary" id="hist-spinner-text">Buscando no PAP...</div>
+            <div id="hist-spinner" class="hist-prog d-none" role="status" aria-live="polite">
+                <div class="spinner-border" aria-hidden="true"></div>
+                <div class="hist-prog-corpo">
+                    <div class="hist-prog-topo">
+                        <span class="hist-prog-titulo" id="hist-prog-titulo">Buscando no PAP…</span>
+                        <span class="hist-prog-tempo" id="hist-prog-tempo"></span>
+                    </div>
+                    <div class="hist-prog-barra indeterminada" id="hist-prog-barra"><div></div></div>
+                    <div class="hist-prog-info" id="hist-prog-info"></div>
+                    <div class="hist-prog-etapa" id="hist-spinner-text"></div>
+                </div>
             </div>
 
             <div class="d-flex justify-content-between align-items-end mb-0 px-2">
@@ -749,7 +775,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             
             const andamento = cfg.busca_em_andamento;
             if (andamento) {
-                document.getElementById('hist-spinner').classList.remove('d-none');
+                mostrarProgHist(andamento);
                 document.getElementById('btn-hist-buscar').disabled = true;
                 iniciarPollHist(andamento.id);
             } else if (cfg.ultima_busca) {
@@ -868,8 +894,73 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         }
     }
 
+    let histProgInicio = null;
+    let histProgTimer = null;
+
+    function fmtDuracao(seg) {
+        seg = Math.max(0, Math.round(seg));
+        const m = Math.floor(seg / 60), s = seg % 60;
+        return m ? `${m} min ${String(s).padStart(2, '0')} s` : `${s} s`;
+    }
+
+    function fmtDataBr(iso) {
+        const [a, m, d] = (iso || '').split('-');
+        return d ? `${d}/${m}/${a}` : '';
+    }
+
+    function tickProgHist() {
+        const el = document.getElementById('hist-prog-tempo');
+        if (!histProgInicio) { el.textContent = ''; return; }
+        el.textContent = 'Tempo decorrido: ' + fmtDuracao((Date.now() - histProgInicio) / 1000);
+    }
+
+    function mostrarProgHist(s = {}) {
+        document.getElementById('hist-spinner').classList.remove('d-none');
+        if (s.iniciado_em) histProgInicio = new Date(s.iniciado_em).getTime();
+        else if (!histProgInicio) histProgInicio = Date.now();
+        if (!histProgTimer) histProgTimer = setInterval(tickProgHist, 1000);
+        tickProgHist();
+
+        const periodo = s.data_inicio ? ` · ${fmtDataBr(s.data_inicio)} a ${fmtDataBr(s.data_fim)}` : '';
+        const tipos = (s.tipos || []).join(', ');
+        document.getElementById('hist-prog-titulo').textContent = `Buscando no PAP${tipos ? ' (' + tipos + ')' : ''}${periodo}`;
+
+        const msg = s.mensagem || '';
+        const m = msg.match(/p[áa]gina\s+(\d+)\s*\/\s*(\d+)\s*\((\d+)\s+de\s+(\d+)/i);
+        const barra = document.getElementById('hist-prog-barra');
+        const info = [];
+        if (m) {
+            const [, pag, totPag, lidos, total] = m.map(Number);
+            const pct = total ? Math.min(100, (lidos / total) * 100) : 0;
+            barra.classList.remove('indeterminada');
+            barra.firstElementChild.style.width = pct.toFixed(1) + '%';
+            info.push(`Página <strong>${pag} de ${totPag}</strong>`);
+            info.push(`<strong>${lidos.toLocaleString('pt-BR')}</strong> de <strong>${total.toLocaleString('pt-BR')}</strong> pedidos (${Math.round(pct)}%)`);
+            if (histProgInicio && pag < totPag && lidos > 0) {
+                const decorrido = (Date.now() - histProgInicio) / 1000;
+                info.push(`Previsão: ~${fmtDuracao(decorrido / lidos * (total - lidos))} restantes`);
+            }
+            document.getElementById('hist-spinner-text').textContent = '';
+        } else {
+            barra.classList.add('indeterminada');
+            barra.firstElementChild.style.width = '';
+            if (s.encontrados) info.push(`Lidos: <strong>${s.encontrados}</strong>`);
+            document.getElementById('hist-spinner-text').textContent = msg || 'Abrindo o PAP e aplicando os filtros…';
+        }
+        if (s.novos) info.push(`Novos: <strong>${s.novos}</strong>`);
+        document.getElementById('hist-prog-info').innerHTML = info.map(t => `<span>${t}</span>`).join('');
+    }
+
+    function esconderProgHist() {
+        document.getElementById('hist-spinner').classList.add('d-none');
+        clearInterval(histProgTimer);
+        histProgTimer = null;
+        histProgInicio = null;
+    }
+
     function iniciarPollHist(id) {
         if (histPoll) clearInterval(histPoll);
+        pollHist(id);
         histPoll = setInterval(() => pollHist(id), 3500);
     }
 
@@ -879,14 +970,11 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             const s = await r.json();
             
             if (s.em_andamento) {
-                const porTipo = s.por_tipo || {};
-                const detalhes = Object.entries(porTipo).map(([t, v]) => `${t}: ${v.encontrados || 0} lidos, ${v.novos || 0} novos`).join(' | ');
-                const etapa = s.mensagem ? `<br><small class="text-muted">${esc(s.mensagem)}</small>` : '';
-                document.getElementById('hist-spinner-text').innerHTML = `Buscando no PAP... Lidos: ${s.encontrados || 0}, Novos: ${s.novos || 0}${etapa}${detalhes ? '<br><small class="text-muted">' + detalhes + '</small>' : ''}`;
+                mostrarProgHist(s);
             } else {
                 clearInterval(histPoll);
                 histPoll = null;
-                document.getElementById('hist-spinner').classList.add('d-none');
+                esconderProgHist();
                 document.getElementById('btn-hist-buscar').disabled = false;
                 currentBuscaId = s.id;
                 atualizarMetricas(s);
@@ -938,14 +1026,14 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             // Fechar o modal APÓS confirmar que a busca foi aceita
             const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
             modalInstance.hide();
-            document.getElementById('hist-spinner-text').innerHTML = `Buscando no PAP (${tiposSelecionados.join(', ')})...`;
-            document.getElementById('hist-spinner').classList.remove('d-none');
+            histProgInicio = Date.now();
+            mostrarProgHist({ tipos: tiposSelecionados });
             // NÃO apaga a tabela aqui — mantém os dados existentes visíveis enquanto aguarda
             iniciarPollHist(data.busca_id);
         } catch (e) {
             document.getElementById('modal-hist-status').innerHTML = `<i class="bi bi-exclamation-triangle text-danger"></i> Erro de conexão: ${e.message}`;
             document.getElementById('btn-hist-buscar').disabled = false;
-            document.getElementById('hist-spinner').classList.add('d-none');
+            esconderProgHist();
         }
     });
 
