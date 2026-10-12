@@ -154,6 +154,39 @@ class JanelasPeriodoPapTests(TestCase):
         self.assertFalse(_pack_no_periodo(url, date(2026, 1, 10), date(2026, 1, 31)))
 
 
+class InteresseUltimos30DiasTests(TestCase):
+    def setUp(self) -> None:
+        self.usuario = Usuario.objects.create_superuser(username='dir', password='x', email='d@x.com')
+
+    def test_interesse_antigo_e_recusado_com_mensagem(self) -> None:
+        from django.utils import timezone as tz
+
+        from crm_app.historico_pap_service import criar_e_iniciar_busca
+
+        hoje = tz.localdate()
+        busca_id, err = criar_e_iniciar_busca(
+            self.usuario, data_inicio=hoje - timedelta(days=40), data_fim=hoje, pdv='', tipos=['INTERESSE']
+        )
+        self.assertIsNone(busca_id)
+        self.assertIn('últimos 30 dias', err)
+        self.assertIn((hoje - timedelta(days=30)).strftime('%d/%m/%Y'), err)
+
+    def test_venda_antiga_continua_permitida(self) -> None:
+        from unittest import mock
+
+        from django.utils import timezone as tz
+
+        from crm_app import historico_pap_service as svc
+
+        hoje = tz.localdate()
+        with mock.patch('crm_app.pool_historico_pap.obter_login_historico_pap', return_value=(None, 'sem login')):
+            _, err = svc.criar_e_iniciar_busca(
+                self.usuario, data_inicio=hoje - timedelta(days=60), data_fim=hoje - timedelta(days=40),
+                pdv='', tipos=['VENDA'],
+            )
+        self.assertNotIn('30 dias', err or '')
+
+
 class LimitePapTests(TestCase):
     def test_429_recente_e_lembrado(self) -> None:
         import time

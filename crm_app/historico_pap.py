@@ -48,6 +48,8 @@ PAP_API_VENDAS = "https://pap-api.niointernet.com.br/api/portal/vendas"
 PAP_HISTORICO_URL = "https://pap.niointernet.com.br/administrativo/historico"
 LIMIT_PAGINA = 15
 MAX_DIAS_BUSCA = 93
+# O PAP só libera Tipo=Interesse nos últimos 30 dias (calendário e API).
+MAX_DIAS_RETROATIVOS_INTERESSE = 30
 
 PEDIDO_COLUNAS = (
     "pedido",

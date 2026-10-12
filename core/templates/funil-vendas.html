@@ -357,6 +357,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                             <input class="form-check-input tipo-check" type="checkbox" value="INTERESSE" id="chk-interesse" checked>
                             <label class="form-check-label fw-medium" for="chk-interesse">
                                 <i class="bi bi-star-fill text-warning me-1"></i> Interesse
+                                <small class="text-muted fw-normal">— o PAP só libera os últimos 30 dias</small>
                             </label>
                         </div>
                         <div class="form-check">
@@ -1009,6 +1010,15 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         if (!tiposSelecionados.length) {
             document.getElementById('modal-hist-status').innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> Selecione ao menos um tipo.`;
             return;
+        }
+        if (tiposSelecionados.includes('INTERESSE')) {
+            const minimo = new Date();
+            minimo.setDate(minimo.getDate() - 30);
+            const minimoIso = `${minimo.getFullYear()}-${String(minimo.getMonth() + 1).padStart(2, '0')}-${String(minimo.getDate()).padStart(2, '0')}`;
+            if (inicio < minimoIso) {
+                document.getElementById('modal-hist-status').innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i> O PAP só permite consultar Interesse dos últimos 30 dias. Use data inicial a partir de ${fmtDataBr(minimoIso)} ou desmarque Interesse para buscar Venda/Pré-venda em períodos antigos.`;
+                return;
+            }
         }
         
         document.getElementById('btn-hist-buscar').disabled = true;

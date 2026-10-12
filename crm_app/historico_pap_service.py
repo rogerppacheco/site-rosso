@@ -2213,7 +2213,16 @@ def _coletar_vendas_via_rede_spa(
                 espera = min(max(espera, ESPERA_429_PADRAO_S), 300)
                 bloqueio_ate["t"] = time.time() + espera
                 _ULTIMO_429["t"] = time.time()
-                logger.warning("[HISTORICO PAP] PAP limitou as consultas (429) — pausa de %ss.", espera)
+                cabecalhos_limite = {
+                    k: v
+                    for k, v in (api_resp.headers or {}).items()
+                    if any(s in k.lower() for s in ("retry", "ratelimit", "rate-limit", "x-rate", "quota", "reset"))
+                }
+                logger.warning(
+                    "[HISTORICO PAP] PAP limitou as consultas (429) — pausa de %ss. Cabeçalhos=%s",
+                    espera,
+                    cabecalhos_limite,
+                )
             if status < 200 or status >= 300:
                 erros.append(f"HTTP {status}: {preview}")
                 logger.warning(
@@ -2725,6 +2734,20 @@ def criar_e_iniciar_busca(
         return None, f"O intervalo máximo é {MAX_DIAS_BUSCA} dias."
 
     tipos_ok = tipos_solicitados(tipos)
+    if "INTERESSE" in tipos_ok:
+        from datetime import timedelta as _td
+
+        from django.utils import timezone as _tz
+
+        from crm_app.historico_pap import MAX_DIAS_RETROATIVOS_INTERESSE
+
+        minimo = _tz.localdate() - _td(days=MAX_DIAS_RETROATIVOS_INTERESSE)
+        if data_inicio < minimo:
+            return None, (
+                f"O PAP só permite consultar Interesse dos últimos {MAX_DIAS_RETROATIVOS_INTERESSE} dias. "
+                f"Escolha uma data inicial a partir de {minimo.strftime('%d/%m/%Y')} "
+                "ou desmarque Interesse para buscar Venda/Pré-venda em períodos antigos."
+            )
     pdv = (pdv or "").strip()
     token_manual = (token_manual or "").strip()
 
