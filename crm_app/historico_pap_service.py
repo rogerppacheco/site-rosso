@@ -1533,6 +1533,19 @@ def _preencher_datas_filtro_spa(page, data_inicio: date | None = None, data_fim:
     logger.info("[HISTORICO PAP] Interação datas %s→%s ok=%s", ini, fim, ok)
 
 
+class SessaoPapExpirada(Exception):
+    """A SPA redirecionou para o login (Microsoft/V.tal): sessão do PAP caiu no meio da busca."""
+
+
+def _garantir_pagina_no_pap(page) -> None:
+    try:
+        url = (page.url or "").lower() if page else ""
+    except Exception:
+        return
+    if "login.microsoftonline.com" in url or "login.microsoft.com" in url or "login.vtal.com" in url:
+        raise SessaoPapExpirada(url[:120])
+
+
 def _contar_itens_e_total_packs(packs: list[dict]) -> tuple[int, int | None]:
     """Soma itens únicos por pacote e o maior total_api reportado."""
     from crm_app.historico_pap import extrair_lista_api
@@ -2199,6 +2212,7 @@ def _coletar_vendas_via_rede_spa(
         # Sempre recarrega COM route/listeners já ativos — o login já pode ter
         # aberto o histórico e disparado /vendas antes da interceptação.
         _navegar_ao_historico_spa(page, force_reload=True, rapido=periodo_curto)
+        _garantir_pagina_no_pap(page)
         if not periodo_curto:
             try:
                 dbg = page.evaluate(
@@ -2314,6 +2328,7 @@ def _coletar_vendas_via_rede_spa(
                         _aguardar_sem_fetch_pendente()
                         if alvo in _paginas_capturadas():
                             break
+                        _garantir_pagina_no_pap(page)
                         pagina_alvo["n"] = alvo
                         inicio_pg = time.time()
                         _tentar_clicar_filtrar(
@@ -3132,11 +3147,27 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
             return False, msg or "Falha ao logar no PAP."
 
         limpar_cooldown_login(matricula)
-        return _executar_loop_busca(
-            page=automacao.page,
-            busca_id=busca_id,
-            busca=busca,
+        try:
+            return _executar_loop_busca(page=automacao.page, busca_id=busca_id, busca=busca)
+        except SessaoPapExpirada as exc:
+            logger.warning(
+                "[HISTORICO PAP] Busca %s: sessão caiu no login (%s) — relogin único e recomeço.",
+                busca_id,
+                exc,
+            )
+        _run_django_sync(
+            lambda: _atualizar(busca_id, mensagem="Sessão do PAP expirou — refazendo login e recomeçando…")
         )
+        ok_relogin, msg_relogin = automacao.garantir_sessao_ativa(PAP_HISTORICO_URL)
+        if not ok_relogin:
+            return False, f"A sessão do PAP expirou durante a busca e o novo login não funcionou: {msg_relogin}"
+        try:
+            return _executar_loop_busca(page=automacao.page, busca_id=busca_id, busca=busca)
+        except SessaoPapExpirada:
+            return False, (
+                "A sessão do PAP expirou de novo logo após o novo login (tela de login Microsoft). "
+                "Tente novamente em alguns minutos."
+            )
 
     try:
         # Apenas 1 tentativa com sessão reutilizada (sem segundo login automático).

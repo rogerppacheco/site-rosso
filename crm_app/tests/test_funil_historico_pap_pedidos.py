@@ -121,3 +121,52 @@ class ReescritaUrlVendasPapTests(TestCase):
 
         sem_page = _rewritar_url_vendas_periodo(url, date(2026, 3, 1), date(2026, 3, 31))
         self.assertEqual(parse_qs(urlparse(sem_page).query)['page'], ['1'])
+
+
+class SessaoExpiradaHistoricoPapTests(TestCase):
+    def setUp(self) -> None:
+        self.login = Usuario.objects.create_user(username='ana', password='x', matricula_pap='TT1', senha_pap='s')
+        self.busca = HistoricoPapBusca.objects.create(data_inicio=date(2026, 1, 1), data_fim=date(2026, 1, 31))
+
+    def _rodar(self, loop_side_effect, relogin=(True, 'ok')):
+        from unittest import mock
+
+        from crm_app import historico_pap_service as svc
+
+        automacao = mock.MagicMock()
+        automacao.iniciar_sessao.return_value = (True, '')
+        automacao.garantir_sessao_ativa.return_value = relogin
+        with mock.patch.object(svc, '_run_django_sync', side_effect=lambda fn: fn()), \
+                mock.patch.object(svc, 'verificar_cooldown_login', return_value=(False, 0)), \
+                mock.patch.object(svc, 'limpar_cooldown_login'), \
+                mock.patch.object(svc, 'registrar_cooldown_login'), \
+                mock.patch('crm_app.services_pap_nio.PAPNioAutomation', return_value=automacao), \
+                mock.patch.object(svc, '_executar_loop_busca', side_effect=loop_side_effect) as loop:
+            svc._executar_busca(self.busca.id, self.login.id)
+        self.busca.refresh_from_db()
+        return automacao, loop
+
+    def test_login_microsoft_no_meio_refaz_login_e_recomeca(self) -> None:
+        from crm_app.historico_pap_service import PAP_HISTORICO_URL, SessaoPapExpirada
+
+        automacao, loop = self._rodar([SessaoPapExpirada('login.microsoftonline.com'), (True, '')])
+        automacao.garantir_sessao_ativa.assert_called_once_with(PAP_HISTORICO_URL)
+        self.assertEqual(loop.call_count, 2)
+        self.assertNotEqual(self.busca.status, HistoricoPapBusca.STATUS_ERRO)
+
+    def test_relogin_falho_marca_erro_claro(self) -> None:
+        from crm_app.historico_pap_service import SessaoPapExpirada
+
+        _, loop = self._rodar([SessaoPapExpirada('x')], relogin=(False, 'senha errada'))
+        self.assertEqual(loop.call_count, 1)
+        self.assertEqual(self.busca.status, HistoricoPapBusca.STATUS_ERRO)
+        self.assertIn('sessão do PAP expirou', self.busca.mensagem)
+
+    def test_pagina_no_idp_levanta_sessao_expirada(self) -> None:
+        from unittest import mock
+
+        from crm_app.historico_pap_service import SessaoPapExpirada, _garantir_pagina_no_pap
+
+        with self.assertRaises(SessaoPapExpirada):
+            _garantir_pagina_no_pap(mock.Mock(url='https://login.microsoftonline.com/85b/saml2'))
+        _garantir_pagina_no_pap(mock.Mock(url='https://pap.niointernet.com.br/administrativo/historico'))
