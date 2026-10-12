@@ -700,7 +700,7 @@ class _SessaoPapUsuarioHolder:
 
     def consultar(self, venda) -> Tuple[bool, str, list]:
         from crm_app.services_pap_nio import PAPNioAutomation
-        from crm_app.utils import obter_os_prioridade_crm_por_cpf
+        from crm_app.utils import data_inicio_busca_pap, obter_os_prioridade_crm_por_cpf
 
         cpf = _cpf_cnpj_venda(venda)
         if len(cpf) not in (11, 14):
@@ -723,6 +723,7 @@ class _SessaoPapUsuarioHolder:
                 cpf,
                 numero_os_filtro=os_num,
                 os_prioridade_crm=os_prioridade,
+                data_inicio=data_inicio_busca_pap(venda),
             )
             self.consultas += 1
             if not sucesso and _recusa_microsoft_sem_retry(msg):

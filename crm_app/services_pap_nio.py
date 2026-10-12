@@ -2982,6 +2982,7 @@ class PAPNioAutomation:
         cpf: str,
         numero_os_filtro: Optional[str] = None,
         os_prioridade_crm: Optional[set] = None,
+        data_inicio=None,
     ) -> Tuple[bool, str, List[Dict[str, Any]], Optional[str]]:
         """
         Fluxo completo: login, Consulta OS, Filtros, CPF, período 30 dias, Filtrar.
@@ -2999,6 +3000,7 @@ class PAPNioAutomation:
                 cpf,
                 numero_os_filtro=numero_os_filtro,
                 os_prioridade_crm=os_prioridade_crm,
+                data_inicio=data_inicio,
             )
         except Exception as e:
             # Nunca deixar Locator.click/Timeout vazar sem tratamento (sync esteira / STATUS).
@@ -3010,6 +3012,7 @@ class PAPNioAutomation:
         cpf: str,
         numero_os_filtro: Optional[str] = None,
         os_prioridade_crm: Optional[set] = None,
+        data_inicio=None,
     ) -> Tuple[bool, str, List[Dict[str, Any]], Optional[str]]:
         from datetime import timedelta
         cpf_limpo = re.sub(r'\D', '', cpf) if cpf else ""
@@ -3048,21 +3051,32 @@ class PAPNioAutomation:
             return False, f"Não foi possível preencher CPF/CNPJ no filtro: {e}", [], None
         self.page.wait_for_timeout(150)
 
-        # Período: últimos 30 dias (já costuma vir preenchido; preenche só se necessário)
+        # Período: últimos 30 dias ou desde a criação do pedido (o que for mais antigo);
+        # pedido criado antes da janela não aparece na lista do PAP.
         hoje = datetime.now().date()
         data_ate = hoje
         data_de = hoje - timedelta(days=30)
-        str_de = data_de.strftime("%d/%m/%Y")
-        str_ate = data_ate.strftime("%d/%m/%Y")
+        if data_inicio and data_inicio < data_de:
+            data_de = data_inicio
         date_inputs = self.page.query_selector_all('input[type="date"], input[placeholder*="/"], input[placeholder*="De"], input[placeholder*="Até"]')
+        periodo_ok = False
         if len(date_inputs) >= 2:
             try:
-                date_inputs[0].fill(str_de)
-                self.page.wait_for_timeout(80)
-                date_inputs[1].fill(str_ate)
-                self.page.wait_for_timeout(80)
-            except Exception:
-                pass
+                for inp, valor in ((date_inputs[0], data_de), (date_inputs[1], data_ate)):
+                    tipo = (inp.get_attribute("type") or "").lower()
+                    # input[type=date] só aceita aaaa-mm-dd no fill do Playwright
+                    inp.fill(valor.isoformat() if tipo == "date" else valor.strftime("%d/%m/%Y"))
+                    self.page.wait_for_timeout(80)
+                periodo_ok = True
+            except Exception as e:
+                logger.warning("[PAP] Não foi possível preencher o período da Consulta OS: %s", e)
+        logger.info(
+            "[PAP] Consulta OS período %s a %s (campos=%s, preenchido=%s).",
+            data_de.strftime("%d/%m/%Y"),
+            data_ate.strftime("%d/%m/%Y"),
+            len(date_inputs),
+            periodo_ok,
+        )
         self.page.wait_for_timeout(100)
 
         # Clicar em Filtrar

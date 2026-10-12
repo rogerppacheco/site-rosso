@@ -127,18 +127,44 @@ class ConsultaStatusPapFilaTodosTests(TestCase):
     def test_sync_pap_agendamento_cancelado_nao_cancela_pedido(self) -> None:
         venda = self._sync(
             self._venda(self.st_outro, '11637557'),
-            status='Draft',
+            status='Em Aprovisionamento',
             status_agendamento='Agendamento Cancelado',
         )
         self.assertEqual(venda.status_esteira_id, self.st_outro.id)
 
-    def test_sync_pap_draft_com_data_mantem_status(self) -> None:
-        venda = self._sync(
-            self._venda(self.st_outro, '11644585'),
-            status='Draft',
-            agendamento='12/10/2026 - 08:00 às 12:00',
-        )
-        self.assertEqual(venda.status_esteira_id, self.st_outro.id)
+    def test_sync_pap_em_cancelamento_e_fraude_viram_cancelada(self) -> None:
+        for os_num, status in (
+            ('11700001', 'Em Cancelamento'),
+            ('11700002', 'Reprovado Analise de Fraude-PAYMENT_NOT_AUTHORIZED_RULE'),
+            ('11700003', 'Reprovado Analise de Fraude-SESSION_DATA_INVALID'),
+        ):
+            venda = self._sync(self._venda(self.st_outro, os_num), status=status)
+            self.assertEqual(venda.status_esteira_id, self.st_cancelada.id, status)
+
+    def test_sync_pap_draft_vira_draft(self) -> None:
+        st_draft = StatusCRM.objects.create(nome='DRAFT', tipo='Esteira', estado='FECHADO')
+        for os_num, status in (
+            ('11644585', 'Draft'),
+            ('11644586', 'Draft-PAYMENT_STATUS_FAILED'),
+            ('11644587', 'Draft-INVALID_SESSION_DATA'),
+        ):
+            venda = self._sync(
+                self._venda(self.st_outro, os_num),
+                status=status,
+                agendamento='12/10/2026 - 08:00 às 12:00',
+                status_agendamento='Concluído com sucesso',
+            )
+            self.assertEqual(venda.status_esteira_id, st_draft.id, status)
+
+    def test_data_inicio_busca_pap_usa_criacao_do_pedido(self) -> None:
+        from datetime import date, datetime, timezone
+
+        from crm_app.utils import data_inicio_busca_pap
+
+        venda = self._venda(self.st_outro, 'OS-DATA')
+        Venda.objects.filter(pk=venda.pk).update(data_criacao=datetime(2026, 5, 20, 15, tzinfo=timezone.utc))
+        venda.refresh_from_db()
+        self.assertEqual(data_inicio_busca_pap(venda), date(2026, 5, 17))
 
     def test_venda_que_muda_de_status_durante_lote_e_pulada(self) -> None:
         venda = self._venda(self.st_outro, 'OS1')

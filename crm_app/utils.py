@@ -599,14 +599,20 @@ def _normalizar_texto_status_pap(status_tabela):
 
 
 def pap_status_indica_concluido(status_tabela, status_agendamento=None):
-    """Indica instalação concluída no PAP (coluna Status ou detalhe Status agendamento)."""
+    """Indica instalação concluída no PAP.
+
+    A coluna Status do pedido prevalece: Em Aprovisionamento, Pendência, Cancelado,
+    Draft ou Reprovado por fraude significam pedido não instalado, mesmo que o
+    detalhe mostre uma visita "Concluído com sucesso". O status do agendamento só
+    decide quando a coluna Status não foi lida ou tem um texto não reconhecido.
+    """
     st = _normalizar_texto_status_pap(status_tabela)
-    if "concluí" in st or "concluido" in st:
+    if "concluido" in st or "instalad" in st:
         return True
-    sa = (status_agendamento or "").strip().lower()
-    if sa and ("concluí" in sa or "concluido" in sa or "sucesso" in sa):
-        return True
-    return False
+    if any(t in st for t in ("aprovisionamento", "penden", "cancel", "fraude", "draft")):
+        return False
+    sa = _normalizar_texto_status_pap(status_agendamento)
+    return bool(sa) and ("concluido" in sa or "sucesso" in sa)
 
 
 def pap_status_indica_pendencia_lista(status_tabela):
@@ -620,6 +626,17 @@ def pap_status_indica_pendencia_lista(status_tabela):
 def pap_status_indica_cancelado(status_tabela):
     """Coluna Status da lista PAP = pedido Cancelado (não o status do agendamento)."""
     return "cancel" in _normalizar_texto_status_pap(status_tabela)
+
+
+def pap_status_indica_reprovado_fraude(status_tabela):
+    """Coluna Status da lista PAP = Reprovado Analise de Fraude-<motivo>."""
+    st = _normalizar_texto_status_pap(status_tabela)
+    return "reprovad" in st and "fraude" in st
+
+
+def pap_status_indica_draft(status_tabela):
+    """Coluna Status da lista PAP = Draft ou Draft-<motivo> (ex.: Draft-PAYMENT_STATUS_FAILED)."""
+    return _normalizar_texto_status_pap(status_tabela).startswith("draft")
 
 
 def pap_status_indica_em_aprovisionamento(status_tabela):
@@ -751,6 +768,25 @@ def _esteira_permite_sync_status_pap(venda):
     if "INSTALAD" in st_u or "CANCELAD" in st_u:
         return False
     return (se.estado or "").strip().upper() == "ABERTO"
+
+
+def data_inicio_busca_pap(venda):
+    """Data inicial do período da Consulta OS no PAP (criação do pedido, com folga).
+
+    O PAP só lista pedidos criados dentro do período informado; com o padrão de
+    30 dias, pedidos mais antigos voltavam como "sem resultado".
+    """
+    from datetime import timedelta
+
+    datas = []
+    for campo in ("data_criacao", "data_abertura"):
+        valor = getattr(venda, campo, None)
+        if not valor:
+            continue
+        datas.append(valor.date() if hasattr(valor, "date") else valor)
+    if not datas:
+        return None
+    return min(datas) - timedelta(days=3)
 
 
 def obter_os_prioridade_crm_por_cpf(cpf_limpo):
@@ -1058,7 +1094,8 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
     - Concluído → INSTALADA (mantém data/turno agendado; + data_instalacao do PAP)
     - Status lista = Pendência Cliente ou Técnica + código no detalhe (cadastrado) → PENDENCIADA
       (limpa data_agendamento e periodo_agendamento)
-    - Status lista = Cancelado → CANCELADA
+    - Status lista = Cancelado, Em Cancelamento ou Reprovado Analise de Fraude → CANCELADA
+    - Status lista = Draft (ex.: Draft-PAYMENT_STATUS_FAILED) → DRAFT
     - Status lista = Em Aprovisionamento + Agendamento com data/turno no detalhe → AGENDADO
       (inclusive se CRM estava PENDENCIADA; limpa motivo_pendencia)
     - Status do agendamento (detalhe PAP) → FK StatusAgendamento quando mapeado;
@@ -1085,6 +1122,7 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
         StatusCRM.objects.filter(tipo="Esteira", nome__iexact="CANCELADA").first()
         or StatusCRM.objects.filter(tipo="Esteira", nome__icontains="CANCELAD").first()
     )
+    status_draft = StatusCRM.objects.filter(tipo="Esteira", nome__iexact="DRAFT").first()
 
     os_filtro_digits = re.sub(r"\D", "", str(os_filtro or "")).strip() if os_filtro else ""
 
@@ -1180,12 +1218,18 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
                 _registrar_alteracao_se_houve()
             continue
 
-        if status_cancelada and pap_status_indica_cancelado(d.get("status")):
-            venda.status_esteira = status_cancelada
+        status_fechamento = None
+        if pap_status_indica_cancelado(d.get("status")) or pap_status_indica_reprovado_fraude(d.get("status")):
+            status_fechamento = status_cancelada
+        elif pap_status_indica_draft(d.get("status")):
+            status_fechamento = status_draft
+        if status_fechamento:
+            venda.status_esteira = status_fechamento
             venda.save()
             logger.info(
-                "[STATUS SYNC] OS %s: marcada CANCELADA (Status PAP=%r, era %s).",
+                "[STATUS SYNC] OS %s: marcada %s (Status PAP=%r, era %s).",
                 os_raw,
+                status_fechamento.nome,
                 d.get("status"),
                 esteira_nome,
             )

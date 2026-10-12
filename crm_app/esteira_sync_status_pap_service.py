@@ -409,7 +409,7 @@ class _SessaoPapSyncHolder:
 
     def consultar(self, venda, *, contador_uso_bo=None) -> tuple[bool, str, list, str]:
         from crm_app.services_pap_nio import PAPNioAutomation
-        from crm_app.utils import obter_os_prioridade_crm_por_cpf
+        from crm_app.utils import data_inicio_busca_pap, obter_os_prioridade_crm_por_cpf
 
         cpf = _cpf_cnpj_venda(venda)
         if len(cpf) not in (11, 14):
@@ -424,7 +424,10 @@ class _SessaoPapSyncHolder:
 
         try:
             sucesso, msg, detalhes, _ = self.automacao.consulta_os_por_cpf_com_resultado(
-                cpf, numero_os_filtro=os_num, os_prioridade_crm=os_prioridade
+                cpf,
+                numero_os_filtro=os_num,
+                os_prioridade_crm=os_prioridade,
+                data_inicio=data_inicio_busca_pap(venda),
             )
             self.consultas += 1
             if not sucesso and _msg_indica_sessao_invalida(msg):
