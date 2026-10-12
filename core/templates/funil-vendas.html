@@ -40,6 +40,7 @@
 .hist-prog-info { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; font-size: 0.82rem; color: var(--text-secondary, #5b6b7d); }
 .hist-prog-info strong { color: var(--text-primary, #1a2332); font-variant-numeric: tabular-nums; }
 .hist-prog-etapa { margin-top: 0.3rem; font-size: 0.8rem; color: var(--text-secondary, #5b6b7d); }
+.hist-prog-tela img { display: block; max-width: 420px; width: 100%; margin-top: 0.4rem; border-radius: 8px; border: 1px solid var(--border-color, #e4e9f2); }
 
 .tab-res-custom { transition: all 0.2s; font-size: 0.95rem; }
 .tab-res-custom:hover { background-color: #f8f9fa; }
@@ -149,6 +150,10 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                     <div class="hist-prog-barra indeterminada" id="hist-prog-barra"><div></div></div>
                     <div class="hist-prog-info" id="hist-prog-info"></div>
                     <div class="hist-prog-etapa" id="hist-spinner-text"></div>
+                    <div class="hist-prog-tela d-none" id="hist-prog-tela">
+                        <div class="hist-prog-etapa">Tela atual do login no PAP (se pedir aprovação, aprove no celular da matrícula):</div>
+                        <img alt="Tela de login do PAP">
+                    </div>
                 </div>
             </div>
 
@@ -949,10 +954,14 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         }
         if (s.novos) info.push(`Novos: <strong>${s.novos}</strong>`);
         document.getElementById('hist-prog-info').innerHTML = info.map(t => `<span>${t}</span>`).join('');
+        const tela = document.getElementById('hist-prog-tela');
+        tela.classList.toggle('d-none', !s.tela_login);
+        if (s.tela_login) tela.querySelector('img').src = 'data:image/jpeg;base64,' + s.tela_login;
     }
 
     function esconderProgHist() {
         document.getElementById('hist-spinner').classList.add('d-none');
+        document.getElementById('hist-prog-tela').classList.add('d-none');
         clearInterval(histProgTimer);
         histProgTimer = null;
         histProgInicio = null;

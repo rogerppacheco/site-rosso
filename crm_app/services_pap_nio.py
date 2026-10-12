@@ -1373,6 +1373,23 @@ class PAPNioAutomation:
         except Exception:
             return
 
+    def _escolher_conta_microsoft(self, email: str) -> bool:
+        """Na tela 'Escolha uma conta', clica no bloco da matrícula ou em 'Usar outra conta'."""
+        if not self.page:
+            return False
+        try:
+            tile = self.page.locator(f'[data-test-id="{email}"], div.table[data-test-id]').filter(has_text=email).first
+            if tile.count():
+                tile.click(timeout=5000)
+                return True
+            outra = self.page.locator("#otherTile, #otherTileText").first
+            if outra.count():
+                outra.click(timeout=5000)
+                return True
+        except Exception as exc:
+            logger.info("[PAP] Escolher conta Microsoft falhou: %s", type(exc).__name__)
+        return False
+
     def _aceitar_manter_conectado(self) -> None:
         """Marca não mostrar de novo e clica em Sim. O Não fica em #idBtn_Back."""
         if not self.page:
@@ -1395,11 +1412,44 @@ class PAPNioAutomation:
         senha_enviada = False
         avisou = False
         numero_avisado = ""
+        parado_desde: Optional[float] = None
+        diagnosticou = False
+        recarregou = False
+        diag_s = float(getattr(self, "_login_parado_diag_s", 12))
+        reload_s = float(getattr(self, "_login_parado_reload_s", 25))
         espera = float(getattr(self, "_mfa_espera_segundos", ESPERA_APROVACAO_MFA_SEGUNDOS))
         limite = time.monotonic() + espera
         try:
             while time.monotonic() < limite:
                 estado = self._estado_login_microsoft()
+                if estado in ("aguardando", "outro"):
+                    agora = time.monotonic()
+                    parado_desde = parado_desde or agora
+                    if not diagnosticou and agora - parado_desde > diag_s:
+                        diagnosticou = True
+                        texto = re.sub(r"\s+", " ", self._texto_visivel_login())[:300]
+                        logger.warning(
+                            "[PAP] Tela Microsoft não reconhecida para %s (url=%s): %s",
+                            self.matricula_pap,
+                            self._ler_url_atual()[:140],
+                            texto,
+                        )
+                        self._publicar_tela_login()
+                    if not recarregou and not senha_enviada and agora - parado_desde > reload_s:
+                        recarregou = True
+                        parado_desde = None
+                        logger.info("[PAP] Recarregando a tela Microsoft parada de %s.", self.matricula_pap)
+                        try:
+                            self.page.goto(PAP_LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
+                        except Exception:
+                            pass
+                        continue
+                else:
+                    parado_desde = None
+                if estado == "escolher_conta":
+                    if not self._escolher_conta_microsoft(email):
+                        self.page.wait_for_timeout(1000)
+                    continue
                 if senha_enviada and estado not in ("pap_ok", "erro_credencial", "cadastro"):
                     self._publicar_tela_login()
                 if estado == "pap_ok":

@@ -401,6 +401,45 @@ class LoginMicrosoftSemRepetirSenhaTests(SimpleTestCase):
         self.assertIn("sucesso", msg.lower())
         pap._fazer_login_microsoft.assert_called_once()
 
+    def test_tela_parada_registra_e_recarrega_uma_vez(self) -> None:
+        pagina = _PaginaMicrosoft()
+        pagina.texto = ""
+        pagina.email_visivel = False
+        pagina.url = "https://login.microsoftonline.com/tenant/saml2?sso_reload=true"
+        gotos: list[str] = []
+
+        def goto(url: str, **_kwargs) -> None:
+            gotos.append(url)
+            pagina.url = "https://login.microsoftonline.com/tenant/saml2"
+            pagina.texto = "Sign in"
+            pagina.email_visivel = True
+
+        pagina.goto = goto  # type: ignore[attr-defined]
+        pap = PAPNioAutomation("TT713110", "senha-teste")
+        pap.page = pagina  # type: ignore[assignment]
+        pap._capture_screenshot = Mock()  # type: ignore[method-assign]
+        pap._publicar_tela_login = Mock()  # type: ignore[method-assign]
+        pap._mfa_espera_segundos = 5
+        pap._login_parado_diag_s = 0.05
+        pap._login_parado_reload_s = 0.1
+
+        with self.assertLogs("crm_app.services_pap_nio", level="WARNING") as logs:
+            ok, _msg = pap._fazer_login_microsoft()
+
+        self.assertTrue(ok)
+        self.assertEqual(len(gotos), 1)
+        pap._publicar_tela_login.assert_called()
+        self.assertTrue(any("não reconhecida" in linha for linha in logs.output))
+
+    def test_escolha_uma_conta(self) -> None:
+        estado = classificar_tela_microsoft(
+            url="https://login.microsoftonline.com/tenant/saml2",
+            texto="Escolha uma conta\nUsar outra conta",
+            email_visivel=False,
+            senha_visivel=False,
+        )
+        self.assertEqual(estado, "escolher_conta")
+
     def test_fazer_login_desvia_para_microsoft_sem_repetir(self) -> None:
         pap = PAPNioAutomation("TT9", "senha-teste")
         pap._aguardar_pagina_estavel = Mock()  # type: ignore[method-assign]

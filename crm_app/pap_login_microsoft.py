@@ -47,6 +47,12 @@ _CADASTRO = (
     "escaneie o codigo qr",
 )
 
+_ESCOLHER_CONTA = (
+    "pick an account",
+    "escolha uma conta",
+    "escolher uma conta",
+)
+
 _MFA = (
     "authenticator",
     "approve a request",
@@ -126,6 +132,8 @@ def classificar_tela_microsoft(
         return "kmsi"
     if any(sinal in visivel for sinal in _CADASTRO):
         return "cadastro"
+    if any(sinal in visivel for sinal in _ESCOLHER_CONTA):
+        return "escolher_conta"
     if any(sinal in visivel for sinal in _MFA):
         return "mfa"
     if email_visivel and not _texto_pede_senha(visivel):
