@@ -1992,6 +1992,7 @@ def _coletar_vendas_via_rede_spa(
     timeout_ms: int = 50000,
     max_paginas_ui: int = 8,
     tipo_crm: str | None = None,
+    ao_progresso=None,
 ) -> list[dict]:
     """
     Captura /api/portal/vendas pela rede da SPA (modo seguro).
@@ -2013,6 +2014,9 @@ def _coletar_vendas_via_rede_spa(
     # Página que o próximo /vendas da SPA deve buscar. Só requests disparados pela
     # própria SPA passam no anti-replay; XHR forjado recebe 401 "jwt malformed".
     pagina_alvo: dict[str, int | None] = {"n": None}
+    # Páginas profundas com limit=200 chegam a levar >30s na API do PAP.
+    fetch_pendentes = {"n": 0}
+    timeout_fetch_ms = 120000
     seen_urls: set[str] = set()
     tipo_api = _tipo_api_para_spa(tipo_crm) if tipo_crm else None
     status_rewrite = _status_lista_para_tipo_api(tipo_api) if tipo_api else ...
@@ -2093,8 +2097,12 @@ def _coletar_vendas_via_rede_spa(
                     data_fim,
                 )
 
+        fetch_pendentes["n"] += 1
         try:
-            api_resp = route.fetch(url=final_url) if rewrote else route.fetch()
+            if rewrote:
+                api_resp = route.fetch(url=final_url, timeout=timeout_fetch_ms)
+            else:
+                api_resp = route.fetch(timeout=timeout_fetch_ms)
             status = api_resp.status
             body = None
             preview = ""
@@ -2144,6 +2152,8 @@ def _coletar_vendas_via_rede_spa(
                         route.abort()
                     except Exception:
                         pass
+        finally:
+            fetch_pendentes["n"] = max(0, fetch_pendentes["n"] - 1)
 
     route_installed = False
     try:
@@ -2288,29 +2298,63 @@ def _coletar_vendas_via_rede_spa(
                     total_paginas,
                     faltando,
                 )
+                espera_fetch_s = timeout_fetch_ms / 1000.0 + 10
+
+                def _aguardar_sem_fetch_pendente() -> None:
+                    # Novo Filtrar com fetch em curso fecha/reabre o drawer e perde o request.
+                    fim_p = time.time() + espera_fetch_s
+                    while fetch_pendentes["n"] > 0 and time.time() < fim_p:
+                        page.wait_for_timeout(500)
+
+                falhas_seguidas = 0
                 for alvo in faltando:
-                    for tentativa in (1, 2):
+                    for tentativa in (1, 2, 3):
+                        if alvo in _paginas_capturadas():
+                            break
+                        _aguardar_sem_fetch_pendente()
                         if alvo in _paginas_capturadas():
                             break
                         pagina_alvo["n"] = alvo
+                        inicio_pg = time.time()
                         _tentar_clicar_filtrar(
                             page,
                             data_inicio=data_inicio,
                             data_fim=data_fim,
                             tipo_crm=tipo_crm,
                         )
-                        fim_pg = time.time() + 25.0
-                        while time.time() < fim_pg and alvo not in _paginas_capturadas():
-                            page.wait_for_timeout(300)
+                        # Sem request em 20s → Filtrar não disparou; com request, espera a API.
+                        while alvo not in _paginas_capturadas():
+                            decorrido = time.time() - inicio_pg
+                            if decorrido > espera_fetch_s:
+                                break
+                            if decorrido > 20 and fetch_pendentes["n"] == 0:
+                                break
+                            page.wait_for_timeout(400)
                         logger.info(
-                            "[HISTORICO PAP] Página %s/%s %s (tentativa %s).",
+                            "[HISTORICO PAP] Página %s/%s %s em %.0fs (tentativa %s).",
                             alvo,
                             total_paginas,
                             "capturada" if alvo in _paginas_capturadas() else "NÃO veio",
+                            time.time() - inicio_pg,
                             tentativa,
                         )
-                    if alvo not in _paginas_capturadas():
-                        break
+                    if alvo in _paginas_capturadas():
+                        falhas_seguidas = 0
+                        if ao_progresso:
+                            try:
+                                ao_progresso(
+                                    len(_paginas_capturadas()),
+                                    total_paginas,
+                                    min(len(_paginas_capturadas()) * 200, int(total_api)),
+                                    int(total_api),
+                                )
+                            except Exception as exc:
+                                logger.debug("[HISTORICO PAP] progresso falhou: %s", exc)
+                    else:
+                        falhas_seguidas += 1
+                        if falhas_seguidas >= 2:
+                            break
+                _aguardar_sem_fetch_pendente()
                 pagina_alvo["n"] = None
 
             final = _matched() or list(collected)
@@ -2422,7 +2466,8 @@ def busca_em_andamento():
     from datetime import timedelta
     from crm_app.models import HistoricoPapBusca
 
-    limite_timeout = timezone.now() - timedelta(minutes=10)
+    # Mês cheio = várias páginas de 200 com até ~2 min cada na API do PAP.
+    limite_timeout = timezone.now() - timedelta(minutes=45)
     HistoricoPapBusca.objects.filter(
         status__in=[
             HistoricoPapBusca.STATUS_PENDENTE,
@@ -2431,7 +2476,7 @@ def busca_em_andamento():
         iniciado_em__lt=limite_timeout
     ).update(
         status=HistoricoPapBusca.STATUS_ERRO, 
-        mensagem='Cancelado por inatividade (Timeout de 10 min)'
+        mensagem='Cancelado por inatividade (Timeout de 45 min)'
     )
 
     return (
@@ -2816,6 +2861,17 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
     timeout_coleta = 25000 if periodo_curto else 55000
     max_paginas = 10 if periodo_curto else 60
     total_api_por_tipo: dict[str, int] = {}
+    def _progresso(tipo_crm):
+        def _cb(paginas, total_paginas, lidos, total_api):
+            _run_django_sync(
+                lambda: _atualizar(
+                    busca_id,
+                    encontrados=lidos,
+                    mensagem=f"{tipo_crm}: página {paginas}/{total_paginas} ({lidos} de {total_api} pedidos)…",
+                )
+            )
+        return _cb
+
     for tipo_crm in tipos_loop:
         packs = _coletar_vendas_via_rede_spa(
             page,
@@ -2824,6 +2880,7 @@ def _executar_loop_busca(page, *, busca_id: int, busca) -> tuple[bool, str]:
             timeout_ms=timeout_coleta,
             max_paginas_ui=max_paginas,
             tipo_crm=tipo_crm,
+            ao_progresso=_progresso(tipo_crm),
         )
         if packs:
             respostas_spa.extend(packs)

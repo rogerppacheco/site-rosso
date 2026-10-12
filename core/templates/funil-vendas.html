@@ -881,7 +881,8 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             if (s.em_andamento) {
                 const porTipo = s.por_tipo || {};
                 const detalhes = Object.entries(porTipo).map(([t, v]) => `${t}: ${v.encontrados || 0} lidos, ${v.novos || 0} novos`).join(' | ');
-                document.getElementById('hist-spinner-text').innerHTML = `Buscando no PAP... Lidos: ${s.encontrados || 0}, Novos: ${s.novos || 0}${detalhes ? '<br><small class="text-muted">' + detalhes + '</small>' : ''}`;
+                const etapa = s.mensagem ? `<br><small class="text-muted">${esc(s.mensagem)}</small>` : '';
+                document.getElementById('hist-spinner-text').innerHTML = `Buscando no PAP... Lidos: ${s.encontrados || 0}, Novos: ${s.novos || 0}${etapa}${detalhes ? '<br><small class="text-muted">' + detalhes + '</small>' : ''}`;
             } else {
                 clearInterval(histPoll);
                 histPoll = null;
