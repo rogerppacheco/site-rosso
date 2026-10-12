@@ -109,6 +109,37 @@ class ConsultaStatusPapFilaTodosTests(TestCase):
         })
         self.assertEqual(filtros, {'aba': 'TODOS', 'status_esteira_id': '7'})
 
+    def _sync(self, venda, **detalhe):
+        from crm_app.utils import sincronizar_venda_crm_apos_status_pap
+
+        sincronizar_venda_crm_apos_status_pap(
+            self.cliente.cpf_cnpj,
+            [{'numero_os': venda.ordem_servico, **detalhe}],
+            os_filtro=venda.ordem_servico,
+        )
+        venda.refresh_from_db()
+        return venda
+
+    def test_sync_pap_cancelado_vira_cancelada(self) -> None:
+        venda = self._sync(self._venda(self.st_outro, '11637556'), status='Cancelado')
+        self.assertEqual(venda.status_esteira_id, self.st_cancelada.id)
+
+    def test_sync_pap_agendamento_cancelado_nao_cancela_pedido(self) -> None:
+        venda = self._sync(
+            self._venda(self.st_outro, '11637557'),
+            status='Draft',
+            status_agendamento='Agendamento Cancelado',
+        )
+        self.assertEqual(venda.status_esteira_id, self.st_outro.id)
+
+    def test_sync_pap_draft_com_data_mantem_status(self) -> None:
+        venda = self._sync(
+            self._venda(self.st_outro, '11644585'),
+            status='Draft',
+            agendamento='12/10/2026 - 08:00 às 12:00',
+        )
+        self.assertEqual(venda.status_esteira_id, self.st_outro.id)
+
     def test_venda_que_muda_de_status_durante_lote_e_pulada(self) -> None:
         venda = self._venda(self.st_outro, 'OS1')
         filtros = {'aba': 'TODOS', 'status_esteira_id': str(self.st_outro.id)}

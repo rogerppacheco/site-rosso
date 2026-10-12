@@ -617,6 +617,11 @@ def pap_status_indica_pendencia_lista(status_tabela):
     return "cliente" in st or "tecnica" in st
 
 
+def pap_status_indica_cancelado(status_tabela):
+    """Coluna Status da lista PAP = pedido Cancelado (não o status do agendamento)."""
+    return "cancel" in _normalizar_texto_status_pap(status_tabela)
+
+
 def pap_status_indica_em_aprovisionamento(status_tabela):
     """Coluna Status da lista PAP = Em Aprovisionamento (agendado no PAP)."""
     st = _normalizar_texto_status_pap(status_tabela)
@@ -1053,6 +1058,7 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
     - Concluído → INSTALADA (mantém data/turno agendado; + data_instalacao do PAP)
     - Status lista = Pendência Cliente ou Técnica + código no detalhe (cadastrado) → PENDENCIADA
       (limpa data_agendamento e periodo_agendamento)
+    - Status lista = Cancelado → CANCELADA
     - Status lista = Em Aprovisionamento + Agendamento com data/turno no detalhe → AGENDADO
       (inclusive se CRM estava PENDENCIADA; limpa motivo_pendencia)
     - Status do agendamento (detalhe PAP) → FK StatusAgendamento quando mapeado;
@@ -1075,6 +1081,10 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
     status_inst = StatusCRM.objects.filter(tipo="Esteira", nome__iexact="INSTALADA").first()
     status_agendado = StatusCRM.objects.filter(tipo="Esteira", nome__iexact="AGENDADO").first()
     status_pendenciada = StatusCRM.objects.filter(tipo="Esteira", nome__iexact="PENDENCIADA").first()
+    status_cancelada = (
+        StatusCRM.objects.filter(tipo="Esteira", nome__iexact="CANCELADA").first()
+        or StatusCRM.objects.filter(tipo="Esteira", nome__icontains="CANCELAD").first()
+    )
 
     os_filtro_digits = re.sub(r"\D", "", str(os_filtro or "")).strip() if os_filtro else ""
 
@@ -1168,6 +1178,22 @@ def sincronizar_venda_crm_apos_status_pap(cpf_limpo, detalhes_pap, os_filtro=Non
             elif not salvou and sa_info.get("alterou"):
                 venda.save()
                 _registrar_alteracao_se_houve()
+            continue
+
+        if status_cancelada and pap_status_indica_cancelado(d.get("status")):
+            venda.status_esteira = status_cancelada
+            venda.save()
+            logger.info(
+                "[STATUS SYNC] OS %s: marcada CANCELADA (Status PAP=%r, era %s).",
+                os_raw,
+                d.get("status"),
+                esteira_nome,
+            )
+            _registrar_alteracao_se_houve()
+            if sa_nao_mapeado:
+                alertar_status_agendamento_pap_nao_mapeado(
+                    texto_pap=sa_nao_mapeado, venda_id=venda.id, os_num=os_raw
+                )
             continue
 
         pendencia_txt = (d.get("pendencia") or "").strip()
