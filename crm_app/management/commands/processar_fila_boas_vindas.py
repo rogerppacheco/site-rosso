@@ -4,7 +4,7 @@ Processa a fila de envio de boas-vindas.
 O scheduler chama a cada 5 min. Envia todas as mensagens cujo agendado_para <= agora.
 """
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from django.utils import timezone
@@ -12,6 +12,15 @@ from crm_app.models import Venda, BoasVindasEnviado, FilaEnvioBoasVindas
 from crm_app.whatsapp_service import WhatsAppService
 
 logger = __import__('logging').getLogger(__name__)
+
+PREFIXO_ERRO_EXPIRADO = "Expirado"
+
+
+def _max_atraso_horas():
+    try:
+        return max(1, int(getattr(settings, 'BOAS_VINDAS_MAX_ATRASO_HORAS', 24)))
+    except (TypeError, ValueError):
+        return 24
 
 
 def _normalizar_telefone_chave(telefone):
@@ -35,11 +44,34 @@ class Command(BaseCommand):
         dry_run = options.get('dry_run', False)
         limite = options.get('limite', 10)
         agora = timezone.now()
+        horas = _max_atraso_horas()
+        limite_atraso = agora - timedelta(hours=horas)
+
+        # Envio muito atrasado (ex.: scheduler parado) não pode sair em massa dias depois.
+        atrasados = FilaEnvioBoasVindas.objects.filter(
+            enviado_em__isnull=True,
+            agendado_para__lt=limite_atraso,
+        ).exclude(erro__startswith=PREFIXO_ERRO_EXPIRADO)
+        if dry_run:
+            qtd_atrasados = atrasados.count()
+        else:
+            qtd_atrasados = atrasados.update(
+                erro=f"{PREFIXO_ERRO_EXPIRADO}: não enviado em até {horas}h do agendamento"
+            )
+        if qtd_atrasados:
+            logger.warning(
+                "[BoasVindas] %s envio(s) com mais de %sh de atraso %s.",
+                qtd_atrasados, horas, "seriam descartados" if dry_run else "descartados",
+            )
+            self.stdout.write(f"[BoasVindas] {qtd_atrasados} envio(s) expirado(s) (>{horas}h de atraso)")
 
         pendentes = list(
             FilaEnvioBoasVindas.objects.filter(
                 enviado_em__isnull=True,
                 agendado_para__lte=agora,
+                agendado_para__gte=limite_atraso,
+            ).exclude(
+                erro__startswith=PREFIXO_ERRO_EXPIRADO,
             ).select_related('venda__cliente', 'criado_por')[:limite]
         )
 
