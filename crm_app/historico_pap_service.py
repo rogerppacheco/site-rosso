@@ -14,7 +14,7 @@ import random
 import re
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Optional, Tuple
 
 import requests
@@ -654,6 +654,46 @@ def _force_click(page, btn) -> None:
             page.evaluate("el => el.click()", btn)
         except Exception:
             pass
+
+
+PAGINAS_POR_JANELA = 2
+ITENS_ALVO_JANELA = 300
+
+
+def _dividir_periodo(ini: date, fim: date, partes: int) -> list[tuple[date, date]]:
+    """Divide [ini, fim] em até `partes` janelas contíguas de dias inteiros."""
+    dias = (fim - ini).days + 1
+    partes = max(1, min(int(partes or 1), dias))
+    tamanho = -(-dias // partes)
+    janelas = []
+    atual = ini
+    while atual <= fim:
+        fim_j = min(fim, atual + timedelta(days=tamanho - 1))
+        janelas.append((atual, fim_j))
+        atual = fim_j + timedelta(days=1)
+    return janelas
+
+
+def _chave_pack_vendas(url: str) -> tuple[str, str, int]:
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    qs = parse_qs(urlparse(url or "").query)
+    try:
+        pg = int((qs.get("page") or ["1"])[0] or 1)
+    except (TypeError, ValueError):
+        pg = 1
+    return (
+        unquote((qs.get("dataInicio") or [""])[0])[:10],
+        unquote((qs.get("dataFim") or [""])[0])[:10],
+        pg,
+    )
+
+
+def _pack_no_periodo(url: str, data_inicio: date | None, data_fim: date | None) -> bool:
+    if not data_inicio or not data_fim:
+        return True
+    ini, fim, _ = _chave_pack_vendas(url)
+    return bool(ini and fim) and data_inicio.isoformat() <= ini <= fim <= data_fim.isoformat()
 
 
 def _datas_url_correspondem(url: str, data_inicio: date | None, data_fim: date | None) -> bool:
@@ -2038,6 +2078,8 @@ def _coletar_vendas_via_rede_spa(
     # Página que o próximo /vendas da SPA deve buscar. Só requests disparados pela
     # própria SPA passam no anti-replay; XHR forjado recebe 401 "jwt malformed".
     pagina_alvo: dict[str, int | None] = {"n": None}
+    # Sub-período do próximo /vendas: o gateway do PAP dá 504 em páginas profundas (offset ≥ 400).
+    janela_alvo: dict[str, date | None] = {"ini": None, "fim": None}
     # Páginas profundas com limit=200 chegam a levar >30s na API do PAP.
     fetch_pendentes = {"n": 0}
     timeout_fetch_ms = 120000
@@ -2108,8 +2150,8 @@ def _coletar_vendas_via_rede_spa(
         if data_inicio and data_fim:
             novo = _rewritar_url_vendas_periodo(
                 req.url,
-                data_inicio,
-                data_fim,
+                janela_alvo["ini"] or data_inicio,
+                janela_alvo["fim"] or data_fim,
                 limit=200,
                 tipo_api=tipo_api,
                 status=status_rewrite if tipo_api else ...,
@@ -2123,8 +2165,8 @@ def _coletar_vendas_via_rede_spa(
                     "(período+limit=200 tipo=%s page=%s) → %s→%s",
                     tipo_api or "SPA",
                     pagina_alvo["n"] or "SPA",
-                    data_inicio,
-                    data_fim,
+                    janela_alvo["ini"] or data_inicio,
+                    janela_alvo["fim"] or data_fim,
                 )
 
         fetch_pendentes["n"] += 1
@@ -2304,100 +2346,130 @@ def _coletar_vendas_via_rede_spa(
                 len(matched),
             )
 
-            def _pagina_do_pack(pack: dict) -> int:
-                from urllib.parse import parse_qs, urlparse
+            espera_fetch_s = timeout_fetch_ms / 1000.0 + 10
 
-                try:
-                    qs = parse_qs(urlparse(pack.get("url") or "").query)
-                    return int((qs.get("page") or ["1"])[0] or 1)
-                except (TypeError, ValueError):
-                    return 1
+            def _aguardar_sem_fetch_pendente() -> None:
+                # Novo Filtrar com fetch em curso fecha/reabre o drawer e perde o request.
+                fim_p = time.time() + espera_fetch_s
+                while fetch_pendentes["n"] > 0 and time.time() < fim_p:
+                    page.wait_for_timeout(500)
 
-            def _paginas_capturadas() -> set[int]:
-                return {
-                    _pagina_do_pack(p)
-                    for p in (_matched() or list(collected))
-                    if extrair_lista_api(p.get("json"))[0]
-                }
+            def _pack_de(ini: date, fim: date, pg: int) -> dict | None:
+                alvo = (ini.isoformat(), fim.isoformat(), pg)
+                for p in reversed(collected):
+                    if _chave_pack_vendas(p.get("url") or "") == alvo:
+                        return p
+                return None
 
-            total_paginas = min(max_paginas_ui, -(-int(total_api or 0) // 200))
-            faltando = [n for n in range(1, total_paginas + 1) if n not in _paginas_capturadas()]
-            if faltando:
+            def _lidos() -> int:
+                vistos: set[str] = set()
+                for p in collected:
+                    if not _pack_no_periodo(p.get("url") or "", data_inicio, data_fim):
+                        continue
+                    for item in extrair_lista_api(p.get("json"))[0] or []:
+                        if isinstance(item, dict) and item.get("numeroPedido"):
+                            vistos.add(str(item.get("numeroPedido")))
+                return len(vistos)
+
+            def _buscar(ini: date, fim: date, pg: int) -> dict | None:
+                for tentativa in (1, 2, 3):
+                    pack = _pack_de(ini, fim, pg)
+                    if pack:
+                        return pack
+                    _aguardar_sem_fetch_pendente()
+                    _garantir_pagina_no_pap(page)
+                    janela_alvo["ini"], janela_alvo["fim"] = ini, fim
+                    pagina_alvo["n"] = pg
+                    inicio_pg = time.time()
+                    _tentar_clicar_filtrar(
+                        page,
+                        data_inicio=data_inicio,
+                        data_fim=data_fim,
+                        tipo_crm=tipo_crm,
+                        rapido=tentativa == 1,
+                    )
+                    # Sem request → Filtrar não disparou; com request, espera a API.
+                    sem_request_s = 10 if tentativa == 1 else 20
+                    while not _pack_de(ini, fim, pg):
+                        decorrido = time.time() - inicio_pg
+                        if decorrido > espera_fetch_s:
+                            break
+                        if decorrido > sem_request_s and fetch_pendentes["n"] == 0:
+                            break
+                        page.wait_for_timeout(400)
+                    logger.info(
+                        "[HISTORICO PAP] Janela %s→%s página %s %s em %.0fs (tentativa %s).",
+                        ini,
+                        fim,
+                        pg,
+                        "capturada" if _pack_de(ini, fim, pg) else "NÃO veio",
+                        time.time() - inicio_pg,
+                        tentativa,
+                    )
+                return _pack_de(ini, fim, pg)
+
+            total_api = int(total_api or 0)
+            paginas_periodo = -(-total_api // 200)
+            pendentes: list[tuple[date, date, int | None]] = []
+            if paginas_periodo > PAGINAS_POR_JANELA and data_inicio and data_fim:
+                partes = -(-total_api // ITENS_ALVO_JANELA)
+                pendentes = [(i, f, None) for i, f in _dividir_periodo(data_inicio, data_fim, partes)]
+            elif paginas_periodo > 1 and data_inicio and data_fim:
+                pendentes = [(data_inicio, data_fim, total_api)]
+
+            if pendentes:
                 logger.info(
-                    "[HISTORICO PAP] Paginando pela SPA: total_api=%s páginas=%s faltando=%s",
+                    "[HISTORICO PAP] Coleta por janelas: total_api=%s janelas=%s",
                     total_api,
-                    total_paginas,
-                    faltando,
+                    [(str(i), str(f)) for i, f, _ in pendentes],
                 )
-                espera_fetch_s = timeout_fetch_ms / 1000.0 + 10
-
-                def _aguardar_sem_fetch_pendente() -> None:
-                    # Novo Filtrar com fetch em curso fecha/reabre o drawer e perde o request.
-                    fim_p = time.time() + espera_fetch_s
-                    while fetch_pendentes["n"] > 0 and time.time() < fim_p:
-                        page.wait_for_timeout(500)
-
-                falhas_seguidas = 0
-                for alvo in faltando:
-                    for tentativa in (1, 2, 3):
-                        if alvo in _paginas_capturadas():
+            feitas = 0
+            falhas_seguidas = 0
+            requisicoes = 0
+            while pendentes and requisicoes < max(max_paginas_ui, 10) * 2:
+                ini, fim, total_janela = pendentes.pop(0)
+                if total_janela is None:
+                    requisicoes += 1
+                    pack = _buscar(ini, fim, 1)
+                    if not pack:
+                        falhas_seguidas += 1
+                        logger.warning("[HISTORICO PAP] Janela %s→%s sem resposta.", ini, fim)
+                        if falhas_seguidas >= 3:
                             break
-                        _aguardar_sem_fetch_pendente()
-                        if alvo in _paginas_capturadas():
-                            break
-                        _garantir_pagina_no_pap(page)
-                        pagina_alvo["n"] = alvo
-                        inicio_pg = time.time()
-                        _tentar_clicar_filtrar(
-                            page,
-                            data_inicio=data_inicio,
-                            data_fim=data_fim,
-                            tipo_crm=tipo_crm,
-                            rapido=tentativa == 1,
-                        )
-                        # Sem request → Filtrar não disparou; com request, espera a API.
-                        sem_request_s = 10 if tentativa == 1 else 20
-                        while alvo not in _paginas_capturadas():
-                            decorrido = time.time() - inicio_pg
-                            if decorrido > espera_fetch_s:
-                                break
-                            if decorrido > sem_request_s and fetch_pendentes["n"] == 0:
-                                break
-                            page.wait_for_timeout(400)
-                        logger.info(
-                            "[HISTORICO PAP] Página %s/%s %s em %.0fs (tentativa %s).",
-                            alvo,
-                            total_paginas,
-                            "capturada" if alvo in _paginas_capturadas() else "NÃO veio",
-                            time.time() - inicio_pg,
-                            tentativa,
-                        )
-                    if alvo in _paginas_capturadas():
+                        continue
+                    falhas_seguidas = 0
+                    feitas += 1
+                    total_janela = int(extrair_lista_api(pack.get("json"))[1] or 0)
+                    if total_janela > PAGINAS_POR_JANELA * 200 and fim > ini:
+                        meio = ini + timedelta(days=(fim - ini).days // 2)
+                        pendentes[:0] = [(ini, meio, None), (meio + timedelta(days=1), fim, None)]
+                        continue
+                for pg in range(2, -(-total_janela // 200) + 1):
+                    requisicoes += 1
+                    if _buscar(ini, fim, pg):
+                        feitas += 1
                         falhas_seguidas = 0
-                        if ao_progresso:
-                            try:
-                                ao_progresso(
-                                    len(_paginas_capturadas()),
-                                    total_paginas,
-                                    min(len(_paginas_capturadas()) * 200, int(total_api)),
-                                    int(total_api),
-                                )
-                            except Exception as exc:
-                                logger.debug("[HISTORICO PAP] progresso falhou: %s", exc)
                     else:
                         falhas_seguidas += 1
-                        if falhas_seguidas >= 2:
-                            break
-                _aguardar_sem_fetch_pendente()
-                pagina_alvo["n"] = None
+                if ao_progresso:
+                    try:
+                        estimadas = feitas + PAGINAS_POR_JANELA * len(pendentes)
+                        ao_progresso(feitas, max(estimadas, feitas), min(_lidos(), total_api), total_api)
+                    except Exception as exc:
+                        logger.debug("[HISTORICO PAP] progresso falhou: %s", exc)
+                if falhas_seguidas >= 3:
+                    break
+            _aguardar_sem_fetch_pendente()
+            pagina_alvo["n"] = None
+            janela_alvo["ini"] = janela_alvo["fim"] = None
 
-            final = _matched() or list(collected)
-            ni, tot = _contar_itens_e_total_packs(final)
+            final = [p for p in collected if _pack_no_periodo(p.get("url") or "", data_inicio, data_fim)]
+            final = final or matched
             logger.info(
-                "[HISTORICO PAP] Coleta SPA final: pacotes=%s itens=%s total_api=%s",
+                "[HISTORICO PAP] Coleta SPA final: pacotes=%s únicos=%s total_api=%s",
                 len(final),
-                ni,
-                tot,
+                _lidos(),
+                total_api,
             )
             return final
 

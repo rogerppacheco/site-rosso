@@ -123,6 +123,37 @@ class ReescritaUrlVendasPapTests(TestCase):
         self.assertEqual(parse_qs(urlparse(sem_page).query)['page'], ['1'])
 
 
+class JanelasPeriodoPapTests(TestCase):
+    def test_divide_mes_em_janelas_contiguas(self) -> None:
+        from crm_app.historico_pap_service import _dividir_periodo
+
+        janelas = _dividir_periodo(date(2026, 1, 1), date(2026, 1, 31), 4)
+        self.assertEqual(janelas[0][0], date(2026, 1, 1))
+        self.assertEqual(janelas[-1][1], date(2026, 1, 31))
+        for (_, fim_a), (ini_b, _) in zip(janelas, janelas[1:]):
+            self.assertEqual(ini_b, fim_a + timedelta(days=1))
+        self.assertLessEqual(len(janelas), 4)
+
+    def test_nao_divide_alem_de_um_dia(self) -> None:
+        from crm_app.historico_pap_service import _dividir_periodo
+
+        self.assertEqual(
+            _dividir_periodo(date(2026, 1, 1), date(2026, 1, 2), 10),
+            [(date(2026, 1, 1), date(2026, 1, 1)), (date(2026, 1, 2), date(2026, 1, 2))],
+        )
+
+    def test_pack_de_janela_conta_como_do_periodo(self) -> None:
+        from crm_app.historico_pap_service import _chave_pack_vendas, _pack_no_periodo
+
+        url = (
+            'https://pap-api.niointernet.com.br/api/portal/vendas?dataInicio=2026-01-09T00%3A00%3A00-03%3A00'
+            '&dataFim=2026-01-16T23%3A59%3A59-03%3A00&tipoVenda=VENDA&limit=200&page=2'
+        )
+        self.assertEqual(_chave_pack_vendas(url), ('2026-01-09', '2026-01-16', 2))
+        self.assertTrue(_pack_no_periodo(url, date(2026, 1, 1), date(2026, 1, 31)))
+        self.assertFalse(_pack_no_periodo(url, date(2026, 1, 10), date(2026, 1, 31)))
+
+
 class SessaoExpiradaHistoricoPapTests(TestCase):
     def setUp(self) -> None:
         self.login = Usuario.objects.create_user(username='ana', password='x', matricula_pap='TT1', senha_pap='s')
