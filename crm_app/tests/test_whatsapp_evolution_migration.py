@@ -260,6 +260,8 @@ class TestProviderFactory(SimpleTestCase):
         ZAPI_TOKEN="z-tok",
         WHATSATENDE_TOKEN_B="",
         WHATSATENDE_WHATSAPP_ID_B="",
+        META_CLOUD_ACCESS_TOKEN="",
+        META_CLOUD_PHONE_NUMBER_ID="",
     )
     @patch(
         "crm_app.services.whatsapp_config_service.get_active_whatsapp_provider_name",

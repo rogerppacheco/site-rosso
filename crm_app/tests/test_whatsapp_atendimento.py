@@ -195,8 +195,8 @@ class AtendimentoWhatsAppTests(TestCase):
         self.client.force_authenticate(self.user)
         cenarios = (
             ("canal_nao_liberado", False, "meta"),
-            ("provedor_zapi", True, "zapi"),
-            ("provedor_evolution", True, "evolution"),
+            ("provedor_zapi", False, "zapi"),
+            ("provedor_evolution", False, "evolution"),
         )
         for nome, pronto, provedor in cenarios:
             with self.subTest(nome), patch(

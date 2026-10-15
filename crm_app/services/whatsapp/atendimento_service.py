@@ -365,9 +365,7 @@ def estado_janela(telefone: str, agora=None) -> dict:
 
 
 def canal_oficial_pronto() -> bool:
-    """Com provedor zapi/evolution a fábrica resolve o purpose cliente como interno
-    (sem passar por canal_cliente_pronto); o inbox só envia pelo número oficial
-    (Cloud API Meta ou WhatsAtende B)."""
+    """O inbox só envia pelo número oficial (Cloud API Meta ou WhatsAtende B)."""
     try:
         from crm_app.services.whatsapp.factory import (
             PURPOSE_CLIENTE,

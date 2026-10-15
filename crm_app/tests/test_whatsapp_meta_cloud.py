@@ -246,6 +246,24 @@ class TestMetaFactory(SimpleTestCase):
         cliente = get_whatsapp_provider(purpose=PURPOSE_CLIENTE)
         self.assertIsInstance(cliente, MetaCloudProvider)
 
+    @override_settings(
+        ZAPI_INSTANCE_ID="inst",
+        ZAPI_TOKEN="z-tok",
+        WHATSATENDE_TOKEN_B="tok-b",
+        WHATSATENDE_WHATSAPP_ID_B="194",
+        META_CLOUD_ACCESS_TOKEN="mtok",
+        META_CLOUD_PHONE_NUMBER_ID="888",
+    )
+    def test_provedor_legado_cliente_sai_pela_meta(self) -> None:
+        for provedor in ("zapi", "evolution"):
+            with self.subTest(provedor=provedor), patch(
+                "crm_app.services.whatsapp_config_service.get_active_whatsapp_provider_name",
+                return_value=provedor,
+            ):
+                clear_whatsapp_provider_cache()
+                cliente = get_whatsapp_provider(purpose=PURPOSE_CLIENTE)
+                self.assertIsInstance(cliente, MetaCloudProvider)
+
 
 class TestMetaCloudProviderSend(SimpleTestCase):
     @override_settings(
