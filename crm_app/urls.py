@@ -8,6 +8,7 @@ from usuarios.views import LoginView, DefinirNovaSenhaView
 # Apoia APIs
 from .esteira_gestao_aproveitamento_api import GestaoAproveitamentoEsteiraView
 from .esteira_churn_tratamento_api import EsteiraChurnTratamentoView
+from .osab_bi_import_api import ImportarOsabBiPapManualView
 from .record_apoia_api import (
     RecordApoiaUploadView,
     RecordApoiaListView,
@@ -41,7 +42,6 @@ from .pedido_ajuda_gc_api import (
     PedidoAjudaGcExportarView,
 )
 from .views import (
-from .osab_bi_import_api import ImportarOsabBiPapManualView
     listar_screenshots_debug,
     baixar_screenshot_debug,
     buscar_fatura_nio_bonus_m10,
