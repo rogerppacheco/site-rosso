@@ -56,36 +56,11 @@ function iniciarAutoRefresh() {
 }
 
 async function refreshAccessToken() {
-    const refresh = localStorage.getItem('refreshToken');
-    if (!refresh) {
-        console.warn("Refresh token não encontrado");
-        return false;
-    }
-
+    // Um único caminho de refresh (grava access + refresh rotacionado).
     try {
-        const response = await fetch(`${API_URL}/api/auth/token/refresh/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh: refresh })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            localStorage.setItem('accessToken', data.access);
-            console.log("Token renovado com sucesso.");
-            return true;
-        } else {
-            // Token de refresh expirado ou inválido - fazer logout
-            console.error("Refresh token expirado ou inválido (401). Fazendo logout...");
-            if (response.status === 401) {
-                // Limpar storage e redirecionar para login
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('refreshToken');
-                localStorage.removeItem('userProfile');
-                // Não redireciona aqui - deixa a página fazer
-            }
-            return false;
-        }
+        await renovarTokenAPI();
+        console.log("Token renovado com sucesso.");
+        return true;
     } catch (error) {
         console.error("Erro no refresh token:", error);
         return false;
@@ -625,6 +600,7 @@ async function renovarTokenManual() {
         }, 1000);
     } catch (e) {
         if (isAccessTokenValid()) {
+            // Access ainda vale: não derruba a sessão; pede novo clique em instantes.
             timeDisplay.textContent = 'Tente nov.';
             if (timeDisplayModal) timeDisplayModal.textContent = 'Tente nov.';
             if (window.showAlert) {
@@ -654,7 +630,126 @@ async function renovarTokenAutomatico() {
 }
 
 // Evita duas renovações ao mesmo tempo (rotação de refresh token invalida o anterior).
+// Também sincroniza entre abas: só uma renova; as outras reaproveitam o token novo.
 let refreshPromise = null;
+const AUTH_TAB_ID = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+const AUTH_REFRESH_LOCK_KEY = 'auth_refresh_lock';
+const AUTH_TOKENS_SYNC_KEY = 'auth_tokens_sync';
+
+function _accessExp(token) {
+    try {
+        if (!token) return 0;
+        const payload = jwt_decode(token);
+        return payload && payload.exp ? Number(payload.exp) : 0;
+    } catch {
+        return 0;
+    }
+}
+
+function _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function _publicarTokensRenovados() {
+    try {
+        localStorage.setItem(
+            AUTH_TOKENS_SYNC_KEY,
+            JSON.stringify({
+                access: localStorage.getItem('accessToken') || '',
+                refresh: localStorage.getItem('refreshToken') || '',
+                at: Date.now(),
+                tab: AUTH_TAB_ID,
+            })
+        );
+    } catch (e) {
+        /* ignore quota / private mode */
+    }
+}
+
+function _liberarLockRefresh() {
+    try {
+        const raw = localStorage.getItem(AUTH_REFRESH_LOCK_KEY);
+        if (!raw) return;
+        const lock = JSON.parse(raw);
+        if (lock && lock.tab === AUTH_TAB_ID) {
+            localStorage.removeItem(AUTH_REFRESH_LOCK_KEY);
+        }
+    } catch (e) {
+        localStorage.removeItem(AUTH_REFRESH_LOCK_KEY);
+    }
+}
+
+function _tentarLockRefresh(ttlMs = 10000) {
+    const agora = Date.now();
+    try {
+        const raw = localStorage.getItem(AUTH_REFRESH_LOCK_KEY);
+        if (raw) {
+            const lock = JSON.parse(raw);
+            if (lock && lock.until > agora && lock.tab !== AUTH_TAB_ID) {
+                return false;
+            }
+        }
+        localStorage.setItem(
+            AUTH_REFRESH_LOCK_KEY,
+            JSON.stringify({ tab: AUTH_TAB_ID, until: agora + ttlMs })
+        );
+        // Confirma que ganhamos o lock (outra aba pode ter escrito no mesmo instante).
+        const conf = JSON.parse(localStorage.getItem(AUTH_REFRESH_LOCK_KEY) || 'null');
+        return !!(conf && conf.tab === AUTH_TAB_ID);
+    } catch (e) {
+        return true; // sem localStorage: segue só com o mutex da aba
+    }
+}
+
+async function _aguardarRefreshOutraAba(expAntes, refreshAntes, timeoutMs = 9000) {
+    const inicio = Date.now();
+    while (Date.now() - inicio < timeoutMs) {
+        await _sleep(250);
+        const access = localStorage.getItem('accessToken');
+        const refresh = localStorage.getItem('refreshToken');
+        if (_accessExp(access) > expAntes || (refresh && refresh !== refreshAntes)) {
+            return true;
+        }
+        try {
+            const raw = localStorage.getItem(AUTH_REFRESH_LOCK_KEY);
+            if (!raw) {
+                // Lock liberado: tenta de novo no fluxo principal.
+                return false;
+            }
+            const lock = JSON.parse(raw);
+            if (!lock || lock.until <= Date.now()) {
+                return false;
+            }
+        } catch (e) {
+            return false;
+        }
+    }
+    return _accessExp(localStorage.getItem('accessToken')) > expAntes;
+}
+
+async function _executarRefreshHttp(refresh) {
+    const response = await fetch('/api/auth/token/refresh/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ refresh: refresh })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail || 'Falha ao renovar token';
+        const err = new Error(detail);
+        err.status = response.status;
+        throw err;
+    }
+
+    const data = await response.json();
+    localStorage.setItem('accessToken', data.access);
+    if (data.refresh) localStorage.setItem('refreshToken', data.refresh);
+    _publicarTokensRenovados();
+}
 
 async function renovarTokenAPI() {
     if (refreshPromise) {
@@ -662,32 +757,57 @@ async function renovarTokenAPI() {
     }
 
     const doRefresh = async () => {
-        const refresh = localStorage.getItem('refreshToken');
-        if (!refresh) {
+        const refreshAntes = localStorage.getItem('refreshToken');
+        if (!refreshAntes) {
             handleSessaoExpirada('Sua sessão expirou. Faça login novamente.');
             throw new Error('Sem refresh token');
         }
+        const expAntes = _accessExp(localStorage.getItem('accessToken'));
 
-        const response = await fetch('/api/auth/token/refresh/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({ refresh: refresh })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const detail = errorData.detail || 'Falha ao renovar token';
-            const err = new Error(detail);
-            err.status = response.status;
-            throw err;
+        // Outra aba já está renovando: espera o token novo em vez de invalidar o refresh.
+        if (!_tentarLockRefresh()) {
+            const ok = await _aguardarRefreshOutraAba(expAntes, refreshAntes);
+            if (ok && isAccessTokenValid()) {
+                return;
+            }
+            // Lock caiu sem sync — tenta obter o lock e renovar.
+            if (!_tentarLockRefresh()) {
+                const ok2 = await _aguardarRefreshOutraAba(expAntes, refreshAntes, 4000);
+                if (ok2 && isAccessTokenValid()) return;
+                if (isAccessTokenValid()) {
+                    // Access ainda válido; evita logout agressivo.
+                    throw new Error('Renovação em andamento em outra aba');
+                }
+                throw new Error('Falha ao coordenar renovação entre abas');
+            }
         }
 
-        const data = await response.json();
-        localStorage.setItem('accessToken', data.access);
-        if (data.refresh) localStorage.setItem('refreshToken', data.refresh);
+        try {
+            const refresh = localStorage.getItem('refreshToken') || refreshAntes;
+            await _executarRefreshHttp(refresh);
+        } catch (err) {
+            // Refresh antigo pode ter sido rotacionado por outra aba/auto-refresh.
+            await _sleep(400);
+            const refreshAgora = localStorage.getItem('refreshToken');
+            const expAgora = _accessExp(localStorage.getItem('accessToken'));
+            if (expAgora > expAntes && isAccessTokenValid()) {
+                return;
+            }
+            if (refreshAgora && refreshAgora !== refreshAntes) {
+                try {
+                    await _executarRefreshHttp(refreshAgora);
+                    return;
+                } catch (err2) {
+                    if (isAccessTokenValid() && _accessExp(localStorage.getItem('accessToken')) > expAntes) {
+                        return;
+                    }
+                    throw err2;
+                }
+            }
+            throw err;
+        } finally {
+            _liberarLockRefresh();
+        }
     };
 
     refreshPromise = doRefresh();
@@ -697,6 +817,19 @@ async function renovarTokenAPI() {
         refreshPromise = null;
     }
 }
+
+// Outras abas publicam tokens novos após rotação — mantém esta aba alinhada.
+window.addEventListener('storage', (event) => {
+    if (event.key !== AUTH_TOKENS_SYNC_KEY || !event.newValue) return;
+    try {
+        const data = JSON.parse(event.newValue);
+        if (!data || data.tab === AUTH_TAB_ID) return;
+        if (data.access) localStorage.setItem('accessToken', data.access);
+        if (data.refresh) localStorage.setItem('refreshToken', data.refresh);
+    } catch (e) {
+        /* ignore */
+    }
+});
 
 function handleSessaoExpirada(message) {
     localStorage.removeItem('accessToken');
