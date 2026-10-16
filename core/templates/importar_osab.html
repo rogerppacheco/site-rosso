@@ -4,6 +4,11 @@
 
 {% block title %}Importar OSAB - {{ SITE_BRAND }}{% endblock %}
 
+
+{% block page_title %}Importar OSAB{% endblock %}
+{% block header_back_class %}{% endblock %}
+{% block header_user_menu_class %}{% endblock %}
+{% block header_nav %}{% endblock %}
 {% block extra_css %}
 <style>
         .import-container {
@@ -198,16 +203,12 @@
 </style>
 {% endblock %}
 
-{% block header_nav %}
-    <li><a href="/importacoes/">Voltar</a></li>
-                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
-{% endblock %}
+
 
 {% block content %}
 <main class="importar-page"><div class="import-container">
         <div class="text-center mb-4">
-            <h2 class="fw-bold text-dark">Importar Base OSAB</h2>
-            <p class="text-muted">Upload da planilha de dados de viabilidade e projetos - Gestão de Obras</p>
+<p class="text-muted">Upload da planilha de dados de viabilidade e projetos - Gestão de Obras</p>
         </div>
 
         <!-- Informações Importantes -->
@@ -224,6 +225,26 @@
                 <strong class="text-dark">Colunas obrigatórias na planilha:</strong><br>
                 <span class="column-tag">DOCUMENTO</span>
                 <span class="column-tag">SITUACAO</span>
+            </div>
+        </div>
+
+        <!-- Importação automática via BI PAP -->
+        <div class="info-card card-modern mb-4" id="cardOsabBiPap">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div>
+                    <h5 class="fw-bold text-dark mb-1">
+                        <i class="bi bi-robot text-warning"></i> Importar do BI PAP (Dinâmica OSAB)
+                    </h5>
+                    <p class="text-muted mb-0 small">
+                        Abre o portal PAP com a conta de serviço, exporta a tabela
+                        <strong>Exportação - OSAB</strong> e importa neste módulo.
+                        Também roda sozinho às 07:30, 13:00 e 19:00.
+                    </p>
+                    <small class="text-muted d-block mt-2" id="osabBiPapStatus">Verificando conta de serviço…</small>
+                </div>
+                <button type="button" class="btn btn-outline-warning fw-bold" id="btnOsabBiPap" disabled>
+                    <i class="bi bi-cloud-download"></i> Buscar no BI e importar
+                </button>
             </div>
         </div>
 
@@ -276,6 +297,19 @@
 
         <!-- Resultados -->
         <div id="resultadoImportacao" class="mt-4" style="display: none;"></div>
+    </div>
+
+    <!-- Pesquisa de pedido na base OSAB -->
+    <div class="historico-container">
+        <h4 class="fw-bold text-dark mb-3">
+            <i class="bi bi-search"></i> Pesquisar pedido na OSAB
+        </h4>
+        <form id="formBuscaOsab" class="d-flex flex-wrap gap-2 mb-2" autocomplete="off">
+            <input type="search" id="buscaOsabTermo" class="form-control" style="max-width: 360px;" placeholder="Número do pedido ou NR_ORDEM_ORIGINAL" aria-label="Número do pedido ou NR_ORDEM_ORIGINAL">
+            <button type="submit" class="btn btn-warning fw-bold" id="btnBuscaOsab"><i class="bi bi-search me-1"></i> Pesquisar</button>
+        </form>
+        <small class="text-muted d-block mb-3">Procura nas colunas PEDIDO e NR_ORDEM_ORIGINAL da base OSAB importada.</small>
+        <div id="resultadoBuscaOsab" class="table-responsive mb-4"></div>
     </div>
 
     <!-- Histórico de Importações -->
@@ -337,7 +371,86 @@
             // Carregar histórico e iniciar auto-refresh
             carregarHistoricoImportacoes();
             refreshIntervalId = setInterval(carregarHistoricoImportacoes, 3000);
+            carregarStatusOsabBiPap();
+            const btnBi = document.getElementById('btnOsabBiPap');
+            if (btnBi) btnBi.addEventListener('click', dispararOsabBiPapManual);
         });
+
+        async function carregarStatusOsabBiPap() {
+            const statusEl = document.getElementById('osabBiPapStatus');
+            const btn = document.getElementById('btnOsabBiPap');
+            if (!statusEl || !btn) return;
+            try {
+                const token = localStorage.getItem('accessToken');
+                const r = await fetch('/api/crm/import/osab/bi-pap/', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    statusEl.textContent = data.detail || 'Sem permissão para esta ação.';
+                    btn.disabled = true;
+                    return;
+                }
+                if (!data.disponivel) {
+                    statusEl.innerHTML = 'Nenhuma conta <strong>Importação OSAB (BI Dinâmica)</strong> ativa. Cadastre em Governança → Contas de Serviço PAP.';
+                    btn.disabled = true;
+                    return;
+                }
+                const mats = (data.contas || []).map(c => c.matricula).join(', ');
+                if (data.em_andamento) {
+                    statusEl.textContent = `Em andamento com: ${mats}. Aguarde o término.`;
+                    btn.disabled = true;
+                } else {
+                    statusEl.textContent = `Conta pronta: ${mats}`;
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                statusEl.textContent = 'Não foi possível verificar a conta de serviço.';
+                btn.disabled = true;
+            }
+        }
+
+        async function dispararOsabBiPapManual() {
+            const btn = document.getElementById('btnOsabBiPap');
+            if (!btn || btn.disabled) return;
+            if (!confirm('Iniciar busca no BI PAP (Dinâmica OSAB) e importar automaticamente?\n\nO processo pode levar alguns minutos.')) {
+                return;
+            }
+            btn.disabled = true;
+            const statusEl = document.getElementById('osabBiPapStatus');
+            if (statusEl) statusEl.textContent = 'Iniciando… login no PAP e exportação do BI.';
+            try {
+                const token = localStorage.getItem('accessToken');
+                const r = await fetch('/api/crm/import/osab/bi-pap/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ enviar_whatsapp: false }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    alert(data.detail || 'Não foi possível iniciar a importação via BI.');
+                    carregarStatusOsabBiPap();
+                    return;
+                }
+                if (window.showAlert) {
+                    window.showAlert(data.detail || 'Importação via BI iniciada.', 'success');
+                } else {
+                    alert(data.detail || 'Importação via BI iniciada.');
+                }
+                if (statusEl) statusEl.textContent = data.detail || 'Em andamento…';
+                if (!refreshIntervalId) {
+                    refreshIntervalId = setInterval(carregarHistoricoImportacoes, 3000);
+                }
+                carregarHistoricoImportacoes();
+                setTimeout(carregarStatusOsabBiPap, 15000);
+            } catch (e) {
+                alert('Erro ao iniciar: ' + (e.message || e));
+                carregarStatusOsabBiPap();
+            }
+        }
 
         // Eventos de drag & drop
         uploadZone.addEventListener('click', () => fileInput.click());
@@ -639,6 +752,74 @@
         }
 
         const detalhesAbertosOSAB = new Set();
+
+        document.getElementById('formBuscaOsab').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const termo = document.getElementById('buscaOsabTermo').value.trim();
+            const alvo = document.getElementById('resultadoBuscaOsab');
+            const btn = document.getElementById('btnBuscaOsab');
+            if (termo.length < 4) {
+                alvo.innerHTML = '<div class="alert alert-warning py-2 mb-0">Digite pelo menos 4 caracteres do pedido.</div>';
+                return;
+            }
+            btn.disabled = true;
+            alvo.innerHTML = '<p class="text-muted mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Pesquisando...</p>';
+            try {
+                const resp = await fetch(`/api/crm/import/osab/buscar/?q=${encodeURIComponent(termo)}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    alvo.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escHtml(data.error || data.detail || `Erro ${resp.status}`)}</div>`;
+                    return;
+                }
+                exibirBuscaOsab(data, termo);
+            } catch (err) {
+                alvo.innerHTML = `<div class="alert alert-danger py-2 mb-0">Erro ao pesquisar: ${escHtml(err.message)}</div>`;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        function exibirBuscaOsab(data, termo) {
+            const alvo = document.getElementById('resultadoBuscaOsab');
+            const itens = data.resultados || [];
+            if (!itens.length) {
+                alvo.innerHTML = `<div class="alert alert-secondary py-2 mb-0">Nenhum pedido encontrado na OSAB para <strong>${escHtml(termo)}</strong>.</div>`;
+                return;
+            }
+            const re = new RegExp(`(${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            const marcar = (v) => String(v || '-').split(re).map((p, i) => (i % 2 ? `<mark>${escHtml(p)}</mark>` : escHtml(p))).join('');
+            const linhas = itens.map(o => `
+                <tr class="align-middle">
+                    <td class="font-monospace">${marcar(o.pedido)}</td>
+                    <td class="font-monospace">${marcar(o.nr_ordem_original)}</td>
+                    <td>${escHtml(o.situacao || '-')}</td>
+                    <td><small>${escHtml(o.dt_ref || '-')}</small></td>
+                    <td><small>${escHtml(o.data_abertura || '-')}</small></td>
+                    <td><small>${escHtml(o.data_agendamento || '-')}</small></td>
+                    <td><small>${escHtml(o.data_fechamento || '-')}</small></td>
+                    <td><small>${escHtml(o.desc_pendencia || '-')}</small></td>
+                    <td><small>${escHtml([o.localidade, o.uf].filter(Boolean).join(' / ') || '-')}</small></td>
+                    <td><small class="font-monospace">${escHtml(o.matricula_vendedor || '-')}</small></td>
+                    <td><small>${escHtml(o.numero_ba || '-')}</small></td>
+                </tr>`).join('');
+            const aviso = data.total > itens.length
+                ? `<small class="text-muted">Mostrando ${itens.length} de ${data.total} resultados. Refine a pesquisa.</small>`
+                : `<small class="text-muted">${data.total} resultado(s).</small>`;
+            alvo.innerHTML = `
+                <table class="table table-hover table-sm mb-1" style="font-size: 0.875rem;">
+                    <thead>
+                        <tr>
+                            <th>Pedido</th><th>NR_ORDEM_ORIGINAL</th><th>Situação</th><th>DT_REF</th>
+                            <th>Abertura</th><th>Agendamento</th><th>Fechamento</th><th>Pendência</th>
+                            <th>Localidade</th><th>Vendedor</th><th>Número BA</th>
+                        </tr>
+                    </thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+                ${aviso}`;
+        }
 
         function escHtml(valor) {
             return String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

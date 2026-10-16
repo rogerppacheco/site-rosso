@@ -41,6 +41,7 @@ from .pedido_ajuda_gc_api import (
     PedidoAjudaGcExportarView,
 )
 from .views import (
+from .osab_bi_import_api import ImportarOsabBiPapManualView
     listar_screenshots_debug,
     baixar_screenshot_debug,
     buscar_fatura_nio_bonus_m10,
@@ -413,6 +414,7 @@ urlpatterns = [
     # --- Importações ---
     path('import/osab/', ImportacaoOsabView.as_view(), name='importacao-osab'),
     path('import/osab/<int:pk>/', ImportacaoOsabDetailView.as_view(), name='importacao-osab-detail'),
+    path('import/osab/bi-pap/', ImportarOsabBiPapManualView.as_view(), name='importacao-osab-bi-pap'),
     path('controle-tts/', ControleTTsAPIView.as_view(), name='controle-tts-api'),
     path('controle-tts/proximo/', ControleTTsProximoAPIView.as_view(), name='controle-tts-proximo-api'),
     path('controle-tts/tratado/', ControleTTTratadoAPIView.as_view(), name='controle-tts-tratado-api'),
