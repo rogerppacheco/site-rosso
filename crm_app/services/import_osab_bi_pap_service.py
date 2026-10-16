@@ -84,16 +84,15 @@ def _liberar_robo(robo_id: int) -> None:
     )
 
 
-def _frame_powerbi(page):
-    """Localiza o iframe do relatório Power BI embutido (preferindo o último/maior)."""
-    sel = 'iframe[src*="powerbi.com"], iframe[src*="app.powerbi.com"]'
-    loc = page.locator(sel)
-    n = loc.count()
-    if n <= 0:
-        raise RuntimeError("Iframe do Power BI não encontrado no Dashboard.")
-    # Com vários iframes, o relatório costuma ser o último.
-    idx = max(0, n - 1)
-    return page.frame_locator(sel).nth(idx)
+_IFRAME_BI = 'iframe[src*="powerbi.com"], iframe[src*="app.powerbi.com"]'
+_PAT_PAGINA_OSAB = re.compile(
+    r"Din[aá]mica\s*[-–—]\s*OSAB|Exporta[cç][aã]o\s*[-–—]\s*OSAB",
+    re.I,
+)
+_PAT_NAV_OSAB = re.compile(
+    r"Din[aá]mica.*OSAB|OSAB.*Din[aá]mica|Din[aá]mica\s*Exporta",
+    re.I,
+)
 
 
 def _sair_tela_cheia(page) -> None:
@@ -116,7 +115,7 @@ def _sair_tela_cheia(page) -> None:
             continue
 
 
-def _texto_visivel_bi(frame, limite: int = 500) -> str:
+def _texto_visivel_bi(frame, limite: int = 800) -> str:
     try:
         txt = frame.locator("body").inner_text(timeout=5000) or ""
         return re.sub(r"\s+", " ", txt).strip()[:limite]
@@ -126,85 +125,181 @@ def _texto_visivel_bi(frame, limite: int = 500) -> str:
 
 def _ja_na_pagina_osab(frame) -> bool:
     try:
-        el = frame.get_by_text(re.compile(r"Exporta[cç][aã]o\s*-\s*OSAB", re.I)).first
+        el = frame.get_by_text(re.compile(r"Exporta[cç][aã]o\s*[-–—]\s*OSAB", re.I)).first
         return bool(el.count() and el.is_visible())
     except Exception:
         return False
 
 
-def _aguardar_relatorio_bi(frame, page, timeout_ms: int = 90000) -> None:
-    """Espera o embed renderizar páginas/título do relatório."""
-    padroes = (
-        r"Exporta[cç][aã]o\s*-\s*OSAB",
-        r"Din[aá]mica\s*-\s*OSAB",
-        r"Performance em Foco",
-        r"Din[aá]mica Exporta",
-        r"Agendamento Futuro",
-    )
+def _listar_frames_bi(page):
+    n = page.locator(_IFRAME_BI).count()
+    return [page.frame_locator(_IFRAME_BI).nth(i) for i in range(n)]
+
+
+def _aguardar_qualquer_bi(page, timeout_ms: int = 90000) -> None:
     fim = time.time() + (timeout_ms / 1000.0)
     while time.time() < fim:
-        for pat in padroes:
-            try:
-                el = frame.get_by_text(re.compile(pat, re.I)).first
-                if el.count() and el.is_visible():
-                    logger.info("[OSAB BI] Relatório detectado via: %s", pat)
-                    return
-            except Exception:
-                continue
-        page.wait_for_timeout(1500)
-    logger.warning(
-        "[OSAB BI] Timeout aguardando relatório. Amostra: %s",
-        _texto_visivel_bi(frame),
-    )
-
-
-def _abrir_aba_dinamica_osab(frame, page) -> None:
-    if _ja_na_pagina_osab(frame):
-        logger.info("[OSAB BI] Já na página Exportação - OSAB; não precisa trocar aba.")
-        return
-
-    pat = re.compile(r"Din[aá]mica\s*-\s*OSAB", re.I)
-    candidatos = [
-        frame.get_by_role("tab", name=pat),
-        frame.get_by_role("button", name=pat),
-        frame.get_by_text(pat),
-        frame.locator('[aria-label*="Dinâmica - OSAB" i], [title*="Dinâmica - OSAB" i]'),
-        frame.locator('[aria-label*="Dinamica - OSAB" i], [title*="Dinamica - OSAB" i]'),
-        # Navegação inferior do Power BI (páginas do relatório)
-        frame.locator(
-            '.explorationNavigation button, .sectionList button, '
-            '[class*="pageNavigation"] button, [class*="page-navigation"] *, '
-            'div[role="tab"], span[role="tab"]'
-        ).filter(has_text=pat),
-        frame.locator("div, span, button, a, li").filter(has_text=pat),
-    ]
-    ultimo: Optional[Exception] = None
-    for loc in candidatos:
-        try:
-            el = loc.first
-            el.wait_for(state="attached", timeout=12000)
-            try:
-                el.scroll_into_view_if_needed(timeout=5000)
-            except Exception:
-                pass
-            el.click(timeout=8000, force=True)
-            page.wait_for_timeout(2500)
-            if _ja_na_pagina_osab(frame):
+        for frame in _listar_frames_bi(page):
+            amostra = _texto_visivel_bi(frame, 200)
+            if amostra and len(amostra) > 40:
+                logger.info("[OSAB BI] Embed com conteúdo detectado.")
                 return
-            # Clique pode ter funcionado mesmo sem o título ainda
-            try:
-                frame.get_by_text(pat).first.wait_for(state="visible", timeout=5000)
-            except Exception:
-                pass
-            return
-        except Exception as exc:
-            ultimo = exc
+        page.wait_for_timeout(1500)
+    logger.warning("[OSAB BI] Timeout aguardando conteúdo nos iframes Power BI.")
+
+
+def _abrir_menu_paginas_extra(frame, page) -> None:
+    """Abre o overflow «…» da barra de páginas do Power BI, se existir."""
+    for sel in (
+        'button[aria-label*="mais páginas" i]',
+        'button[aria-label*="More pages" i]',
+        'button[aria-label*="páginas do relatório" i]',
+        'button[aria-label*="Report pages" i]',
+        'button[title*="mais" i]',
+        '.explorationNavigation button.more',
+        'button:has-text("…")',
+        'button:has-text("...")',
+    ):
+        try:
+            btn = frame.locator(sel).first
+            if btn.count() and btn.is_visible():
+                btn.click(timeout=3000)
+                page.wait_for_timeout(600)
+                return
+        except Exception:
             continue
 
-    amostra = _texto_visivel_bi(frame)
+
+def _clicar_navegacao_por_texto(frame, page, padrao: re.Pattern) -> bool:
+    locs = [
+        frame.get_by_role("tab", name=padrao),
+        frame.get_by_role("button", name=padrao),
+        frame.get_by_role("menuitem", name=padrao),
+        frame.get_by_text(padrao),
+        frame.locator(
+            '.explorationNavigation button, .sectionList button, '
+            '[class*="pageNavigation"] button, [class*="page-navigation"] button, '
+            '[class*="navigation"] button, div[role="tab"], span[role="tab"], '
+            'li[role="option"], div[role="option"]'
+        ).filter(has_text=padrao),
+    ]
+    for loc in locs:
+        try:
+            el = loc.first
+            if el.count() == 0:
+                continue
+            el.scroll_into_view_if_needed(timeout=4000)
+            el.click(timeout=6000, force=True)
+            page.wait_for_timeout(2200)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _varrer_paginas_bi(frame, page, max_cliques: int = 16) -> bool:
+    """
+    Percorre a barra de páginas do relatório até achar Exportação - OSAB.
+    O embed às vezes abre em «Visão Parceiro», não em Dinâmica.
+    """
+    if _ja_na_pagina_osab(frame):
+        return True
+
+    _abrir_menu_paginas_extra(frame, page)
+    if _clicar_navegacao_por_texto(frame, page, _PAT_NAV_OSAB):
+        page.wait_for_timeout(2000)
+        if _ja_na_pagina_osab(frame):
+            return True
+
+    # Itens visíveis na navegação (rodapé / lista de páginas)
+    nav = frame.locator(
+        '.explorationNavigation button, .sectionList button, '
+        '[class*="pageNavigation"] button, [class*="navigationPane"] button, '
+        '[class*="page-nav"] button, div[role="tab"]'
+    )
+    try:
+        total = min(nav.count(), max_cliques)
+    except Exception:
+        total = 0
+
+    vistos: set[str] = set()
+    for i in range(total):
+        try:
+            btn = nav.nth(i)
+            if not btn.is_visible():
+                continue
+            nome = re.sub(r"\s+", " ", (btn.inner_text(timeout=1500) or "").strip())
+            if not nome or nome in vistos:
+                continue
+            vistos.add(nome)
+            logger.info("[OSAB BI] Tentando página do relatório: %s", nome[:80])
+            btn.click(timeout=5000, force=True)
+            page.wait_for_timeout(2200)
+            if _ja_na_pagina_osab(frame) or _PAT_PAGINA_OSAB.search(_texto_visivel_bi(frame)):
+                if not _ja_na_pagina_osab(frame):
+                    _clicar_navegacao_por_texto(frame, page, _PAT_NAV_OSAB)
+                    page.wait_for_timeout(1500)
+                if _ja_na_pagina_osab(frame):
+                    return True
+            # Dentro da página, abas internas (Dinâmica - OSAB)
+            if _clicar_navegacao_por_texto(frame, page, _PAT_NAV_OSAB):
+                page.wait_for_timeout(2000)
+                if _ja_na_pagina_osab(frame):
+                    return True
+        except Exception as exc:
+            logger.debug("[OSAB BI] Página %s: %s", i, exc)
+
+    # Setas da navegação (quando há overflow)
+    for seta in (
+        'button[aria-label*="próxima" i]',
+        'button[aria-label*="Next" i]',
+        'button[aria-label*="next page" i]',
+        'button[aria-label*="página seguinte" i]',
+    ):
+        for _ in range(8):
+            try:
+                btn = frame.locator(seta).first
+                if not (btn.count() and btn.is_visible()):
+                    break
+                btn.click(timeout=3000)
+                page.wait_for_timeout(1200)
+                if _clicar_navegacao_por_texto(frame, page, _PAT_NAV_OSAB):
+                    page.wait_for_timeout(2000)
+                    if _ja_na_pagina_osab(frame):
+                        return True
+            except Exception:
+                break
+
+    return _ja_na_pagina_osab(frame)
+
+
+def _obter_frame_dinamica_osab(page):
+    """Escolhe o iframe certo e navega até a grade Exportação - OSAB."""
+    frames = _listar_frames_bi(page)
+    if not frames:
+        raise RuntimeError("Iframe do Power BI não encontrado no Dashboard.")
+
+    # Preferir frame que já mostre OSAB / Dinâmica / Exportação
+    for idx, frame in enumerate(frames):
+        amostra = _texto_visivel_bi(frame)
+        if _ja_na_pagina_osab(frame):
+            logger.info("[OSAB BI] Frame %s já na Exportação - OSAB.", idx)
+            return frame
+        if _PAT_NAV_OSAB.search(amostra) or re.search(r"\bOSAB\b", amostra, re.I):
+            logger.info("[OSAB BI] Frame %s menciona OSAB; navegando…", idx)
+            if _varrer_paginas_bi(frame, page):
+                return frame
+
+    # Varre todos os frames (o dashboard pode embutir «Visão Parceiro» e «Dinâmica»)
+    for idx, frame in enumerate(frames):
+        logger.info("[OSAB BI] Varrendo páginas do frame %s/%s…", idx + 1, len(frames))
+        if _varrer_paginas_bi(frame, page):
+            return frame
+
+    amostras = " | ".join(_texto_visivel_bi(f, 180) for f in frames)
     raise RuntimeError(
-        f"Aba «Dinâmica - OSAB» não encontrada no Power BI: {ultimo}. "
-        f"Texto visível (amostra): {amostra or '(vazio)'}"
+        "Não foi possível abrir a página «Dinâmica - OSAB» / «Exportação - OSAB» "
+        f"no Power BI. Amostra: {amostras or '(vazio)'}"
     )
 
 def _garantir_filtros_todos(frame, page) -> None:
@@ -446,17 +541,12 @@ def exportar_e_importar_osab_bi(
             page.wait_for_timeout(2000)
             _sair_tela_cheia(page)
 
-        # Aguardar embed Power BI (renderização costuma demorar)
-        page.wait_for_selector(
-            'iframe[src*="powerbi.com"], iframe[src*="app.powerbi.com"]',
-            timeout=90000,
-        )
+        # Aguardar embed Power BI e navegar até Dinâmica / Exportação - OSAB
+        page.wait_for_selector(_IFRAME_BI, timeout=90000)
         page.wait_for_timeout(8000)
-        frame = _frame_powerbi(page)
-        _aguardar_relatorio_bi(frame, page, timeout_ms=90000)
-
-        _abrir_aba_dinamica_osab(frame, page)
-        page.wait_for_timeout(2500)
+        _aguardar_qualquer_bi(page, timeout_ms=90000)
+        frame = _obter_frame_dinamica_osab(page)
+        page.wait_for_timeout(2000)
         _garantir_filtros_todos(frame, page)
         page.wait_for_timeout(2000)
 
