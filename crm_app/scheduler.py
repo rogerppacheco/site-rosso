@@ -52,6 +52,17 @@ def buscar_faturas_automatico():
         logger.error(f"❌ Erro na busca automática: {str(e)}")
 
 
+
+def buscar_historico_pap_funil_automatico():
+    """Todo dia às 06:00: busca Histórico PAP (Interesse + Venda) dos últimos 7 dias."""
+    try:
+        logger.info("Iniciando busca automática Histórico PAP (Funil: Interesse/Venda)…")
+        call_command('buscar_historico_pap_funil')
+        logger.info("Busca automática Histórico PAP enfileirada.")
+    except Exception as e:
+        logger.error("Erro na busca automática Histórico PAP: %s", e)
+
+
 def finalizar_match_nio_noturno():
     try:
         from crm_app.services.nio_match_service import finalizar_janela_noturna
@@ -234,6 +245,15 @@ def _registrar_jobs(scheduler):
         replace_existing=True,
         max_instances=1,
     )
+    scheduler.add_job(
+        _wrap_scheduler_job(buscar_historico_pap_funil_automatico),
+        trigger=CronTrigger.from_crontab('0 6 * * *', timezone=tz_match),
+        id='buscar_historico_pap_funil',
+        name='Histórico PAP Funil — Interesse/Venda 7 dias (06:00)',
+        replace_existing=True,
+        max_instances=1,
+    )
+
     scheduler.add_job(
         _wrap_scheduler_job(processar_envio_performance_agendado),
         trigger=IntervalTrigger(minutes=1),
