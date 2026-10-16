@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!document.getElementById('token-indicator')) {
             const tokenIndicator = document.createElement('div');
             tokenIndicator.id = 'token-indicator';
-            tokenIndicator.className = 'token-indicator';
+            tokenIndicator.className = 'token-indicator token-ok';
             tokenIndicator.title = 'Token válido. Clique para renovar';
             tokenIndicator.onclick = () => {
                 if (typeof renovarTokenManual === 'function') {

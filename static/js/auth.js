@@ -473,18 +473,27 @@ function iniciarMonitoramentoToken() {
     const timeDisplayModal = document.getElementById('token-time-modal');
     const iconModal = indicatorModal ? indicatorModal.querySelector('i') : null;
 
+    function setTokenState(el, iconEl, state, iconClass, title) {
+        if (!el) return;
+        el.classList.remove('token-ok', 'token-warn', 'token-critical', 'token-error');
+        el.classList.add(state);
+        el.style.background = '';
+        el.style.color = '';
+        el.title = title || '';
+        if (iconEl) {
+            iconEl.style.color = '';
+            iconEl.className = iconClass;
+        }
+    }
+
     function atualizarDisplay() {
         const token = localStorage.getItem('accessToken');
         if (!token) {
             timeDisplay.textContent = 'Sem token';
-            indicator.style.background = '#ffebee';
-            icon.style.color = '#d32f2f';
-            icon.className = 'bi bi-shield-x';
+            setTokenState(indicator, icon, 'token-error', 'bi bi-shield-x', 'Sessão expirada');
             if (indicatorModal) {
                 timeDisplayModal.textContent = 'Sem token';
-                indicatorModal.style.background = '#ffebee';
-                iconModal.style.color = '#d32f2f';
-                iconModal.className = 'bi bi-shield-x';
+                setTokenState(indicatorModal, iconModal, 'token-error', 'bi bi-shield-x', 'Sessão expirada');
             }
             
             // Logout automático se não tiver token
@@ -507,14 +516,10 @@ function iniciarMonitoramentoToken() {
 
             if (tempoRestante <= 0) {
                 timeDisplay.textContent = 'Expirado';
-                indicator.style.background = '#ffebee';
-                icon.style.color = '#d32f2f';
-                icon.className = 'bi bi-shield-x';
+                setTokenState(indicator, icon, 'token-error', 'bi bi-shield-x', 'Sessão expirada');
                 if (indicatorModal) {
                     timeDisplayModal.textContent = 'Expirado';
-                    indicatorModal.style.background = '#ffebee';
-                    iconModal.style.color = '#d32f2f';
-                    iconModal.className = 'bi bi-shield-x';
+                    setTokenState(indicatorModal, iconModal, 'token-error', 'bi bi-shield-x', 'Sessão expirada');
                 }
                 
                 // Logout automático quando expirar
@@ -532,40 +537,22 @@ function iniciarMonitoramentoToken() {
 
             // Crítico quando faltar menos de 2 minutos
             if (tempoRestante < 120) {
-                indicator.style.background = '#ffebee';
-                icon.style.color = '#d32f2f';
-                icon.className = 'bi bi-shield-exclamation';
-                indicator.title = 'ATENÇÃO: Token expirando! Clique para renovar AGORA';
+                setTokenState(indicator, icon, 'token-critical', 'bi bi-shield-exclamation', 'ATENÇÃO: Token expirando! Clique para renovar AGORA');
                 if (indicatorModal) {
-                    indicatorModal.style.background = '#ffebee';
-                    iconModal.style.color = '#d32f2f';
-                    iconModal.className = 'bi bi-shield-exclamation';
-                    indicatorModal.title = 'ATENÇÃO: Token expirando! Clique para renovar AGORA';
+                    setTokenState(indicatorModal, iconModal, 'token-critical', 'bi bi-shield-exclamation', 'ATENÇÃO: Token expirando! Clique para renovar AGORA');
                 }
             } 
             // Alerta visual quando faltar menos de 5 minutos
             else if (tempoRestante < 300) {
-                indicator.style.background = '#fff3e0';
-                icon.style.color = '#f57c00';
-                icon.className = 'bi bi-shield-exclamation';
-                indicator.title = 'Token expirando em breve! Clique para renovar';
+                setTokenState(indicator, icon, 'token-warn', 'bi bi-shield-exclamation', 'Token expirando em breve! Clique para renovar');
                 if (indicatorModal) {
-                    indicatorModal.style.background = '#fff3e0';
-                    iconModal.style.color = '#f57c00';
-                    iconModal.className = 'bi bi-shield-exclamation';
-                    indicatorModal.title = 'Token expirando em breve! Clique para renovar';
+                    setTokenState(indicatorModal, iconModal, 'token-warn', 'bi bi-shield-exclamation', 'Token expirando em breve! Clique para renovar');
                 }
             } 
             else {
-                indicator.style.background = '#e8f5e9';
-                icon.style.color = '#4caf50';
-                icon.className = 'bi bi-shield-check';
-                indicator.title = 'Token válido. Clique para renovar manualmente';
+                setTokenState(indicator, icon, 'token-ok', 'bi bi-shield-check', 'Token válido. Clique para renovar manualmente');
                 if (indicatorModal) {
-                    indicatorModal.style.background = '#e8f5e9';
-                    iconModal.style.color = '#4caf50';
-                    iconModal.className = 'bi bi-shield-check';
-                    indicatorModal.title = 'Token válido. Clique para renovar manualmente';
+                    setTokenState(indicatorModal, iconModal, 'token-ok', 'bi bi-shield-check', 'Token válido. Clique para renovar manualmente');
                 }
             }
 

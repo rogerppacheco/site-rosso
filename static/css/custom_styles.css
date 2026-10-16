@@ -508,31 +508,98 @@ ul {
 .token-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.35rem;
     height: 34px;
-    padding: 0 0.55rem;
-    border-radius: 8px;
-    border: 1px solid color-mix(in srgb, #22c55e 45%, var(--border-color));
-    background: color-mix(in srgb, #22c55e 12%, var(--bg-secondary));
-    color: #16a34a;
+    padding: 0 0.65rem;
+    border-radius: 999px;
+    border: 1px solid #15803d;
+    background: #14532d;
+    color: #ffffff;
     cursor: pointer;
     flex-shrink: 0;
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: 0.82rem;
+    font-weight: 800;
     font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
 }
 
 .token-indicator i {
-    font-size: 0.9rem;
-    color: #22c55e;
+    font-size: 0.95rem;
+    color: #86efac;
 }
 
-html[data-theme="dark"] .token-indicator,
-[data-theme="dark"] .token-indicator {
-    color: #86efac;
-    border-color: color-mix(in srgb, #22c55e 40%, var(--border-color));
-    background: color-mix(in srgb, #22c55e 16%, var(--bg-secondary));
+.token-indicator #token-time {
+    color: #ffffff;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
 }
+
+/* Estados — contraste alto em light e dark */
+.token-indicator.token-ok {
+    background: #14532d;
+    border-color: #22c55e;
+    color: #ffffff;
+}
+.token-indicator.token-ok i { color: #86efac; }
+.token-indicator.token-ok #token-time { color: #ffffff; }
+
+.token-indicator.token-warn {
+    background: #9a3412;
+    border-color: #fb923c;
+    color: #ffffff;
+}
+.token-indicator.token-warn i { color: #fdba74; }
+.token-indicator.token-warn #token-time { color: #ffffff; }
+
+.token-indicator.token-critical,
+.token-indicator.token-error {
+    background: #991b1b;
+    border-color: #f87171;
+    color: #ffffff;
+}
+.token-indicator.token-critical i,
+.token-indicator.token-error i { color: #fca5a5; }
+.token-indicator.token-critical #token-time,
+.token-indicator.token-error #token-time { color: #ffffff; }
+
+html[data-theme="light"] .token-indicator.token-ok,
+[data-theme="light"] .token-indicator.token-ok {
+    background: #dcfce7;
+    border-color: #16a34a;
+    color: #14532d;
+}
+html[data-theme="light"] .token-indicator.token-ok i,
+[data-theme="light"] .token-indicator.token-ok i { color: #15803d; }
+html[data-theme="light"] .token-indicator.token-ok #token-time,
+[data-theme="light"] .token-indicator.token-ok #token-time { color: #14532d; }
+
+html[data-theme="light"] .token-indicator.token-warn,
+[data-theme="light"] .token-indicator.token-warn {
+    background: #ffedd5;
+    border-color: #ea580c;
+    color: #9a3412;
+}
+html[data-theme="light"] .token-indicator.token-warn i,
+[data-theme="light"] .token-indicator.token-warn i { color: #c2410c; }
+html[data-theme="light"] .token-indicator.token-warn #token-time,
+[data-theme="light"] .token-indicator.token-warn #token-time { color: #9a3412; }
+
+html[data-theme="light"] .token-indicator.token-critical,
+html[data-theme="light"] .token-indicator.token-error,
+[data-theme="light"] .token-indicator.token-critical,
+[data-theme="light"] .token-indicator.token-error {
+    background: #fee2e2;
+    border-color: #dc2626;
+    color: #991b1b;
+}
+html[data-theme="light"] .token-indicator.token-critical i,
+html[data-theme="light"] .token-indicator.token-error i,
+[data-theme="light"] .token-indicator.token-critical i,
+[data-theme="light"] .token-indicator.token-error i { color: #b91c1c; }
+html[data-theme="light"] .token-indicator.token-critical #token-time,
+html[data-theme="light"] .token-indicator.token-error #token-time,
+[data-theme="light"] .token-indicator.token-critical #token-time,
+[data-theme="light"] .token-indicator.token-error #token-time { color: #991b1b; }
 
 .table-fill-viewport {
     max-height: calc(100dvh - var(--app-chrome-h, var(--app-header-h)) - 8px);
@@ -1591,10 +1658,6 @@ a.btn-action-delete:hover {
 /* Indicador de Token — pulse leve (layout em .header-actions) */
 .token-indicator {
     animation: pulse-token 2s infinite;
-}
-
-.token-indicator #token-time {
-    font-variant-numeric: tabular-nums;
 }
 
 /* Spinner de Carregamento */

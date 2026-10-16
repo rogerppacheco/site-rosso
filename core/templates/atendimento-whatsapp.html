@@ -77,7 +77,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/auth.js' %}?v=7.0"></script>
+<script src="{% static 'js/auth.js' %}?v=7.1"></script>
 <script>
     if (!localStorage.getItem('accessToken')) { window.location.href = '/'; }
     const API = '/api/crm/atendimento-whatsapp';
