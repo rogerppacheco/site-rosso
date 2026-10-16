@@ -214,25 +214,6 @@
 .funil-filtros-busca .funil-busca-hint {
     margin: 0.35rem 0 0; font-size: 0.7rem; color: var(--text-secondary, #5b6b7d);
 }
-.funil-chips-bar {
-    display: none; flex-wrap: wrap; align-items: center; gap: 0.3rem;
-    padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
-    background: var(--bg-surface, #fff);
-}
-.funil-chips-bar.has-chips { display: flex; }
-.funil-chip {
-    display: inline-flex; align-items: center; gap: 0.25rem;
-    max-width: 100%; padding: 0.12rem 0.3rem 0.12rem 0.5rem;
-    border-radius: 999px; font-size: 0.7rem; font-weight: 600;
-    background: rgba(14, 165, 233, 0.12); color: var(--text-primary, #1a2332);
-    border: 1px solid rgba(14, 165, 233, 0.28);
-}
-.funil-chip-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12rem; }
-.funil-chip-x {
-    border: 0; background: transparent; color: inherit; opacity: 0.65;
-    width: 1.15rem; height: 1.15rem; border-radius: 999px; line-height: 1; padding: 0; font-size: 0.9rem;
-}
-.funil-chip-x:hover { opacity: 1; background: rgba(0,0,0,0.08); }
 body.funil-sheet-open { overflow: hidden; }
 .funil-page { width: 100%; max-width: none; padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
 .funil-page .card { border-radius: 12px; }
@@ -481,13 +462,9 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             </div>
 
             <div class="card card-modern border-top-0 shadow-sm funil-card" style="border-top-left-radius: 0;">
-                <div class="funil-chips-bar" id="funil-chips-bar" aria-live="polite">
-                    <div class="funil-chips" id="funil-chips"></div>
-                    <button type="button" id="f-limpar" class="btn btn-sm funil-limpar d-none"><i class="bi bi-x-circle me-1"></i>Limpar</button>
-                </div>
-
                 <!-- Controles legados (sincronizados pelo sheet; fora da vista) -->
                 <div id="funil-filtros-hidden" class="d-none" aria-hidden="true">
+                    <button type="button" id="f-limpar">Limpar</button>
                     <input type="search" id="f-busca" value="" aria-label="Busca">
                     <select id="f-status" class="form-select form-select-sm funil-select" aria-label="Filtrar por status PAP">
                         <option value="">Todos os status</option>
@@ -1071,10 +1048,11 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                 });
             }
         } else if (g === 'MAILING') {
-            const lote = document.getElementById('f-mailing-lote');
+            // Lote ativo já aparece na faixa "Lotes" — não conta no badge.
             const st = document.getElementById('f-mailing-status');
-            if (lote && lote.value) chips.push({ id: 'mailing_lote', label: labelSelectOpt('f-mailing-lote', lote.value), clearMailing: { lote: '' } });
-            if (st && st.value && st.value !== 'NOVO') chips.push({ id: 'mailing_status', label: labelSelectOpt('f-mailing-status', st.value), clearMailing: { status: 'NOVO' } });
+            if (st && st.value && st.value !== 'NOVO') {
+                chips.push({ id: 'mailing_status', label: labelSelectOpt('f-mailing-status', st.value), clearMailing: { status: 'NOVO' } });
+            }
         }
         return chips;
     }
@@ -1086,8 +1064,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     }
 
     function renderChips() {
-        const box = document.getElementById('funil-chips');
-        const bar = document.getElementById('funil-chips-bar');
+        // Só badge no botão Filtros do header — sem faixa de chips acima da tabela.
         const chips = chipsAtivos();
         const badge = document.getElementById('funil-filtros-count');
         const nFiltro = chips.length;
@@ -1095,14 +1072,6 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             badge.textContent = String(nFiltro);
             badge.classList.toggle('d-none', nFiltro === 0);
         }
-        document.getElementById('f-limpar').classList.toggle('d-none', chips.length === 0);
-        if (bar) bar.classList.toggle('has-chips', chips.length > 0);
-        if (!box) return;
-        box.innerHTML = chips.map(c => `
-            <span class="funil-chip" data-chip="${esc(c.id)}">
-                <span class="funil-chip-txt" title="${esc(c.label)}">${esc(c.label)}</span>
-                <button type="button" class="funil-chip-x" data-chip-clear="${esc(c.id)}" aria-label="Remover filtro">&times;</button>
-            </span>`).join('');
     }
 
     function htmlOpcoesDim(dim) {
@@ -1287,21 +1256,6 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         renderSheetFiltros();
     });
 
-    document.getElementById('funil-chips').addEventListener('click', (e) => {
-        const x = e.target.closest('[data-chip-clear]');
-        if (!x) return;
-        const id = x.getAttribute('data-chip-clear');
-        const chip = chipsAtivos().find(c => c.id === id);
-        if (!chip) return;
-        if (chip.clearMailing) {
-            if ('lote' in chip.clearMailing) document.getElementById('f-mailing-lote').value = chip.clearMailing.lote;
-            if ('status' in chip.clearMailing) document.getElementById('f-mailing-status').value = chip.clearMailing.status;
-            histState.page = 1;
-            carregarMailing({ rolarTopo: true });
-            return;
-        }
-        if (chip.clear) aplicarFiltros(chip.clear);
-    });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && sheetAberto()) {
             fecharPainelFiltros();
