@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('usuarios', '0034_usuario_operadoras_permitidas'),
+        ('usuarios', '0035_credencialrobopap_brpronto'),
     ]
 
     operations = [
