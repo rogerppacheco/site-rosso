@@ -1,15 +1,14 @@
 {% extends "base.html" %}
 
-{% block page_title %}Governança{% endblock %}
-{% block header_back_class %}{% endblock %}
-{% block header_user_menu_class %}{% endblock %}
-{% block header_nav %}{% endblock %}
-
-
 {% load static %}
 
 {% block title %}Governança - {{ SITE_BRAND }}{% endblock %}
 
+
+{% block page_title %}Governança{% endblock %}
+{% block header_back_class %}{% endblock %}
+{% block header_user_menu_class %}{% endblock %}
+{% block header_nav %}{% endblock %}
 {% block extra_css %}
 <style>
 /* Layout de Administração */
@@ -883,16 +882,24 @@
                                 <option value="CONSULTA_ESTEIRA">Consulta PAP (Esteira)</option>
                                 <option value="WHATSAPP_BOT">Bot do WhatsApp (Crédito, OS, etc)</option>
                                 <option value="HISTORICO_VENDAS">Auditoria/Histórico (Excel PAP)</option>
+                                <option value="BRPRONTO_GED">Br Pronto / GED360 (Biometria)</option>
+                                <option value="IMPORT_OSAB_BI">Importação OSAB (BI Dinâmica)</option>
                                 <option value="OUTROS">Outros</option>
                             </select>
+                            <div class="form-text d-none" id="pap_login_ajuda_brpronto">Login do site ged360.niointernet.com.br/brprontopdv. Usado pela auditoria (Checar biometria), pelo comando BIO no WhatsApp e pela Repescagem Bio. Cadastre vários logins para rodar consultas em paralelo.</div>
+                            <div class="form-text d-none" id="pap_login_ajuda_osab_bi">Usado pelo robô que exporta a aba Dinâmica - OSAB do Power BI (PAP) e importa na Central de Importações. Agendado às 07:30, 13:00 e 19:00. Cadastre só uma conta ativa com essa função.</div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Matrícula PAP</label>
+                            <label class="form-label" id="pap_login_matricula_label">Matrícula PAP</label>
                             <input type="text" id="pap_login_matricula" class="form-control" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Senha PAP</label>
+                            <label class="form-label" id="pap_login_senha_label">Senha PAP</label>
                             <input type="text" id="pap_login_senha" class="form-control" required>
+                        </div>
+                        <div class="mb-3 d-none" id="pap_login_dominio_grupo">
+                            <label class="form-label">Domínio</label>
+                            <input type="text" id="pap_login_dominio" class="form-control" placeholder="BrPronto">
                         </div>
                         <div class="mb-3 form-check">
                             <input type="checkbox" id="pap_login_ativo" class="form-check-input" checked>
@@ -1009,19 +1016,22 @@
                                     </div>
 
                                     <div class="col-12 mt-3 pt-3"><h6 class="text-primary border-bottom pb-2 mb-2"><i class="bi bi-fingerprint me-1"></i> Br Pronto (Biometria – Auditoria / BIO)</h6></div>
-                                    <div class="col-lg-3 col-md-6">
+                                    <div class="col-lg-9 col-md-6 small text-muted d-flex align-items-end">
+                                        <span><i class="bi bi-robot me-1"></i>Os logins usados pelas automações do Br Pronto ficam em <strong>Contas de Serviço (Robôs)</strong>, função "Br Pronto / GED360".</span>
+                                    </div>
+                                    <div class="col-lg-3 col-md-6 d-none">
                                         <label class="form-label fw-bold">Login Br Pronto</label>
                                         <input type="text" class="form-control" id="brpronto_login" placeholder="Ex.: TT828860 (perfil BO)">
                                     </div>
-                                    <div class="col-lg-2 col-md-6">
+                                    <div class="col-lg-2 col-md-6 d-none">
                                         <label class="form-label fw-bold">Senha Br Pronto</label>
                                         <input type="password" class="form-control" id="brpronto_senha" placeholder="Branco = manter" autocomplete="new-password">
                                     </div>
-                                    <div class="col-lg-2 col-md-6">
+                                    <div class="col-lg-2 col-md-6 d-none">
                                         <label class="form-label fw-bold">Domínio Br Pronto</label>
                                         <input type="text" class="form-control" id="brpronto_dominio" placeholder="BrPronto" value="BrPronto">
                                     </div>
-                                    <div class="col-lg-3 col-md-6 d-flex align-items-end">
+                                    <div class="col-lg-3 col-md-6 d-none">
                                         <div class="form-check form-switch mb-2">
                                             <input class="form-check-input" type="checkbox" id="brpronto_disponivel_para_automacao">
                                             <label class="form-check-label" for="brpronto_disponivel_para_automacao">Disponibilizar no pool (bot/auditoria)</label>
@@ -4588,7 +4598,7 @@
                 const emUsoBadge = item.em_uso ? '<span class="badge bg-warning">Sim</span>' : '<span class="badge bg-secondary">Não</span>';
                 tbody.innerHTML += `
                     <tr>
-                        <td>${item.funcao}</td>
+                        <td>${FUNCOES_ROBO[item.funcao] || item.funcao}</td>
                         <td>${item.matricula}</td>
                         <td>${ativoBadge}</td>
                         <td>${emUsoBadge}</td>
@@ -4604,9 +4614,32 @@
         }
     }
 
+    const FUNCOES_ROBO = {
+        CONSULTA_ESTEIRA: 'Consulta PAP (Esteira)',
+        WHATSAPP_BOT: 'Bot do WhatsApp (Crédito, OS, etc)',
+        HISTORICO_VENDAS: 'Auditoria/Histórico (Excel PAP)',
+        BRPRONTO_GED: 'Br Pronto / GED360 (Biometria)',
+        IMPORT_OSAB_BI: 'Importação OSAB (BI Dinâmica)',
+        OUTROS: 'Outros',
+    };
+
+    function ajustarCamposPapLogin() {
+        const brpronto = document.getElementById('pap_login_funcao').value === 'BRPRONTO_GED';
+        const osabBi = document.getElementById('pap_login_funcao').value === 'IMPORT_OSAB_BI';
+        document.getElementById('pap_login_matricula_label').textContent = brpronto ? 'Login Br Pronto (matrícula TT)' : 'Matrícula PAP';
+        document.getElementById('pap_login_senha_label').textContent = brpronto ? 'Senha Br Pronto' : 'Senha PAP';
+        document.getElementById('pap_login_dominio_grupo').classList.toggle('d-none', !brpronto);
+        document.getElementById('pap_login_ajuda_brpronto').classList.toggle('d-none', !brpronto);
+        const ajudaOsab = document.getElementById('pap_login_ajuda_osab_bi');
+        if (ajudaOsab) ajudaOsab.classList.toggle('d-none', !osabBi);
+    }
+    document.getElementById('pap_login_funcao').addEventListener('change', ajustarCamposPapLogin);
+
     function abrirModalPapLogin() {
         document.getElementById('formPapLogin').reset();
         document.getElementById('pap_login_id').value = '';
+        document.getElementById('pap_login_dominio').value = 'BrPronto';
+        ajustarCamposPapLogin();
         new bootstrap.Modal(document.getElementById('modalPapLogin')).show();
     }
 
@@ -4615,16 +4648,20 @@
         document.getElementById('pap_login_funcao').value = item.funcao;
         document.getElementById('pap_login_matricula').value = item.matricula;
         document.getElementById('pap_login_senha').value = item.senha;
+        document.getElementById('pap_login_dominio').value = item.dominio || 'BrPronto';
         document.getElementById('pap_login_ativo').checked = item.ativo;
+        ajustarCamposPapLogin();
         new bootstrap.Modal(document.getElementById('modalPapLogin')).show();
     }
 
     async function salvarPapLogin() {
         const id = document.getElementById('pap_login_id').value;
+        const funcao = document.getElementById('pap_login_funcao').value;
         const data = {
-            funcao: document.getElementById('pap_login_funcao').value,
-            matricula: document.getElementById('pap_login_matricula').value,
+            funcao,
+            matricula: document.getElementById('pap_login_matricula').value.trim(),
             senha: document.getElementById('pap_login_senha').value,
+            dominio: funcao === 'BRPRONTO_GED' ? (document.getElementById('pap_login_dominio').value.trim() || 'BrPronto') : '',
             ativo: document.getElementById('pap_login_ativo').checked
         };
         const method = id ? 'PUT' : 'POST';

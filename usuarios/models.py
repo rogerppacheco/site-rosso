@@ -301,12 +301,16 @@ class CredencialRoboPAP(models.Model):
         ('CONSULTA_ESTEIRA', 'Consulta PAP (Esteira)'),
         ('WHATSAPP_BOT', 'Bot do WhatsApp (Crédito, OS, etc)'),
         ('HISTORICO_VENDAS', 'Auditoria/Histórico (Excel PAP)'),
+        ('BRPRONTO_GED', 'Br Pronto / GED360 (Biometria)'),
+        ('IMPORT_OSAB_BI', 'Importação OSAB (BI Dinâmica)'),
         ('OUTROS', 'Outros'),
     ]
 
     funcao = models.CharField('Função', max_length=50, choices=FUNCOES_CHOICES)
     matricula = models.CharField('Matrícula PAP', max_length=50)
     senha = models.CharField('Senha PAP', max_length=128)
+    dominio = models.CharField('Domínio', max_length=100, blank=True, default='',
+                               help_text='Domínio no login do Br Pronto (ex.: BrPronto). Só para a função Br Pronto.')
     ativo = models.BooleanField('Ativo', default=True)
     em_uso = models.BooleanField('Em Uso (Trancado)', default=False)
     ultimo_uso = models.DateTimeField(null=True, blank=True)
@@ -325,3 +329,19 @@ class CredencialRoboPAP(models.Model):
     @property
     def senha_pap(self):
         return self.senha
+
+    @property
+    def brpronto_login(self):
+        return self.matricula
+
+    @property
+    def brpronto_senha(self):
+        return self.senha
+
+    @property
+    def brpronto_dominio(self):
+        return self.dominio or 'BrPronto'
+
+    @property
+    def username(self):
+        return self.matricula

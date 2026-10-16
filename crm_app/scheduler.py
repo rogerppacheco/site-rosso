@@ -43,14 +43,14 @@ def _wrap_scheduler_job(func: _F) -> _F:
     return wrapper  # type: ignore[return-value]
 
 
-def buscar_faturas_automatico():
+def buscar_repescagem_bio_ged_automatico():
+    """Todo dia às 07:00: baixa ~6 meses de biometrias do GED360 (Br Pronto)."""
     try:
-        logger.info("🤖 Iniciando busca automática de faturas no Nio...")
-        call_command('buscar_faturas_nio_automatico')
-        logger.info("✅ Busca automática concluída com sucesso!")
+        logger.info("Iniciando busca automática Repescagem Bio (GED360)…")
+        call_command('buscar_repescagem_bio_ged')
+        logger.info("Busca automática Repescagem Bio enfileirada.")
     except Exception as e:
-        logger.error(f"❌ Erro na busca automática: {str(e)}")
-
+        logger.error("Erro na busca automática Repescagem Bio: %s", e)
 
 
 def buscar_historico_pap_funil_automatico():
@@ -61,6 +61,39 @@ def buscar_historico_pap_funil_automatico():
         logger.info("Busca automática Histórico PAP enfileirada.")
     except Exception as e:
         logger.error("Erro na busca automática Histórico PAP: %s", e)
+
+
+def importar_osab_bi_pap_automatico():
+    """
+    07:30 / 13:00 / 19:00: exporta OSAB do BI (PAP Dinâmica) e importa no CRM.
+    Conta: Contas de Serviço PAP → função Importação OSAB (BI Dinâmica).
+    """
+    try:
+        logger.info("Iniciando importação automática OSAB via BI PAP…")
+        call_command("importar_osab_bi_pap")
+        logger.info("Importação automática OSAB via BI PAP concluída.")
+    except Exception as e:
+        logger.error("Erro na importação automática OSAB via BI PAP: %s", e)
+
+
+def processar_disparo_mailing():
+    """Continua o envio de lotes de mailing em DISPARANDO (~25/min por ciclo)."""
+    try:
+        from crm_app.services.mailing_dispatch_service import processar_lotes_em_disparo
+        n = processar_lotes_em_disparo()
+        if n:
+            logger.info("Mailing: %s lote(s) processado(s) neste ciclo.", n)
+    except Exception as e:
+        logger.error("Erro no disparo de mailing: %s", e)
+
+
+def buscar_faturas_automatico():
+    try:
+        logger.info("🤖 Iniciando busca automática de faturas no Nio...")
+        call_command('buscar_faturas_nio_automatico')
+        logger.info("✅ Busca automática concluída com sucesso!")
+    except Exception as e:
+        logger.error(f"❌ Erro na busca automática: {str(e)}")
 
 
 def finalizar_match_nio_noturno():
@@ -246,6 +279,14 @@ def _registrar_jobs(scheduler):
         max_instances=1,
     )
     scheduler.add_job(
+        _wrap_scheduler_job(buscar_repescagem_bio_ged_automatico),
+        trigger=CronTrigger.from_crontab('0 7 * * *', timezone=tz_match),
+        id='buscar_repescagem_bio_ged',
+        name='Repescagem Bio — busca GED360 6 meses (07:00)',
+        replace_existing=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
         _wrap_scheduler_job(buscar_historico_pap_funil_automatico),
         trigger=CronTrigger.from_crontab('0 6 * * *', timezone=tz_match),
         id='buscar_historico_pap_funil',
@@ -253,7 +294,19 @@ def _registrar_jobs(scheduler):
         replace_existing=True,
         max_instances=1,
     )
-
+    for cron_expr, label in (
+        ("30 7 * * *", "07:30"),
+        ("0 13 * * *", "13:00"),
+        ("0 19 * * *", "19:00"),
+    ):
+        scheduler.add_job(
+            _wrap_scheduler_job(importar_osab_bi_pap_automatico),
+            trigger=CronTrigger.from_crontab(cron_expr, timezone=tz_match),
+            id=f"importar_osab_bi_pap_{label.replace(':', '')}",
+            name=f"OSAB BI PAP → Central Importações ({label})",
+            replace_existing=True,
+            max_instances=1,
+        )
     scheduler.add_job(
         _wrap_scheduler_job(processar_envio_performance_agendado),
         trigger=IntervalTrigger(minutes=1),
@@ -283,6 +336,14 @@ def _registrar_jobs(scheduler):
         trigger=IntervalTrigger(minutes=5),
         id='processar_fila_boas_vindas',
         name='Processar fila de boas-vindas (a cada 5 min)',
+        replace_existing=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        _wrap_scheduler_job(processar_disparo_mailing),
+        trigger=IntervalTrigger(minutes=2),
+        id='processar_disparo_mailing',
+        name='Disparo mailings de mercado (a cada 2 min)',
         replace_existing=True,
         max_instances=1,
     )
