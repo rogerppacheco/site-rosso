@@ -392,10 +392,21 @@ class FunilHistoricoPapPedidosView(APIView):
             cliente_val = mapped.get("cliente") or payload.get("cliente") or payload.get("nomeCliente") or "Desconhecido"
             doc_val = mapped.get("cpf") or mapped.get("documento") or payload.get("cpf") or payload.get("documento") or ""
             status_val = p.status_exibicao or "Desconhecido"
+            # Etapa do interesse no PAP = status secundário (ex.: INTERESSE_AUTOMATICO / INTERESSE_ENCERRADO).
+            etapa_val = (
+                mapped.get("status_secundario")
+                or payload.get("subStatus")
+                or payload.get("chaveStatusSecundario")
+                or payload.get("statusSecundario")
+                or ""
+            )
 
             envio = {}
             if (p.tipo_venda or "").upper() == "INTERESSE":
-                envio = enriquecer_linha_interesse(mapped, pedido_id=p.id)
+                try:
+                    envio = enriquecer_linha_interesse(mapped, pedido_id=p.id) or {}
+                except Exception:
+                    envio = {}
 
             res.append({
                 "id": p.id,
@@ -405,6 +416,8 @@ class FunilHistoricoPapPedidosView(APIView):
                 "os_instalacao": mapped.get("os_instalacao") or "",
                 "tipo_venda": p.tipo_venda,
                 "status_primario": status_val,
+                "etapa": etapa_val,
+                "status_secundario": etapa_val,
                 "novo_nesta_busca": num_norm in novos_set,
                 "data_status": mapped.get("data_pedido") or "",
                 **envio,

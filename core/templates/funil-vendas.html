@@ -527,6 +527,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                                     <th class="py-2">Cliente</th>
                                     <th class="py-2">Documento</th>
                                     <th class="py-2">Status PAP</th>
+                                    <th class="py-2">Etapa</th>
                                     <th class="py-2">
                                         <button type="button" id="th-ordem-data" class="funil-th-sort" title="Inverter ordenação por data do pedido">
                                             Data do pedido <i class="bi bi-sort-down" id="ic-ordem-data"></i>
@@ -2333,6 +2334,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
 
     function linhaPedido(p) {
         const [dia, hora] = String(p.data_status || '').split(' ');
+        const etapa = (p.etapa || p.status_secundario || '').replace(/_/g, ' ');
         const acao = (String(p.tipo_venda || histState.tipo || '').toUpperCase() === 'INTERESSE')
             ? btnEnviarTemplate('INTERESSE', p.id, p)
             : `<button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="alert('Funcionalidade de Tratamento em desenvolvimento')">Tratar</button>`;
@@ -2342,6 +2344,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                 <td class="fw-medium text-dark">${destacar(p.cliente || 'Desconhecido')}</td>
                 <td class="text-muted small text-nowrap">${destacar(p.documento || '-')}</td>
                 <td><span class="badge bg-secondary badge-status">${esc((p.status_primario || 'Desconhecido').replace(/_/g, ' '))}</span></td>
+                <td class="small text-nowrap">${etapa ? `<span class="badge bg-info-subtle text-info border border-info-subtle badge-status">${esc(etapa)}</span>` : '<span class="text-muted">—</span>'}</td>
                 <td class="text-muted small text-nowrap">${dia ? `${esc(dia)}${hora ? `<br><span class="opacity-75">${esc(hora)}</span>` : ''}` : '-'}</td>
                 <td>
                     ${p.novo_nesta_busca
