@@ -228,6 +228,7 @@ from .pendencia_indevida_api import PendenciaIndevidaRegistrarView, PendenciaInd
 from .funil_venda_wpp_api import FunilVendaWppTentativaDetailView, FunilVendaWppTentativaListView
 from .funil_legado_api import FunilMontarLegadoConfigView, FunilMontarLegadoView
 from .historico_pap_api import (
+    FunilHistoricoPapAssertivaMatchLoteView,
     FunilHistoricoPapAssertivaMatchView,
     FunilHistoricoPapBuscarView,
     FunilHistoricoPapConfigView,
@@ -319,6 +320,11 @@ urlpatterns = [
         'funil-venda-wpp/historico-pap/pedidos/<int:pedido_id>/assertiva-match/',
         FunilHistoricoPapAssertivaMatchView.as_view(),
         name='funil-historico-pap-assertiva-match',
+    ),
+    path(
+        'funil-venda-wpp/historico-pap/assertiva-match-lote/',
+        FunilHistoricoPapAssertivaMatchLoteView.as_view(),
+        name='funil-historico-pap-assertiva-match-lote',
     ),
     path('funil-venda-wpp/historico-pap/exportar/', FunilHistoricoPapExportarView.as_view(), name='funil-historico-pap-exportar'),
     path('historico/importar-vendas/', FunilHistoricoPapImportarView.as_view(), name='historico-importar-vendas'),

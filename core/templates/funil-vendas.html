@@ -383,6 +383,10 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                     <button class="btn btn-outline-primary fw-semibold shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#modalBusca">
                         <i class="bi bi-search me-1"></i>Nova Busca
                     </button>
+                    <button type="button" class="btn btn-outline-warning fw-semibold shadow-sm d-none" id="btn-assertiva-match-lote"
+                        title="Consulta CPF e telefones na Assertiva para N interesses sem documento">
+                        <i class="bi bi-person-vcard me-1"></i>Match Assertiva
+                    </button>
                     <div class="btn-group shadow-sm">
                         <button type="button" class="btn btn-success fw-semibold" id="btn-exportar-filtro" title="Exporta para Excel todos os pedidos da aba com os filtros aplicados (todas as páginas)">
                             <i class="bi bi-file-earmark-excel me-1"></i>Exportar <span class="badge ms-1" id="exportar-qtd">0</span>
@@ -1288,10 +1292,13 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         const bio = histState.tipo === 'BIO';
         const mailing = histState.tipo === 'MAILING';
         const pap = !churn && !bio && !mailing;
+        const interesse = histState.tipo === 'INTERESSE';
         document.getElementById('funil-periodo').title = bio
             ? 'Data de envio da biometria no GED ou data da venda no CRM'
             : 'Data do pedido no PAP';
         document.getElementById('acoes-pap').classList.toggle('d-none', !pap);
+        const btnMatchLote = document.getElementById('btn-assertiva-match-lote');
+        if (btnMatchLote) btnMatchLote.classList.toggle('d-none', !interesse);
         document.getElementById('acoes-churn').classList.toggle('d-none', !churn);
         document.getElementById('acoes-bio').classList.toggle('d-none', !bio);
         document.getElementById('acoes-mailing').classList.toggle('d-none', !mailing);
@@ -1595,6 +1602,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     }
     document.getElementById('btn-exportar-filtro').addEventListener('click', exportarFiltrado);
     document.getElementById('btn-exportar-filtro-menu').addEventListener('click', exportarFiltrado);
+    document.getElementById('btn-assertiva-match-lote').addEventListener('click', matchAssertivaLote);
 
     function linhasSkeleton(qtd) {
         const cel = w => `<td class="py-3"><span class="funil-skel" style="width:${w}%"></span></td>`;
@@ -1708,6 +1716,83 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             data-id="${esc(String(p.id || ''))}" title="${esc(title)}">
             <i class="bi bi-person-vcard me-1"></i>${label}
         </button>`;
+    }
+
+    async function matchAssertivaLote() {
+        const btn = document.getElementById('btn-assertiva-match-lote');
+        const raw = prompt(
+            'Quantos interesses sem CPF deseja consultar na Assertiva?\n\n' +
+            'Serão os mais recentes ainda sem match único.\nMáximo: 100',
+            '20'
+        );
+        if (raw === null) return;
+        let limite = parseInt(String(raw).trim(), 10);
+        if (!Number.isFinite(limite) || limite < 1) {
+            alert('Informe um número válido (1 a 100).');
+            return;
+        }
+        limite = Math.min(100, Math.max(1, limite));
+        if (!confirm(`Consultar até ${limite} interesse(s) na Assertiva?\n\nIsso consome consultas do plano.`)) return;
+
+        const label = btn.innerHTML;
+        btn.disabled = true;
+        let unicos = 0, multiplos = 0, sem = 0, erros = 0, feitos = 0;
+        try {
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Listando…';
+            const rList = await fetch(API_HIST + 'assertiva-match-lote/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limite, processar: false }),
+            });
+            const lista = await rList.json().catch(() => ({}));
+            if (!rList.ok || !lista.ok) {
+                alert(lista.detail || 'Não foi possível listar candidatos.');
+                return;
+            }
+            const ids = lista.ids || [];
+            if (!ids.length) {
+                alert('Nenhum interesse elegível (sem CPF e sem match único).');
+                return;
+            }
+            for (let i = 0; i < ids.length; i++) {
+                btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${i + 1}/${ids.length}`;
+                const r = await fetch(API_HIST + 'pedidos/' + ids[i] + '/assertiva-match/', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ forcar: false }),
+                });
+                const data = await r.json().catch(() => ({}));
+                feitos += 1;
+                if (!r.ok || !data.ok) {
+                    erros += 1;
+                    const det = String(data.detail || '').toLowerCase();
+                    if (det.includes('horário') || det.includes('horario')) {
+                        alert((data.detail || 'Assertiva bloqueada neste horário.') +
+                            `\n\nParcial: ${feitos - 1} consultado(s) antes de interromper.`);
+                        break;
+                    }
+                    continue;
+                }
+                const st = (data.assertiva_match || {}).status || '';
+                if (st === 'match_unico') unicos += 1;
+                else if (st === 'multiplos') multiplos += 1;
+                else sem += 1;
+            }
+            alert(
+                `Match Assertiva concluído.\n\n` +
+                `Consultados: ${feitos}\n` +
+                `CPF único: ${unicos}\n` +
+                `Múltiplos: ${multiplos}\n` +
+                `Sem match: ${sem}\n` +
+                `Erros: ${erros}`
+            );
+            carregarPedidos({});
+        } catch (err) {
+            alert('Erro no lote Assertiva: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = label;
+        }
     }
 
     function linhaChurn(r) {

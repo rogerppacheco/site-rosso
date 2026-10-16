@@ -641,3 +641,78 @@ class FunilHistoricoPapAssertivaMatchView(APIView):
         if not out.get("ok"):
             return Response({"ok": False, "detail": out.get("detail") or "Falha no match."}, status=400)
         return Response(out)
+
+
+class FunilHistoricoPapAssertivaMatchLoteView(APIView):
+    """Lista candidatos e/ou processa lote de Match Assertiva (Interesse)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not is_member(request.user, ["Diretoria", "Admin"]):
+            return Response({"detail": "Sem permissão."}, status=403)
+        from crm_app.services.assertiva_match_interesse_service import (
+            listar_candidatos_match_assertiva,
+            match_interesse_assertiva,
+        )
+
+        try:
+            limite = int(request.data.get("limite") or 20)
+        except (TypeError, ValueError):
+            limite = 20
+        limite = max(1, min(limite, 100))
+        processar = bool(request.data.get("processar"))
+        forcar = bool(request.data.get("forcar"))
+        apenas_sem_match = request.data.get("apenas_sem_match_unico", True)
+        if isinstance(apenas_sem_match, str):
+            apenas_sem_match = apenas_sem_match.strip().lower() not in ("0", "false", "nao", "não")
+
+        candidatos = listar_candidatos_match_assertiva(
+            limite=limite,
+            apenas_sem_cpf=True,
+            apenas_sem_match_unico=bool(apenas_sem_match) and not forcar,
+        )
+        if not processar:
+            return Response(candidatos)
+
+        resumo = {
+            "ok": True,
+            "limite": limite,
+            "qtd_candidatos": candidatos["qtd"],
+            "processados": 0,
+            "match_unico": 0,
+            "multiplos": 0,
+            "sem_match": 0,
+            "erros": 0,
+            "itens": [],
+        }
+        for pid in candidatos["ids"]:
+            out = match_interesse_assertiva(int(pid), forcar=forcar)
+            resumo["processados"] += 1
+            st = ""
+            if out.get("ok"):
+                m = out.get("assertiva_match") or {}
+                st = m.get("status") or ""
+                if st == "match_unico":
+                    resumo["match_unico"] += 1
+                elif st == "multiplos":
+                    resumo["multiplos"] += 1
+                else:
+                    resumo["sem_match"] += 1
+            else:
+                resumo["erros"] += 1
+                st = "erro"
+            resumo["itens"].append({
+                "id": pid,
+                "ok": bool(out.get("ok")),
+                "status": st,
+                "detail": out.get("detail") or "",
+                "cpf": ((out.get("assertiva_match") or {}).get("cpf_formatado") or ""),
+            })
+            # Se Assertiva bloquear horário, para o lote cedo.
+            detail = str(out.get("detail") or "").lower()
+            if (not out.get("ok")) and ("horário" in detail or "horario" in detail):
+                resumo["detail"] = out.get("detail")
+                resumo["interrompido"] = True
+                break
+        return Response(resumo)

@@ -120,6 +120,51 @@ def serializar_match(payload: dict | None) -> dict:
     }
 
 
+def listar_candidatos_match_assertiva(
+    *,
+    limite: int = 20,
+    apenas_sem_cpf: bool = True,
+    apenas_sem_match_unico: bool = True,
+) -> dict:
+    """Lista IDs de Interesses elegíveis para match Assertiva (mais recentes primeiro)."""
+    from crm_app.models import HistoricoPapPedido
+
+    limite = max(1, min(int(limite or 20), 100))
+    qs = (
+        HistoricoPapPedido.objects.filter(tipo_venda="INTERESSE")
+        .order_by("-capturado_em")
+        .only("id", "payload", "numero_pedido")
+    )
+    ids: list[int] = []
+    protocolos: list[str] = []
+    vistos = 0
+    for ped in qs.iterator(chunk_size=300):
+        vistos += 1
+        payload = ped.payload if isinstance(ped.payload, dict) else {}
+        mapped = map_pedido_api(payload, "INTERESSE")
+        nome = (mapped.get("cliente") or payload.get("cliente") or "").strip()
+        if len(nome.split()) < 2:
+            continue
+        dig = _DOC_RE.sub("", str(mapped.get("cpf") or payload.get("cpf") or ""))
+        if apenas_sem_cpf and len(dig) == 11:
+            continue
+        bloco = payload.get(MATCH_KEY) if isinstance(payload.get(MATCH_KEY), dict) else None
+        if apenas_sem_match_unico and bloco and bloco.get("status") == "match_unico" and bloco.get("cpf"):
+            continue
+        ids.append(ped.id)
+        protocolos.append(ped.numero_pedido)
+        if len(ids) >= limite:
+            break
+    return {
+        "ok": True,
+        "limite": limite,
+        "ids": ids,
+        "protocolos": protocolos,
+        "qtd": len(ids),
+        "varridos": vistos,
+    }
+
+
 def match_interesse_assertiva(pedido_id: int, *, forcar: bool = False) -> dict:
     """
     Busca CPF (nome/telefone) e, com CPF único, telefones cadastrais na Assertiva.
