@@ -158,9 +158,10 @@
 </style>
 {% endblock %}
 
-{% block header_nav %}
-    <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
-{% endblock %}
+{% block header_back_class %}d-none{% endblock %}
+{% block header_user_menu_class %}{% endblock %}
+{% block header_nav %}{% endblock %}
+
 
 {% block content %}
 <main class="area-interna-page">
@@ -317,7 +318,7 @@
                 'Admin': 'all',
 
                 // Acesso Backoffice (inclui Qualidade)
-                'BackOffice': ['card-antecipar', 'card-boas-vindas', 'card-atendimento-whatsapp', 'card-vendas', 'card-informa', 'card-esteira', 'card-auditoria', 'card-performance', 'card-importacoes', 'card-cdoi', 'card-apoia', 'card-conhecimento-ia', 'card-qualidade', 'card-controle-tts', 'card-whatsapp-config'],
+                'BackOffice': ['card-antecipar', 'card-boas-vindas', 'card-atendimento-whatsapp', 'card-vendas', 'card-informa', 'card-esteira', 'card-auditoria', 'card-performance', 'card-importacoes', 'card-cdoi', 'card-apoia', 'card-conhecimento-ia', 'card-qualidade', 'card-controle-tts', 'card-whatsapp-config', 'card-funil-vendas'],
 
                 // Qualidade (sem valores de bônus R$ — só Diretoria/Admin na API)
                 'Qualidade': ['card-qualidade', 'card-esteira', 'card-auditoria', 'card-boas-vindas', 'card-atendimento-whatsapp', 'card-vendas', 'card-informa', 'card-importacoes', 'card-apoia', 'card-conhecimento-ia'],

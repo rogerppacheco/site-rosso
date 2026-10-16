@@ -1,5 +1,5 @@
 /**
- * MENU.JS v5.0 - Sistema de Navegação Padronizado
+ * MENU.JS v5.3 - Sistema de Navegação Padronizado Record PAP
  * Gerencia menu responsivo, autenticação e funcionalidades globais
  */
 
@@ -7,15 +7,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuToggle = document.getElementById('menu-toggle');
     const mainNav = document.querySelector('.main-nav');
     const userDisplay = document.getElementById('welcome-user');
+    const headerUserName = document.getElementById('header-user-name');
+    const headerLogoutBtn = document.getElementById('header-logout-btn');
     const currentPath = window.location.pathname;
     const isLandingPage = currentPath === '/' || currentPath === '/login/';
     const isInternalHome = currentPath === '/area-interna/';
+    const backLinkEl = document.getElementById('header-back-link');
+    const hasAppShellBack = !!(backLinkEl && !backLinkEl.classList.contains('d-none'));
 
     function normalizeInternalBackButton() {
         if (!mainNav) return;
 
         const navList = mainNav.querySelector('ul');
         if (!navList) return;
+
+        // App Shell já tem Voltar discreto — não injeta o botão grande antigo
+        if (hasAppShellBack) {
+            navList.querySelectorAll('a.nav-back-button, a[href="/area-interna/"].nav-button').forEach(link => {
+                const li = link.closest('li');
+                if (li && !link.classList.contains('btn-login-trigger')) {
+                    // Remove apenas o "Voltar/Área Interna" legado; mantém links de ação do módulo
+                    const txt = (link.textContent || '').trim().toLowerCase();
+                    if (txt === 'voltar' || txt === 'voltar para área interna' || txt === 'área interna' || txt === 'area interna') {
+                        li.remove();
+                    }
+                }
+            });
+            return;
+        }
 
         const areaInternaLinks = Array.from(navList.querySelectorAll('a[href="/area-interna/"]'));
 
@@ -125,16 +144,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Carrega nome do usuário
-    if (token && userDisplay) {
+    // Carrega nome do usuário (área interna + menu do shell)
+    function nomeDoToken() {
+        if (!token) return 'Conta';
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
-            const username = payload.first_name || payload.username || 'Usuário';
-            userDisplay.textContent = username;
+            return payload.first_name || payload.user_name || payload.username || 'Conta';
         } catch (e) {
-            console.error('Erro ao ler token:', e);
-            userDisplay.textContent = 'Usuário';
+            return 'Conta';
         }
+    }
+    const nomeUsuario = nomeDoToken();
+    if (userDisplay) userDisplay.textContent = nomeUsuario;
+    if (headerUserName && token) {
+        headerUserName.textContent = String(nomeUsuario).split(' ')[0] || 'Conta';
+    }
+    if (headerLogoutBtn) {
+        headerLogoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            logout();
+        });
     }
 
     // Verifica token expirado em páginas internas
@@ -145,31 +174,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ===== ADICIONAR INDICADOR DE TOKEN NO HEADER =====
+    // ===== INDICADOR DE TOKEN (compacto, ao lado do menu do usuário) =====
+    const userMenu = document.querySelector('.header-user-menu');
     const sairButton = document.querySelector('.logout-button');
-    if (sairButton && token && !isLandingPage) {
-        // Verifica se já existe um indicador
+    const tokenAnchor = userMenu || sairButton;
+    if (tokenAnchor && token && !isLandingPage) {
         if (!document.getElementById('token-indicator')) {
             const tokenIndicator = document.createElement('div');
             tokenIndicator.id = 'token-indicator';
             tokenIndicator.className = 'token-indicator';
-            tokenIndicator.style.cssText = 'display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; background: #e8f5e9; cursor: pointer; margin-right: 12px;';
             tokenIndicator.title = 'Token válido. Clique para renovar';
             tokenIndicator.onclick = () => {
                 if (typeof renovarTokenManual === 'function') {
                     renovarTokenManual();
                 }
             };
-            
             tokenIndicator.innerHTML = `
-                <i class="bi bi-shield-check" style="color: #4caf50;"></i>
-                <span id="token-time" style="font-size: 0.85rem; font-weight: 600; color: #2e7d32;">--:--</span>
+                <i class="bi bi-shield-check" aria-hidden="true"></i>
+                <span id="token-time">--:--</span>
             `;
-            
-            // Inserir antes do botão Sair
-            sairButton.parentNode.insertBefore(tokenIndicator, sairButton);
-            
-            // Iniciar monitoramento
+            tokenAnchor.parentNode.insertBefore(tokenIndicator, tokenAnchor);
             if (typeof iniciarMonitoramentoToken === 'function') {
                 iniciarMonitoramentoToken();
             }

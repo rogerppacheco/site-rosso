@@ -1,5 +1,5 @@
 /* ==========================================================================
-   1. DESIGN SYSTEM - ROSSO TELECOM v17
+   1. DESIGN SYSTEM - RECORD PAP v17
    Tokens semânticos canônicos + aliases legados (--cor-*) para Bootstrap
    ========================================================================== */
 :root {
@@ -258,12 +258,17 @@ body, h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd {
     margin: 0;
 }
 
+:root {
+    --app-header-h: 52px;
+    --app-chrome-h: 52px;
+}
+
 body {
     background-color: var(--bg-primary);
     font-family: var(--font-family-base);
     color: var(--text-primary);
     line-height: 1.6;
-    padding-top: 100px; /* Espaço para header fixo */
+    padding-top: var(--app-header-h); /* Espaço para header fixo compacto */
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -289,12 +294,12 @@ ul {
     background: var(--cor-header-bg);
     -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
-    padding: 0 1.5rem;
+    padding: 0 0.85rem;
     position: fixed;
     top: 0; 
     left: 0; 
     width: 100%; 
-    height: 80px;
+    height: var(--app-header-h);
     z-index: 1020; 
     box-shadow: var(--cor-header-shadow);
     display: flex; 
@@ -307,32 +312,236 @@ ul {
     display: flex;
     justify-content: flex-start;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
-    max-width: 1400px;
+    max-width: none;
     margin: 0 auto;
     height: 100%;
+    padding: 0 0.35rem;
+}
+
+.header-brand-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    flex-shrink: 1;
+    height: 100%;
+}
+
+.header-brand-group .brand-link {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+}
+
+.header-module-title {
+    display: inline-flex;
+    align-items: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+    letter-spacing: -0.015em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(48vw, 420px);
+    align-self: center;
+    margin: 0;
+    padding: 0;
+}
+
+.header-module-title:empty {
+    display: none;
+}
+
+.header-module-actions {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    min-width: 0;
+    margin-left: auto;
+}
+
+.header-module-actions:empty {
+    display: none;
+}
+
+.header-module-actions .btn,
+.header-module-actions .nav-link {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.28rem 0.7rem;
+    border-radius: 8px;
+    white-space: nowrap;
 }
 
 .header-actions {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
     margin-left: auto;
     position: relative;
     z-index: 1031;
 }
 
+.header-module-actions:not(:empty) ~ .header-actions {
+    margin-left: 0;
+}
+
+.app-shell-header .main-nav:not(:has(li)) {
+    display: none;
+}
+
+.header-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.28rem 0.55rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1;
+    transition: all var(--transition-speed) ease;
+}
+
+.header-back:hover,
+.header-back:focus-visible {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    background: var(--bg-surface-hover);
+    outline: none;
+}
+
+.header-back i {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.header-util-btn,
 .theme-toggle-btn {
     position: relative;
     z-index: 1032;
     cursor: pointer;
 }
 
+.header-util-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    padding: 0;
+    line-height: 1;
+    transition: all var(--transition-speed) var(--transition-cubic);
+}
+
+.header-util-btn:hover,
+.header-util-btn:focus-visible {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    background: var(--bg-surface-hover);
+    outline: none;
+}
+
+.header-user-menu .dropdown-menu {
+    min-width: 10.5rem;
+    font-size: 0.875rem;
+}
+
+.header-user-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 160px;
+    height: 34px;
+    padding: 0 0.65rem 0 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+}
+
+.header-user-btn:hover,
+.header-user-btn:focus-visible,
+.header-user-btn[aria-expanded="true"] {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    background: var(--bg-surface-hover);
+    outline: none;
+}
+
+.header-user-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 110px;
+}
+
+.header-user-caret {
+    font-size: 0.72rem;
+    opacity: 0.75;
+    flex-shrink: 0;
+}
+
+.header-user-dropdown .dropdown-item {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.token-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    height: 34px;
+    padding: 0 0.55rem;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, #22c55e 45%, var(--border-color));
+    background: color-mix(in srgb, #22c55e 12%, var(--bg-secondary));
+    color: #16a34a;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.token-indicator i {
+    font-size: 0.9rem;
+    color: #22c55e;
+}
+
+html[data-theme="dark"] .token-indicator,
+[data-theme="dark"] .token-indicator {
+    color: #86efac;
+    border-color: color-mix(in srgb, #22c55e 40%, var(--border-color));
+    background: color-mix(in srgb, #22c55e 16%, var(--bg-secondary));
+}
+
+.table-fill-viewport {
+    max-height: calc(100dvh - var(--app-chrome-h, var(--app-header-h)) - 8px);
+    overflow: auto;
+}
+
 .logo,
 .logo-img {
-    height: 45px;
+    height: 34px;
     width: auto;
     display: block;
     object-fit: contain;
@@ -355,12 +564,14 @@ body[data-theme="dark"] .logo-img,
 
 .brand-text-logo {
     font-weight: 800;
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-primary);
     line-height: 1;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
 }
 
 .brand-link {
@@ -383,9 +594,9 @@ body[data-theme="dark"] .logo-img,
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
     color: var(--text-muted);
@@ -1377,28 +1588,13 @@ a.btn-action-delete:hover {
     color: var(--text-on-accent) !important;
 }
 
-/* Indicador de Token — alinhado ao header, discreto e theme-aware */
+/* Indicador de Token — pulse leve (layout em .header-actions) */
 .token-indicator {
     animation: pulse-token 2s infinite;
-    background: var(--bg-secondary) !important;
-    border: 1px solid var(--border-color);
-    color: var(--text-muted);
 }
 
 .token-indicator #token-time {
-    color: var(--text-main) !important;
-}
-
-html[data-theme="dark"] .token-indicator {
-    background: rgba(52, 211, 153, 0.12) !important;
-    border-color: rgba(52, 211, 153, 0.35);
-}
-
-/* Garante alinhamento do item de navegação que contém token + Sair */
-.main-nav > ul > li:has(.logout-button) {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Spinner de Carregamento */
@@ -2908,7 +3104,7 @@ a.link-accent:hover,
     color: var(--accent-hover);
 }
 
-/* Bootstrap utilities — respeitam o tema */
+/* Bootstrap utilities — respeitam o tema Record PAP */
 [data-theme="dark"] .text-dark,
 html[data-theme="dark"] .text-dark {
     color: var(--text-main) !important;
@@ -2952,7 +3148,37 @@ html[data-theme="dark"] .input-group-text.bg-white {
 
 @media (max-width: 992px) {
     .header-container {
-        gap: 8px;
+        gap: 6px;
+    }
+
+    .header-module-title {
+        max-width: min(40vw, 260px);
+        font-size: 1.1rem;
+    }
+
+    .header-back-label {
+        display: none;
+    }
+
+    .header-back {
+        padding: 0.28rem;
+        width: 34px;
+        height: 34px;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-module-actions .btn .header-action-label {
+        display: none;
+    }
+
+    .header-user-name {
+        max-width: 72px;
+    }
+
+    .token-indicator span {
+        display: none;
     }
 }
 

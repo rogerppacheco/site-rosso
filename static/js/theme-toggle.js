@@ -1,19 +1,11 @@
 /**
- * theme-toggle.js - Rosso Dark/Light Mode v1.7
- * Persistência: localStorage['rosso-theme'] = 'dark' | 'light'
+ * theme-toggle.js - Record PAP Dark/Light Mode v1.6
+ * PersistÃªncia: localStorage['record-pap-theme'] = 'dark' | 'light'
  */
 (function () {
     'use strict';
 
-    var STORAGE_KEY = 'rosso-theme';
-    try {
-        if (!localStorage.getItem(STORAGE_KEY)) {
-            var legacy = localStorage.getItem('record-pap-theme');
-            if (legacy === 'dark' || legacy === 'light') {
-                localStorage.setItem(STORAGE_KEY, legacy);
-            }
-        }
-    } catch (e) { /* ignore */ }
+    var STORAGE_KEY = 'record-pap-theme';
     var BG_LIGHT = '#F7F9FC';
     var BG_DARK = '#0F172A';
 
@@ -51,6 +43,10 @@
             icon.className = isDark ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
         }
         var label = isDark ? 'Ativar modo claro' : 'Ativar modo escuro';
+        var menuLabel = document.getElementById('header-theme-label');
+        if (menuLabel) {
+            menuLabel.textContent = isDark ? 'Modo claro' : 'Modo escuro';
+        }
         button.setAttribute('aria-label', label);
         button.setAttribute('title', label);
         button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
@@ -111,11 +107,10 @@
         });
     });
 
-    window.RossoTheme = {
+    window.RecordPapTheme = {
         applyTheme: applyTheme,
         toggleTheme: toggleTheme,
         getPreferredTheme: getPreferredTheme,
         storageKey: STORAGE_KEY
     };
-    window.RecordPapTheme = window.RossoTheme;
 }());

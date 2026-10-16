@@ -3,6 +3,11 @@
 
 {% block title %}Qualidade - {{ SITE_BRAND }}{% endblock %}
 
+
+{% block page_title %}Qualidade{% endblock %}
+{% block header_back_class %}{% endblock %}
+{% block header_user_menu_class %}{% endblock %}
+{% block header_nav %}{% endblock %}
 {% block extra_css %}
 <style>
 .qualidade-page {
@@ -1042,10 +1047,7 @@
 </style>
 {% endblock %}
 
-{% block header_nav %}
-    <li><a href="/area-interna/">Voltar</a></li>
-    <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
-{% endblock %}
+
 
 {% block content %}
 <main class="area-interna-section qualidade-page" id="qualidade-page">
@@ -4440,7 +4442,7 @@
         modalLigacaoQualidade = new bootstrap.Modal(document.getElementById('modalLigacaoQualidade'));
         modalHistoricoContato = new bootstrap.Modal(document.getElementById('modalHistoricoContato'));
         setTimeout(() => {
-            document.querySelectorAll('a[href="/area-interna/"]').forEach((a) => {
+            document.querySelectorAll('a[href="/area-interna/"]:not(.header-back)').forEach((a) => {
                 a.textContent = 'Voltar';
                 a.title = 'Voltar para a área interna';
             });

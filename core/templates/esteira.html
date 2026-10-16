@@ -4,6 +4,11 @@
 
 {% block title %}Esteira de Vendas - {{ SITE_BRAND }}{% endblock %}
 
+
+{% block page_title %}Esteira{% endblock %}
+{% block header_back_class %}{% endblock %}
+{% block header_user_menu_class %}{% endblock %}
+{% block header_nav %}{% endblock %}
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
 {% endblock %}
@@ -853,10 +858,7 @@ min-width: 100%;
 </style>
 {% endblock %}
 
-{% block header_nav %}
-    <li><a href="/area-interna/">Voltar</a></li>
-                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
-{% endblock %}
+
 
 {% block content %}
 <main class="area-interna-section esteira-page-main esteira-modo-lista">

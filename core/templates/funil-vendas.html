@@ -1,26 +1,28 @@
 {% extends "base.html" %}
 
 {% block title %}Funil de Tratamento - {{ SITE_BRAND }}{% endblock %}
+{% block page_title %}Funil de Tratamento{% endblock %}
+{% block header_back_class %}{% endblock %}
+{% block header_user_menu_class %}{% endblock %}
+{% block header_nav %}{% endblock %}
+
+{% block header_module_actions %}
+<button class="btn btn-sm btn-primary" id="tab-hist" type="button" title="Histórico PAP">
+    <i class="bi bi-cloud-download"></i><span class="header-action-label ms-1">Histórico PAP</span>
+</button>
+<button class="btn btn-sm btn-outline-primary" id="tab-wpp" type="button" title="WhatsApp (Vender)">
+    <i class="bi bi-whatsapp"></i><span class="header-action-label ms-1">WhatsApp</span>
+</button>
+{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
 <style>
-.nav-pills-custom .nav-link {
-    color: var(--text-secondary);
-    border-radius: 50rem;
-    padding: 0.5rem 1.5rem;
-    margin-right: 0.5rem;
-    transition: all 0.2s ease;
-}
-.nav-pills-custom .nav-link.active {
-    background-color: var(--accent-primary, #0d6efd);
-    color: white;
-    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3);
-}
+:root { --funil-chrome: calc(var(--app-header-h, 52px) + 118px); }
 .card-modern { border-radius: 12px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-.table-modern th { border-bottom: 2px solid #eaeaea; color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
-.table-modern td { vertical-align: middle; font-size: 0.9rem; border-bottom: 1px solid #f2f2f2; }
-.badge-status { font-weight: 500; padding: 0.4em 0.8em; border-radius: 6px; font-size: 0.75rem;}
+.table-modern th { border-bottom: 2px solid #eaeaea; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.4px; }
+.table-modern td { vertical-align: middle; font-size: 0.84rem; border-bottom: 1px solid #f2f2f2; padding-top: 0.4rem; padding-bottom: 0.4rem; }
+.badge-status { font-weight: 500; padding: 0.3em 0.65em; border-radius: 6px; font-size: 0.7rem;}
 .hist-prog {
     display: flex; align-items: center; gap: 1rem; margin: 0 0 0.85rem; padding: 0.9rem 1.1rem;
     border-radius: 12px; border: 1px solid var(--border-color, #e4e9f2); border-left: 4px solid var(--accent-primary, #0ea5e9);
@@ -48,11 +50,11 @@
 
 .funil-card { overflow: hidden; }
 .funil-toolbar {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
-    padding: 0.85rem 1rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem;
+    padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
     background: var(--bg-surface, #fff);
 }
-.funil-search { position: relative; flex: 1 1 260px; max-width: 380px; }
+.funil-search { position: relative; flex: 1 1 280px; min-width: 200px; max-width: none; }
 .funil-search > .bi-search { position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--text-subtle, #8f9bb3); pointer-events: none; }
 .funil-search input { padding-left: 2.1rem; padding-right: 2rem; border-radius: 999px; }
 .funil-kbd {
@@ -61,20 +63,73 @@
     background: var(--bg-secondary, #e8edf5); color: var(--text-secondary, #5b6b7d); border: 1px solid var(--border-color, #e4e9f2);
 }
 .funil-search input:focus ~ .funil-kbd, .funil-search input:not(:placeholder-shown) ~ .funil-kbd { display: none; }
-.funil-select { width: auto; min-width: 170px; border-radius: 999px; }
-.funil-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--bg-secondary, #e8edf5); border: 1px solid var(--border-color, #e4e9f2); }
+.funil-select { width: auto; min-width: 140px; max-width: 220px; border-radius: 10px; }
+.funil-select-wide { min-width: 180px; max-width: 260px; }
+.funil-seg { display: inline-flex; flex-wrap: wrap; padding: 2px; border-radius: 999px; background: var(--bg-secondary, #e8edf5); border: 1px solid var(--border-color, #e4e9f2); }
 .funil-seg button {
     border: 0; background: transparent; color: var(--text-secondary, #5b6b7d);
-    font-size: 0.8rem; font-weight: 600; padding: 0.3rem 0.85rem; border-radius: 999px; transition: all 0.15s ease;
+    font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.7rem; border-radius: 999px; transition: all 0.15s ease;
 }
 .funil-seg button:hover { color: var(--text-primary, #1a2332); }
 .funil-seg button.active { background: var(--accent-primary, #0ea5e9); color: var(--text-on-accent, #fff); box-shadow: 0 2px 6px rgba(14,165,233,0.3); }
+.funil-toolbar .btn { border-radius: 10px; font-weight: 600; }
+#acoes-pap .btn, #acoes-churn .btn, #acoes-bio .btn, #acoes-mailing .btn { border-radius: 8px; font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+.funil-page { width: 100%; max-width: none; padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.funil-page .card { border-radius: 12px; }
+.funil-tabs-row {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 0.5rem;
+    min-width: 0; margin-bottom: 0;
+}
+.funil-tabs-scroll {
+    display: flex; flex-wrap: nowrap; gap: 0.25rem; min-width: 0; flex: 1 1 auto;
+    overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin; border-bottom: none; padding-bottom: 0;
+}
+.funil-tabs-scroll::-webkit-scrollbar { height: 4px; }
+.nav-pills-custom .nav-link {
+    border-radius: 8px; font-weight: 600; padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border-color, #e4e9f2); color: var(--text-secondary, #5b6b7d);
+}
+.nav-pills-custom .nav-link.active {
+    background: var(--accent-primary, #0ea5e9); border-color: transparent; color: #fff;
+}
+.tab-res-custom {
+    border-radius: 8px 8px 0 0 !important; padding: 0.4rem 0.75rem !important;
+    font-size: 0.76rem !important; white-space: nowrap; flex: 0 0 auto;
+}
+.tab-res-custom {
+    border-radius: 8px 8px 0 0 !important; padding: 0.4rem 0.75rem !important;
+    font-size: 0.76rem !important; white-space: nowrap; flex: 0 0 auto;
+    display: inline-flex !important; align-items: center;
+}
+#tabs-resultados .tab-res-custom .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.55rem; height: 1.35rem; padding: 0 0.4rem;
+    margin-left: 0.35rem !important;
+    border-radius: 999px !important;
+    font-size: 0.8rem !important; font-weight: 800 !important;
+    font-variant-numeric: tabular-nums; line-height: 1;
+    background: #0f172a !important; color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.12);
+}
+#tabs-resultados .tab-res-custom.tab-res-active {
+    background: var(--accent-primary, #0ea5e9) !important; color: #fff !important;
+}
+#tabs-resultados .tab-res-custom.tab-res-active .badge {
+    background: #fff !important; color: #0c4a6e !important;
+    border-color: transparent;
+}
+#tabs-resultados .tab-res-custom.tab-res-active i { color: #fff !important; }
 .funil-periodo { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text-secondary, #5b6b7d); font-size: 0.8rem; }
 .funil-periodo input { width: 140px; border-radius: 999px; }
 .funil-limpar { color: var(--color-danger, #dc2626); font-weight: 600; border-radius: 999px; }
 .funil-limpar:hover { background: var(--badge-danger-bg, #fee2e2); color: var(--color-danger, #dc2626); }
 
-.funil-scroll { max-height: 65vh; overflow-y: auto; }
+.funil-scroll {
+    max-height: calc(100dvh - var(--funil-chrome));
+    overflow-y: auto;
+}
+.btn-funil-tmpl { white-space: nowrap; }
 .funil-th-sort {
     border: 0; background: transparent; padding: 0; color: inherit;
     font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer;
@@ -108,6 +163,9 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
 .funil-pag-ir { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; }
 .funil-pag-ir input { width: 4.5rem; border-radius: 10px; text-align: center; }
 #pag-hist-size { width: auto; border-radius: 10px; }
+.nio-qtd { font-size: 0.72rem; opacity: 0.8; margin-left: 0.15rem; }
+.nio-qtd:empty { display: none; }
+.badge-nio { font-weight: 600; padding: 0.4em 0.75em; border-radius: 6px; font-size: 0.75rem; cursor: default; }
 @media (max-width: 768px) {
     .funil-pag { justify-content: center; }
     .funil-pag-info { text-align: center; width: 100%; }
@@ -117,23 +175,8 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
 {% endblock %}
 
 {% block content %}
-<main class="container-fluid py-4 px-4" style="max-width: 1400px;">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <div>
-            <h1 class="h3 mb-1 fw-bold"><i class="bi bi-funnel text-primary"></i> Funil de Tratamento</h1>
-            <p class="text-muted small mb-0">Gestão e tratamento de Interesses, Pré-Vendas e Vendas do PAP.</p>
-        </div>
-        <ul class="nav nav-pills nav-pills-custom" role="tablist">
-            <li class="nav-item">
-                <button class="nav-link active" id="tab-hist" type="button"><i class="bi bi-cloud-download me-2"></i>Histórico PAP</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" id="tab-wpp" type="button"><i class="bi bi-whatsapp me-2"></i>WhatsApp (Vender)</button>
-            </li>
-        </ul>
-    </div>
-
-    <div id="alert-403" class="alert alert-danger d-none rounded-3 shadow-sm">Sem permissão para acessar esta ferramenta.</div>
+<main class="container-fluid px-2 px-xl-3 funil-page">
+    <div id="alert-403" class="alert alert-danger d-none rounded-3 shadow-sm py-2">Sem permissão para acessar esta ferramenta.</div>
 
     <!-- PAINEL HISTORICO PAP (TRATAMENTO) -->
     <div id="painel-hist">
@@ -157,32 +200,46 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                 </div>
             </div>
 
-            <div class="d-flex justify-content-between align-items-end mb-0 px-2">
-                <ul class="nav nav-tabs border-bottom-0 gap-1" id="tabs-resultados" role="tablist">
+            <div class="funil-tabs-row px-1">
+                <ul class="nav nav-tabs border-bottom-0 funil-tabs-scroll" id="tabs-resultados" role="tablist">
                     <li class="nav-item">
-                        <button class="nav-link tab-res-custom tab-res-active fw-bold border-0 bg-light rounded-top text-muted py-3 px-4" id="tab-res-interesse" data-tipo="INTERESSE" type="button">
-                            <i class="bi bi-star-fill text-warning me-2"></i> INTERESSE <span class="badge bg-secondary ms-2 rounded-pill" id="count-interesse">0</span>
+                        <button class="nav-link tab-res-custom tab-res-active fw-bold border-0 bg-light text-muted" id="tab-res-interesse" data-tipo="INTERESSE" type="button">
+                            <i class="bi bi-star-fill text-warning me-1"></i>INTERESSE <span class="badge bg-secondary ms-1 rounded-pill" id="count-interesse">0</span>
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light rounded-top text-muted py-3 px-4" id="tab-res-prevenda" data-tipo="PRE_VENDA" type="button">
-                            <i class="bi bi-clock-history text-info me-2"></i> PRÉ-VENDA <span class="badge bg-secondary ms-2 rounded-pill" id="count-prevenda">0</span>
+                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light text-muted" id="tab-res-prevenda" data-tipo="PRE_VENDA" type="button">
+                            <i class="bi bi-clock-history text-info me-1"></i>PRÉ-VENDA <span class="badge bg-secondary ms-1 rounded-pill" id="count-prevenda">0</span>
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light rounded-top text-muted py-3 px-4" id="tab-res-venda" data-tipo="VENDA" type="button">
-                            <i class="bi bi-check-circle-fill text-success me-2"></i> VENDA <span class="badge bg-secondary ms-2 rounded-pill" id="count-venda">0</span>
+                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light text-muted" id="tab-res-venda" data-tipo="VENDA" type="button">
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>VENDA <span class="badge bg-secondary ms-1 rounded-pill" id="count-venda">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light text-muted" id="tab-res-churn" data-tipo="CHURN" type="button">
+                            <i class="bi bi-arrow-repeat text-danger me-1"></i>REPESCAR CHURN <span class="badge bg-secondary ms-1 rounded-pill" id="count-churn">—</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light text-muted" id="tab-res-bio" data-tipo="BIO" type="button">
+                            <i class="bi bi-fingerprint text-primary me-1"></i>REPESCAGEM BIO <span class="badge bg-secondary ms-1 rounded-pill" id="count-bio">—</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link tab-res-custom fw-bold border-0 bg-light text-muted" id="tab-res-mailing" data-tipo="MAILING" type="button">
+                            <i class="bi bi-envelope-paper text-info me-1"></i>MAILING <span class="badge bg-secondary ms-1 rounded-pill" id="count-mailing">—</span>
                         </button>
                     </li>
                 </ul>
-                <div class="pb-2 pe-2 d-flex gap-2">
-                    <!-- Botão Discreto de Nova Busca -->
-                    <button class="btn btn-outline-primary fw-bold shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#modalBusca">
-                        <i class="bi bi-search me-2"></i> Nova Busca
+                <div class="pb-1 d-flex gap-1 flex-shrink-0" id="acoes-pap">
+                    <button class="btn btn-outline-primary fw-semibold shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#modalBusca">
+                        <i class="bi bi-search me-1"></i>Nova Busca
                     </button>
                     <div class="btn-group shadow-sm">
-                        <button type="button" class="btn btn-success fw-bold" id="btn-exportar-filtro" title="Exporta para Excel todos os pedidos da aba com os filtros aplicados (todas as páginas)">
-                            <i class="bi bi-file-earmark-excel me-2"></i>Exportar <span class="badge bg-light text-success ms-1" id="exportar-qtd">0</span>
+                        <button type="button" class="btn btn-success fw-semibold" id="btn-exportar-filtro" title="Exporta para Excel todos os pedidos da aba com os filtros aplicados (todas as páginas)">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Exportar <span class="badge bg-light text-success ms-1" id="exportar-qtd">0</span>
                         </button>
                         <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais opções de exportação"></button>
                         <ul class="dropdown-menu dropdown-menu-end shadow">
@@ -192,50 +249,167 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                         </ul>
                     </div>
                 </div>
+                <div class="pb-1 d-flex gap-1 flex-shrink-0 d-none" id="acoes-churn">
+                    <div class="btn-group shadow-sm">
+                        <button type="button" class="btn btn-primary fw-semibold" id="btn-nio-consultar" title="Consulta débitos na Nio para os CPFs da aba (pula quem foi consultado nas últimas 24 horas)">
+                            <i class="bi bi-shield-check me-1"></i>Consultar Nio
+                        </button>
+                        <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais opções da consulta"></button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <li><button type="button" class="dropdown-item" id="btn-nio-forcar"><i class="bi bi-arrow-repeat me-2"></i>Reconsultar todos (ignora as últimas 24 horas)</button></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="pb-1 d-flex gap-1 flex-shrink-0 d-none" id="acoes-bio">
+                    <button type="button" class="btn btn-primary fw-semibold shadow-sm" id="btn-bio-buscar" title="Baixa do GED360 o relatório detalhado de digitalizações pela Data de Envio do período selecionado. Rotina automática: todo dia às 07:00 (últimos 6 meses).">
+                        <i class="bi bi-cloud-download me-1"></i>Buscar no GED
+                    </button>
+                </div>
+                <div class="pb-1 d-flex gap-1 flex-wrap flex-shrink-0 d-none" id="acoes-mailing">
+                    <label class="btn btn-outline-primary fw-semibold mb-0 shadow-sm" title="Importa XLS OPTIC ou CSV ALG">
+                        <i class="bi bi-upload me-1"></i>Importar XLS
+                        <input type="file" id="mailing-file" accept=".xlsx,.xls" class="d-none">
+                    </label>
+                    <select id="f-mailing-lote" class="form-select form-select-sm funil-select" aria-label="Lote" style="width:auto;min-width:200px" title="Qual lote exibir">
+                        <option value="">Todos os lotes</option>
+                    </select>
+                    <select id="f-mailing-status" class="form-select form-select-sm funil-select" aria-label="Status mailing" style="width:auto;min-width:180px">
+                        <option value="NOVO" selected>Na fila (importados)</option>
+                        <option value="ENVIADO">Enviados (sem resposta)</option>
+                        <option value="RESPONDEU">Respostas</option>
+                        <option value="TRATADO">Tratados</option>
+                        <option value="TODOS">Todos do lote</option>
+                    </select>
+                    <button type="button" class="btn btn-primary fw-semibold shadow-sm d-none" id="btn-mailing-disparar" title="Inicia/continua o disparo do lote selecionado">
+                        <i class="bi bi-send me-1"></i>Disparar lote
+                    </button>
+                </div>
+            </div>
+            <div id="mailing-lote-info" class="alert alert-info py-2 px-3 small d-none" role="status"></div>
+
+            <div id="bio-prog" class="hist-prog d-none" role="status" aria-live="polite">
+                <div class="spinner-border" id="bio-prog-spin" aria-hidden="true"></div>
+                <div class="hist-prog-corpo">
+                    <div class="hist-prog-topo">
+                        <span class="hist-prog-titulo" id="bio-prog-titulo">Buscando no GED360…</span>
+                        <span class="hist-prog-tempo" id="bio-prog-periodo"></span>
+                    </div>
+                    <div class="hist-prog-barra indeterminada" id="bio-prog-barra"><div></div></div>
+                    <div class="hist-prog-etapa" id="bio-prog-msg"></div>
+                </div>
+            </div>
+            <div id="bio-cobertura" class="alert alert-warning py-2 px-3 small d-none" role="status"></div>
+
+            <div id="nio-prog" class="hist-prog d-none" role="status" aria-live="polite">
+                <div class="spinner-border" id="nio-prog-spin" aria-hidden="true"></div>
+                <div class="hist-prog-corpo">
+                    <div class="hist-prog-topo">
+                        <span class="hist-prog-titulo" id="nio-prog-titulo">Consultando débitos na Nio…</span>
+                        <span class="hist-prog-tempo" id="nio-prog-qtd"></span>
+                    </div>
+                    <div class="hist-prog-barra" id="nio-prog-barra"><div></div></div>
+                    <div class="hist-prog-info" id="nio-prog-info"></div>
+                    <div class="hist-prog-etapa" id="nio-prog-msg"></div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill d-none" id="btn-nio-cancelar"><i class="bi bi-stop-circle me-1"></i>Cancelar</button>
             </div>
 
             <div class="card card-modern border-top-0 shadow-sm funil-card" style="border-top-left-radius: 0;">
                 <div class="funil-toolbar">
                     <div class="funil-search">
                         <i class="bi bi-search"></i>
-                        <input type="search" id="f-busca" class="form-control form-control-sm" placeholder="Protocolo, cliente ou CPF" aria-label="Buscar por protocolo, cliente ou CPF" autocomplete="off">
+                        <input type="search" id="f-busca" class="form-control form-control-sm" placeholder="Busca inteligente: nome, CPF, O.S., vendedor… ou atalhos: apto, link, repescar, adimplente" aria-label="Busca inteligente" autocomplete="off">
                         <kbd class="funil-kbd" title="Atalho: / foca a busca">/</kbd>
                     </div>
                     <select id="f-status" class="form-select form-select-sm funil-select" aria-label="Filtrar por status PAP">
                         <option value="">Todos os status</option>
                     </select>
-                    <div class="funil-seg" role="group" aria-label="Situação no CRM">
+                    <div class="funil-seg" id="funil-seg" role="group" aria-label="Situação no CRM">
                         <button type="button" class="active" data-situacao="">Todos</button>
                         <button type="button" data-situacao="novos"><i class="bi bi-stars"></i> Novos</button>
                         <button type="button" data-situacao="base">Já na base</button>
                     </div>
+                    <select id="f-nio" class="form-select form-select-sm funil-select d-none" aria-label="Situação de débito na Nio">
+                        <option value="">Débito Nio: todos</option>
+                        <option value="ADIMPLENTE">Adimplentes</option>
+                        <option value="INADIMPLENTE">Inadimplentes</option>
+                        <option value="A_VENCER">A vencer</option>
+                        <option value="NAO_CONSULTADO">Não consultados</option>
+                        <option value="ERRO">Erro</option>
+                    </select>
+                    <select id="f-bio" class="form-select form-select-sm funil-select funil-select-wide d-none" aria-label="Situação da biometria">
+                        <option value="">Biometria: todas</option>
+                        <option value="APTO">Fez (apto)</option>
+                        <option value="EM_ANALISE">Em análise</option>
+                        <option value="LINK_ENVIADO">Link enviado</option>
+                        <option value="REFAZER">Refazer</option>
+                        <option value="RISCO">Risco/Reprovado</option>
+                        <option value="SEM_BIOMETRIA">Sem biometria</option>
+                        <option value="APTO_SEM_VENDA">Apto sem venda</option>
+                        <option value="NAO_VERIFICADO">Aguardando GED</option>
+                    </select>
+                    <select id="f-rep" class="form-select form-select-sm funil-select d-none" aria-label="Repescável" title="Biometria há mais de 48h, sem O.S. ou sem venda; fora risco e DUPLICIDADE; CONSTA PEDIDO após 30 dias no PAP">
+                        <option value="">Repescável: todos</option>
+                        <option value="SIM">Só repescáveis</option>
+                        <option value="NAO">Só não repescáveis</option>
+                    </select>
                     <select id="f-mes" class="form-select form-select-sm funil-select" aria-label="Mês da data do pedido" title="Mês pela Data do pedido">
                         <option value="">Todos os meses</option>
                     </select>
-                    <div class="funil-periodo" title="Data do pedido no PAP">
+                    <div class="funil-periodo" id="funil-periodo" title="Data do pedido no PAP">
                         <i class="bi bi-calendar3"></i>
                         <input type="date" id="f-de" class="form-control form-control-sm" aria-label="Data do pedido a partir de">
                         <span>até</span>
                         <input type="date" id="f-ate" class="form-control form-control-sm" aria-label="Data do pedido até">
                     </div>
-                    <button type="button" id="f-limpar" class="btn btn-sm funil-limpar d-none"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button>
+                    <button type="button" id="f-limpar" class="btn btn-sm funil-limpar d-none"><i class="bi bi-x-circle me-1"></i>Limpar</button>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive funil-scroll" id="funil-scroll">
                         <table class="table table-modern table-hover mb-0 align-middle">
                             <thead class="table-light sticky-top shadow-sm">
-                                <tr>
-                                    <th class="ps-4 py-3">Protocolo / Pedido</th>
-                                    <th class="py-3">Cliente</th>
-                                    <th class="py-3">Documento</th>
-                                    <th class="py-3">Status PAP</th>
-                                    <th class="py-3">
+                                <tr id="thead-pap">
+                                    <th class="ps-3 py-2">Protocolo / Pedido</th>
+                                    <th class="py-2">Cliente</th>
+                                    <th class="py-2">Documento</th>
+                                    <th class="py-2">Status PAP</th>
+                                    <th class="py-2">
                                         <button type="button" id="th-ordem-data" class="funil-th-sort" title="Inverter ordenação por data do pedido">
                                             Data do pedido <i class="bi bi-sort-down" id="ic-ordem-data"></i>
                                         </button>
                                     </th>
-                                    <th class="py-3">Situação CRM</th>
-                                    <th class="text-end pe-4 py-3">Ação</th>
+                                    <th class="py-2">Situação CRM</th>
+                                    <th class="text-end pe-3 py-2">Ação</th>
+                                </tr>
+                                <tr id="thead-churn" class="d-none">
+                                    <th class="ps-3 py-2">O.S. / Pedido</th>
+                                    <th class="py-2">Cliente</th>
+                                    <th class="py-2">CPF</th>
+                                    <th class="py-2">Motivo</th>
+                                    <th class="py-2">Data da retirada</th>
+                                    <th class="py-2">Consultor</th>
+                                    <th class="py-2">Situação Nio</th>
+                                    <th class="text-end pe-3 py-2">Ação</th>
+                                </tr>
+                                <tr id="thead-bio" class="d-none">
+                                    <th class="ps-3 py-2">Cliente</th>
+                                    <th class="py-2">CPF</th>
+                                    <th class="py-2">Venda no CRM</th>
+                                    <th class="py-2">Vendedor</th>
+                                    <th class="py-2">Biometria</th>
+                                    <th class="py-2">Último envio no GED</th>
+                                    <th class="py-2">Telefone</th>
+                                    <th class="text-end pe-3 py-2">Repescável?</th>
+                                </tr>
+                                <tr id="thead-mailing" class="d-none">
+                                    <th class="ps-3 py-2">Cliente</th>
+                                    <th class="py-2">CPF</th>
+                                    <th class="py-2">Telefone</th>
+                                    <th class="py-2">Cidade</th>
+                                    <th class="py-2">Situação</th>
+                                    <th class="py-2">Lote</th>
+                                    <th class="py-2">Resposta</th>
+                                    <th class="text-end pe-3 py-2">Ação</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-resultados">
@@ -421,17 +595,24 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     }
 
     // Navegação de Abas Principais
+    function marcarAbaPrincipal(ativa) {
+        const hist = document.getElementById('tab-hist');
+        const wpp = document.getElementById('tab-wpp');
+        const histOn = ativa === 'hist';
+        hist.classList.toggle('btn-primary', histOn);
+        hist.classList.toggle('btn-outline-primary', !histOn);
+        wpp.classList.toggle('btn-primary', !histOn);
+        wpp.classList.toggle('btn-outline-primary', histOn);
+    }
     document.getElementById('tab-hist').addEventListener('click', () => {
         document.getElementById('painel-hist').classList.remove('d-none');
         document.getElementById('painel-wpp').classList.add('d-none');
-        document.getElementById('tab-hist').classList.add('active');
-        document.getElementById('tab-wpp').classList.remove('active');
+        marcarAbaPrincipal('hist');
     });
     document.getElementById('tab-wpp').addEventListener('click', () => {
         document.getElementById('painel-wpp').classList.remove('d-none');
         document.getElementById('painel-hist').classList.add('d-none');
-        document.getElementById('tab-wpp').classList.add('active');
-        document.getElementById('tab-hist').classList.remove('active');
+        marcarAbaPrincipal('wpp');
         carregarWpp();
     });
 
@@ -498,18 +679,32 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     // LÓGICA DE TRATAMENTO HISTORICO PAP
     
     const TIPOS_HIST = ['INTERESSE', 'PRE_VENDA', 'VENDA'];
+    const TIPOS_ABAS = TIPOS_HIST.concat(['CHURN', 'BIO']);
+    const TIPOS_PROPRIOS = ['CHURN', 'BIO', 'MAILING'];
+    const API_MAILING = '/api/crm/mailings/';
+    let mailingLoteAtivo = null;
     const BADGE_TIPO = { INTERESSE: 'count-interesse', PRE_VENDA: 'count-prevenda', VENDA: 'count-venda' };
+    const API_CHURN = '/api/crm/esteira/churn-tratamento/';
+    const API_BIO = '/api/crm/repescagem-bio/';
+    const API_FUNIL_TMPL = '/api/crm/funil-templates/';
     const TAMANHOS_PAGINA = [25, 50, 100, 200];
     const LS_FUNIL_PAGE_SIZE = 'funil_hist_page_size';
     // Chaves curtas na URL: o estado sobrevive a F5 e pode ser compartilhado por link.
-    const URL_CHAVES = { tipo: 'aba', page: 'pg', pageSize: 'pp', q: 'q', status: 'st', situacao: 'sit', de: 'de', ate: 'ate', ordem: 'ord' };
+    const URL_CHAVES = { tipo: 'aba', page: 'pg', pageSize: 'pp', q: 'q', status: 'st', situacao: 'sit', de: 'de', ate: 'ate', ordem: 'ord', nio: 'nio', bio: 'bio', rep: 'rep' };
 
     const histState = {
         tipo: 'INTERESSE', page: 1, pageSize: 25,
-        q: '', status: '', situacao: '', de: '', ate: '', ordem: 'recentes',
+        q: '', status: '', situacao: '', de: '', ate: '', ordem: 'recentes', nio: '', bio: '', rep: '',
     };
     let histMeta = { page: 1, totalPages: 1, count: 0 };
     let histAbort = null;
+    let histReqId = 0; // ignora resposta atrasada quando outro carregamento já começou
+    let rodapePapHtml = '';
+    let periodoPap = null;
+    let nioPoll = null;
+    let nioLoteAtual = null;
+    let bioPoll = null;
+    let bioImportacaoAtual = null;
     let buscaDebounce = null;
 
     function esc(v) {
@@ -533,9 +728,10 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             if (v === null || v === '') return;
             if (k === 'page') histState.page = Math.max(1, parseInt(v, 10) || 1);
             else if (k === 'pageSize') { const n = parseInt(v, 10); if (TAMANHOS_PAGINA.includes(n)) histState.pageSize = n; }
-            else if (k === 'tipo') { if (TIPOS_HIST.includes(v)) histState.tipo = v; }
+            else if (k === 'tipo') { if (TIPOS_ABAS.includes(v)) histState.tipo = v; }
             else histState[k] = v;
         });
+        if (histState.bio === 'REPESCAR') Object.assign(histState, { bio: '', rep: 'SIM' });
     }
 
     function gravarEstadoNaUrl() {
@@ -558,17 +754,119 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         document.getElementById('f-de').value = histState.de;
         document.getElementById('f-ate').value = histState.ate;
         document.getElementById('pag-hist-size').value = String(histState.pageSize);
-        document.querySelectorAll('.funil-seg button').forEach(b => {
+        document.querySelectorAll('#funil-seg button').forEach(b => {
             b.classList.toggle('active', b.getAttribute('data-situacao') === histState.situacao);
         });
+        const fNio = document.getElementById('f-nio');
+        const fBio = document.getElementById('f-bio');
+        const fRep = document.getElementById('f-rep');
+        if (fNio) fNio.value = histState.nio || '';
+        if (fBio) fBio.value = histState.bio || '';
+        if (fRep) fRep.value = histState.rep || '';
         document.getElementById('ic-ordem-data').className = histState.ordem === 'antigos' ? 'bi bi-sort-up' : 'bi bi-sort-down';
-        const temFiltro = !!(histState.q || histState.status || histState.situacao || histState.de || histState.ate);
+        const churn = histState.tipo === 'CHURN';
+        const bio = histState.tipo === 'BIO';
+        const mailing = histState.tipo === 'MAILING';
+        const pap = !churn && !bio && !mailing;
+        const temFiltro = churn
+            ? !!(histState.q || histState.de || histState.ate || histState.nio)
+            : bio
+                ? !!(histState.q || histState.bio || histState.rep)
+                : mailing
+                    ? !!(histState.q)
+                    : !!(histState.q || histState.status || histState.situacao || histState.de || histState.ate);
         document.getElementById('f-limpar').classList.toggle('d-none', !temFiltro);
+        document.getElementById('f-status').classList.toggle('d-none', !pap);
+        document.getElementById('funil-seg').classList.toggle('d-none', !pap);
+        fNio.classList.toggle('d-none', !churn);
+        fBio.classList.toggle('d-none', !bio);
+        fRep.classList.toggle('d-none', !bio);
+        document.getElementById('funil-periodo').classList.toggle('d-none', churn || mailing);
+        document.getElementById('funil-periodo').title = bio ? 'Data de envio da biometria no GED ou data da venda no CRM' : 'Data do pedido no PAP';
+        document.getElementById('f-mes').classList.toggle('d-none', bio || mailing);
+        document.getElementById('acoes-pap').classList.toggle('d-none', !pap);
+        document.getElementById('acoes-churn').classList.toggle('d-none', !churn);
+        document.getElementById('acoes-bio').classList.toggle('d-none', !bio);
+        document.getElementById('acoes-mailing').classList.toggle('d-none', !mailing);
+        if (!mailing) document.getElementById('mailing-lote-info').classList.add('d-none');
+        if (!churn) document.getElementById('nio-prog').classList.add('d-none');
+        if (!bio) {
+            document.getElementById('bio-prog').classList.add('d-none');
+            document.getElementById('bio-cobertura').classList.add('d-none');
+        }
+        document.getElementById('thead-pap').classList.toggle('d-none', !pap);
+        document.getElementById('thead-churn').classList.toggle('d-none', !churn);
+        document.getElementById('thead-bio').classList.toggle('d-none', !bio);
+        document.getElementById('thead-mailing').classList.toggle('d-none', !mailing);
+        const busca = document.getElementById('f-busca');
+        busca.placeholder = churn
+            ? 'Busca: O.S., cliente, CPF… atalhos: adimplente, inadimplente'
+            : bio
+                ? 'Busca: cliente, CPF, O.S.… atalhos: apto, link, repescar, sem bio'
+                : mailing
+                    ? 'Busca: nome, CPF, telefone ou cidade'
+                    : 'Busca: protocolo, O.S., cliente, CPF… atalhos: novos, base';
+        document.getElementById('f-mes').title = churn ? 'Mês da retirada do churn' : 'Mês pela Data do pedido';
+    }
+
+    /** Interpreta atalhos na busca (ex.: "repescar", "apto joao") e devolve { q, ...filtros }. */
+    function interpretarBuscaInteligente(texto) {
+        let restante = String(texto || '').trim();
+        const mudancas = {};
+        const regras = [
+            { re: /\b(repescar|repescavel|repescável)\b/gi, tipo: 'BIO', campo: 'rep', valor: 'SIM' },
+            { re: /\b(nao\s*repescavel|não\s*repescável)\b/gi, tipo: 'BIO', campo: 'rep', valor: 'NAO' },
+            { re: /\b(apto\s*sem\s*venda)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'APTO_SEM_VENDA' },
+            { re: /\b(sem\s*bio(metria)?)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'SEM_BIOMETRIA' },
+            { re: /\b(aguardando\s*ged)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'NAO_VERIFICADO' },
+            { re: /\b(link(\s*enviado)?)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'LINK_ENVIADO' },
+            { re: /\b(em\s*an[aá]lise)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'EM_ANALISE' },
+            { re: /\b(refazer)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'REFAZER' },
+            { re: /\b(risco|reprovado)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'RISCO' },
+            { re: /\b(apto|fez)\b/gi, tipo: 'BIO', campo: 'bio', valor: 'APTO' },
+            { re: /\b(adimplente[s]?)\b/gi, tipo: 'CHURN', campo: 'nio', valor: 'ADIMPLENTE' },
+            { re: /\b(inadimplente[s]?)\b/gi, tipo: 'CHURN', campo: 'nio', valor: 'INADIMPLENTE' },
+            { re: /\b(a\s*vencer)\b/gi, tipo: 'CHURN', campo: 'nio', valor: 'A_VENCER' },
+            { re: /\b(novos?)\b/gi, tipo: 'PAP', campo: 'situacao', valor: 'novos' },
+            { re: /\b(j[aá]\s*na\s*base|base)\b/gi, tipo: 'PAP', campo: 'situacao', valor: 'base' },
+        ];
+        for (const regra of regras) {
+            if (!regra.re.test(restante)) continue;
+            regra.re.lastIndex = 0;
+            if (regra.tipo === 'BIO' && histState.tipo !== 'BIO') continue;
+            if (regra.tipo === 'CHURN' && histState.tipo !== 'CHURN') continue;
+            if (regra.tipo === 'PAP' && TIPOS_PROPRIOS.includes(histState.tipo)) continue;
+            mudancas[regra.campo] = regra.valor;
+            restante = restante.replace(regra.re, ' ').replace(/\s+/g, ' ').trim();
+            break; // um atalho por vez, o resto fica como texto livre
+        }
+        mudancas.q = restante;
+        return mudancas;
+    }
+
+    function ultimosDias(qtd) {
+        const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const fim = new Date();
+        const ini = new Date();
+        ini.setDate(fim.getDate() - (qtd - 1));
+        return { de: iso(ini), ate: iso(fim) };
     }
 
     function aplicarFiltros(mudancas) {
         Object.assign(histState, mudancas, { page: 1 });
         carregarPedidos();
+    }
+
+    /** Atualiza o texto das options com contagens, preservando o rótulo base em data-label. */
+    function atualizarContagensSelect(selectId, contagens) {
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        [...sel.options].forEach(opt => {
+            if (!opt.dataset.label) opt.dataset.label = opt.textContent.replace(/\s*\([\d.]+\)\s*$/, '').trim();
+            const base = opt.dataset.label;
+            const n = opt.value ? contagens[opt.value] : null;
+            opt.textContent = (n != null && n > 0) ? `${base} (${Number(n).toLocaleString('pt-BR')})` : base;
+        });
     }
 
     function irParaPagina(pagina) {
@@ -585,27 +883,44 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             const tipo = e.currentTarget.getAttribute('data-tipo');
             if (tipo === histState.tipo) return;
             // Os status do PAP mudam entre Interesse/Pré-venda/Venda.
-            aplicarFiltros({ tipo, status: '' });
+            const mudancas = { tipo, status: '', nio: '', bio: '', rep: '' };
+            if (TIPOS_PROPRIOS.includes(tipo)) {
+                if (!TIPOS_PROPRIOS.includes(histState.tipo)) periodoPap = { de: histState.de, ate: histState.ate };
+                Object.assign(mudancas, { situacao: '', de: '', ate: '' }, tipo === 'BIO' ? ultimosDias(7) : {});
+            } else if (TIPOS_PROPRIOS.includes(histState.tipo) && periodoPap) {
+                mudancas.de = periodoPap.de;
+                mudancas.ate = periodoPap.ate;
+                periodoPap = null;
+            }
+            aplicarFiltros(mudancas);
         });
     });
 
+    function aplicarBuscaDaCaixa(texto) {
+        aplicarFiltros(interpretarBuscaInteligente(texto));
+    }
     document.getElementById('f-busca').addEventListener('input', (e) => {
         clearTimeout(buscaDebounce);
         const valor = e.target.value;
-        buscaDebounce = setTimeout(() => aplicarFiltros({ q: valor.trim() }), 350);
+        buscaDebounce = setTimeout(() => aplicarBuscaDaCaixa(valor), 350);
     });
     document.getElementById('f-busca').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { clearTimeout(buscaDebounce); aplicarFiltros({ q: e.target.value.trim() }); }
+        if (e.key === 'Enter') { clearTimeout(buscaDebounce); aplicarBuscaDaCaixa(e.target.value); }
         if (e.key === 'Escape' && e.target.value) { e.target.value = ''; clearTimeout(buscaDebounce); aplicarFiltros({ q: '' }); }
     });
     document.getElementById('f-status').addEventListener('change', (e) => aplicarFiltros({ status: e.target.value }));
-    document.querySelectorAll('.funil-seg button').forEach(b => {
+    document.querySelectorAll('#funil-seg button').forEach(b => {
         b.addEventListener('click', () => aplicarFiltros({ situacao: b.getAttribute('data-situacao') }));
     });
+    document.getElementById('f-nio').addEventListener('change', (e) => aplicarFiltros({ nio: e.target.value }));
+    document.getElementById('f-bio').addEventListener('change', (e) => aplicarFiltros({ bio: e.target.value }));
+    document.getElementById('f-rep').addEventListener('change', (e) => aplicarFiltros({ rep: e.target.value }));
     document.getElementById('f-de').addEventListener('change', (e) => aplicarFiltros({ de: e.target.value }));
     document.getElementById('f-ate').addEventListener('change', (e) => aplicarFiltros({ ate: e.target.value }));
     document.getElementById('f-limpar').addEventListener('click', () => {
-        aplicarFiltros({ q: '', status: '', situacao: '', de: '', ate: '' });
+        if (histState.tipo === 'BIO') { aplicarFiltros({ q: '', bio: '', rep: '' }); return; }
+        if (histState.tipo === 'CHURN') { aplicarFiltros({ q: '', nio: '', de: '', ate: '' }); return; }
+        aplicarFiltros({ q: '', status: '', situacao: '', de: '', ate: '', nio: '' });
     });
     document.getElementById('th-ordem-data').addEventListener('click', () => {
         aplicarFiltros({ ordem: histState.ordem === 'antigos' ? 'recentes' : 'antigos' });
@@ -663,9 +978,10 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         const ini = count ? (page - 1) * histState.pageSize + 1 : 0;
         const fim = Math.min(page * histState.pageSize, count);
         const fmt = n => n.toLocaleString('pt-BR');
+        const rotulo = { CHURN: 'registros', BIO: 'clientes' }[histState.tipo] || 'pedidos';
         document.getElementById('pag-hist-info').innerHTML = count
-            ? `Mostrando <strong>${fmt(ini)}–${fmt(fim)}</strong> de <strong>${fmt(count)}</strong> pedidos`
-            : 'Nenhum pedido';
+            ? `Mostrando <strong>${fmt(ini)}–${fmt(fim)}</strong> de <strong>${fmt(count)}</strong> ${rotulo}`
+            : ({ CHURN: 'Nenhum registro', BIO: 'Nenhum cliente' }[histState.tipo] || 'Nenhum pedido');
         document.getElementById('pag-hist-prev').disabled = page <= 1;
         document.getElementById('pag-hist-next').disabled = page >= totalPages;
         document.getElementById('pag-hist-paginas').innerHTML = paginasVisiveis(page, totalPages).map(n => n === null
@@ -809,13 +1125,646 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             el.classList.toggle('text-warning', alerta);
             el.innerHTML = `<i class="bi ${alerta ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill'} me-1"></i> ${esc(s.mensagem)}`;
         }
+        rodapePapHtml = document.getElementById('rodape-info').innerHTML;
     }
+
+    function fmtDataIso(iso) {
+        if (!iso) return '-';
+        const p = String(iso).slice(0, 10).split('-');
+        return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(iso);
+    }
+
+    const NIO_SITUACAO = {
+        ADIMPLENTE: { rotulo: 'Adimplente', cls: 'bg-success-subtle text-success border border-success-subtle', icone: 'bi-check-circle-fill' },
+        INADIMPLENTE: { rotulo: 'Inadimplente', cls: 'bg-danger-subtle text-danger border border-danger-subtle', icone: 'bi-exclamation-octagon-fill' },
+        A_VENCER: { rotulo: 'A vencer', cls: 'bg-warning-subtle text-warning-emphasis border border-warning-subtle', icone: 'bi-hourglass-split' },
+        ERRO: { rotulo: 'Erro', cls: 'bg-secondary-subtle text-secondary border', icone: 'bi-x-circle' },
+        NAO_CONSULTADO: { rotulo: 'Não consultado', cls: 'bg-light text-muted border', icone: 'bi-dash-circle' },
+    };
+    const fmtBRL = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    function badgeNio(r) {
+        const s = NIO_SITUACAO[r.situacao_nio] || NIO_SITUACAO.NAO_CONSULTADO;
+        const d = r.debito_nio;
+        let dica = 'Ainda não consultado na Nio';
+        if (d) {
+            const partes = [];
+            if (d.qtd_vencidas) partes.push(`${d.qtd_vencidas} vencida(s): ${fmtBRL(d.valor_vencido)} desde ${fmtDataIso(d.vencimento_mais_antigo)}`);
+            if (d.qtd_a_vencer) partes.push(`${d.qtd_a_vencer} a vencer: ${fmtBRL(d.valor_a_vencer)}`);
+            if (d.detalhe) partes.push(d.detalhe);
+            if (!partes.length) partes.push('Nenhuma conta em aberto');
+            const quando = d.consultado_em ? new Date(d.consultado_em).toLocaleString('pt-BR') : '';
+            dica = partes.join(' · ') + (quando ? ` · consultado em ${quando}` : '');
+        }
+        const valor = r.situacao_nio === 'INADIMPLENTE' && d ? `<div class="small text-danger mt-1">${esc(fmtBRL(d.valor_vencido))}</div>` : '';
+        return `<span class="badge badge-nio ${s.cls}" title="${esc(dica)}"><i class="bi ${s.icone} me-1"></i>${s.rotulo}</span>${valor}`;
+    }
+
+    function btnEnviarTemplate(aba, id, r) {
+        const elegivel = !!r.elegivel_envio;
+        const motivo = r.motivo_inelegivel || '';
+        const prev = r.preview_envio || {};
+        const previewBits = [prev.nome, prev.protocolo || prev.contrato || prev.pedido, prev.endereco]
+            .filter(Boolean).join(' · ');
+        const title = elegivel
+            ? (previewBits ? `Enviar template: ${previewBits}` : 'Enviar template WhatsApp')
+            : (motivo || 'Não elegível para envio');
+        const cls = elegivel ? 'btn-success' : 'btn-outline-secondary';
+        return `<button type="button" class="btn btn-sm ${cls} rounded-pill fw-bold btn-funil-tmpl"
+            data-aba="${esc(aba)}" data-id="${esc(String(id || ''))}"
+            ${elegivel ? '' : 'disabled'} title="${esc(title)}">
+            <i class="bi bi-whatsapp me-1"></i>Enviar
+        </button>`;
+    }
+
+    function linhaChurn(r) {
+        const motivo = r.DS_MOTIVO_RETIRADA || r.TP_RETIRADA || '—';
+        return `
+            <tr class="funil-row-anim">
+                <td class="ps-4 fw-bold font-monospace text-primary">${destacar(r.pedido || '-')}</td>
+                <td class="fw-medium text-dark">${destacar(r.nome_cliente || '—')}</td>
+                <td class="text-muted small text-nowrap">${destacar(r.cpf_cliente || '—')}</td>
+                <td><span class="badge bg-secondary badge-status">${esc(motivo)}</span></td>
+                <td class="text-muted small text-nowrap">${esc(fmtDataIso(r.dt_retirada))}</td>
+                <td class="small">${esc(r.vendedor || '—')}</td>
+                <td class="text-nowrap">${badgeNio(r)}</td>
+                <td class="text-end pe-4">${btnEnviarTemplate('CHURN', r.churn_id, r)}</td>
+            </tr>`;
+    }
+
+    async function carregarChurn({ rolarTopo = false } = {}) {
+        const tbody = document.getElementById('tbody-resultados');
+        const scroll = document.getElementById('funil-scroll');
+        if (histAbort) histAbort.abort();
+        histAbort = new AbortController();
+        const sinal = histAbort.signal;
+
+        if (tbody.querySelector('.funil-row-anim')) scroll.classList.add('funil-carregando');
+        else tbody.innerHTML = linhasSkeleton(Math.min(histState.pageSize, 8));
+
+        const mes = mesSelecionado();
+        const params = new URLSearchParams({
+            page: String(histState.page),
+            page_size: String(histState.pageSize),
+            somente_com_venda: '1',
+            campo_mes: 'retirada',
+        });
+        if (mes && mes !== 'custom') params.set('mes_referencia', mes);
+        else if (mes === 'custom' && histState.de) params.set('mes_referencia', histState.de.slice(0, 7));
+        else params.set('mes_referencia', 'todos');
+        if (histState.q) params.set('busca', histState.q);
+        if (histState.nio) params.set('situacao_nio', histState.nio);
+
+        try {
+            const r = await fetch(API_CHURN + '?' + params.toString(), {
+                headers: { 'Authorization': 'Bearer ' + getToken() },
+                signal: sinal,
+            });
+            const data = await r.json().catch(() => ({}));
+            if (sinal.aborted) return;
+            if (!r.ok) {
+                const detalhe = data.detail || `Erro HTTP ${r.status} ao carregar o churn.`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">${esc(detalhe)}</td></tr>`;
+                return;
+            }
+
+            const pag = data.paginacao || {};
+            const total = pag.total || 0;
+            histMeta = { page: pag.page || 1, totalPages: Math.max(1, pag.total_pages || 1), count: total };
+            histState.page = histMeta.page;
+            gravarEstadoNaUrl();
+            renderMeses(data.meses);
+            renderPaginacao();
+            const contagens = data.contagens_nio || {};
+            const totalSemNio = Object.values(contagens).reduce((a, b) => a + (b || 0), 0);
+            document.getElementById('count-churn').textContent = totalSemNio.toLocaleString('pt-BR');
+            atualizarContagensSelect('f-nio', contagens);
+            document.getElementById('rodape-info').textContent = 'Cruzamento pela O.S. (pedido e nr_ordem), o mesmo da Esteira. A lista traz nome e CPF do cliente da venda encontrada no CRM.';
+
+            const itens = data.lista || [];
+            if (!itens.length) {
+                const temFiltro = !!(histState.q || histState.de || histState.ate || histState.nio);
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>
+                    ${temFiltro ? 'Nenhum churn com cliente no CRM para esses filtros.' : 'Nenhum churn cruzado com o CRM neste período.'}
+                    ${temFiltro ? '<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="document.getElementById(\'f-limpar\').click()"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button></div>' : ''}
+                </td></tr>`;
+            } else {
+                tbody.innerHTML = itens.map(linhaChurn).join('');
+            }
+            if (rolarTopo) scroll.scrollTop = 0;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">Erro ao carregar o churn: ${esc(e.message)}</td></tr>`;
+        } finally {
+            if (!sinal.aborted) scroll.classList.remove('funil-carregando');
+        }
+        if (!nioPoll) verificarLoteNio();
+    }
+
+    const API_NIO_LOTE = API_CHURN + 'debitos-nio/';
+
+    function renderLoteNio(lote) {
+        const box = document.getElementById('nio-prog');
+        nioLoteAtual = lote;
+        const emAndamento = lote && lote.status === 'EM_ANDAMENTO';
+        document.getElementById('btn-nio-consultar').disabled = !!emAndamento;
+        document.getElementById('btn-nio-forcar').disabled = !!emAndamento;
+        if (!lote || histState.tipo !== 'CHURN') { box.classList.add('d-none'); return; }
+        box.classList.remove('d-none');
+        const pct = lote.total ? Math.round((lote.processados / lote.total) * 100) : 0;
+        document.getElementById('nio-prog-spin').classList.toggle('d-none', !emAndamento);
+        document.getElementById('btn-nio-cancelar').classList.toggle('d-none', !emAndamento);
+        document.getElementById('nio-prog-barra').firstElementChild.style.width = (emAndamento ? pct : 100) + '%';
+        const titulos = { EM_ANDAMENTO: 'Consultando débitos na Nio…', CONCLUIDO: 'Última consulta de débitos concluída', CANCELADO: 'Consulta de débitos cancelada', ERRO: 'Consulta de débitos interrompida' };
+        document.getElementById('nio-prog-titulo').textContent = titulos[lote.status] || 'Consulta de débitos';
+        document.getElementById('nio-prog-qtd').textContent = lote.total
+            ? `${lote.processados.toLocaleString('pt-BR')} de ${lote.total.toLocaleString('pt-BR')} CPFs (${pct}%)`
+            : '';
+        document.getElementById('nio-prog-info').innerHTML = `
+            <span>Adimplentes <strong>${lote.adimplentes}</strong></span>
+            <span>Inadimplentes <strong>${lote.inadimplentes}</strong></span>
+            <span>A vencer <strong>${lote.a_vencer}</strong></span>
+            <span>Erros <strong>${lote.erros}</strong></span>`;
+        const quando = lote.finalizado_em ? ` · ${new Date(lote.finalizado_em).toLocaleString('pt-BR')}` : '';
+        document.getElementById('nio-prog-msg').textContent = (lote.mensagem || '') + quando;
+    }
+
+    async function verificarLoteNio() {
+        try {
+            const r = await fetch(API_NIO_LOTE, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+            if (!r.ok) return;
+            const { lote } = await r.json();
+            const estavaRodando = nioLoteAtual && nioLoteAtual.status === 'EM_ANDAMENTO';
+            renderLoteNio(lote);
+            const rodando = lote && lote.status === 'EM_ANDAMENTO';
+            if (rodando && !nioPoll) nioPoll = setInterval(verificarLoteNio, 3000);
+            if (!rodando && nioPoll) { clearInterval(nioPoll); nioPoll = null; }
+            if (estavaRodando && !rodando && histState.tipo === 'CHURN') carregarPedidos();
+        } catch (e) {}
+    }
+
+    async function iniciarLoteNio(forcar) {
+        if (forcar && !confirm('Reconsultar TODOS os CPFs na Nio, inclusive os consultados nas últimas 24 horas?')) return;
+        try {
+            const r = await fetch(API_NIO_LOTE, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ forcar: !!forcar }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) { alert(data.detail || `Erro HTTP ${r.status} ao iniciar a consulta.`); return; }
+            if (!data.criado) alert('Já existe uma consulta em andamento. Acompanhando o progresso.');
+            renderLoteNio(data.lote);
+            if (!nioPoll) nioPoll = setInterval(verificarLoteNio, 3000);
+        } catch (e) {
+            alert('Erro ao iniciar a consulta: ' + e.message);
+        }
+    }
+
+    document.getElementById('btn-nio-consultar').addEventListener('click', () => iniciarLoteNio(false));
+    document.getElementById('btn-nio-forcar').addEventListener('click', () => iniciarLoteNio(true));
+    document.getElementById('btn-nio-cancelar').addEventListener('click', async () => {
+        if (!nioLoteAtual || !confirm('Cancelar a consulta de débitos? O que já foi consultado fica salvo.')) return;
+        await fetch(`${API_NIO_LOTE}${nioLoteAtual.id}/cancelar/`, {
+            method: 'POST', headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+        verificarLoteNio();
+    });
+
+    const BIO_SITUACAO = {
+        APTO: { rotulo: 'Fez (apto)', cls: 'bg-success-subtle text-success border border-success-subtle', icone: 'bi-check-circle-fill' },
+        EM_ANALISE: { rotulo: 'Em análise', cls: 'bg-info-subtle text-info-emphasis border border-info-subtle', icone: 'bi-hourglass-split' },
+        LINK_ENVIADO: { rotulo: 'Link enviado', cls: 'bg-warning-subtle text-warning-emphasis border border-warning-subtle', icone: 'bi-send' },
+        REFAZER: { rotulo: 'Refazer', cls: 'bg-warning-subtle text-warning-emphasis border border-warning-subtle', icone: 'bi-arrow-repeat' },
+        RISCO: { rotulo: 'Risco/Reprovado', cls: 'bg-danger-subtle text-danger border border-danger-subtle', icone: 'bi-shield-exclamation' },
+        SEM_BIOMETRIA: { rotulo: 'Sem biometria', cls: 'bg-secondary-subtle text-secondary border', icone: 'bi-dash-circle' },
+        NAO_VERIFICADO: { rotulo: 'Aguardando GED', cls: 'bg-light text-muted border', icone: 'bi-cloud-slash' },
+    };
+    const fmtDataHora = iso => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+
+    function linhaBio(r) {
+        const s = BIO_SITUACAO[r.situacao] || BIO_SITUACAO.SEM_BIOMETRIA;
+        const dica = r.situacao === 'NAO_VERIFICADO'
+            ? 'O horário desta venda ainda não foi buscado no GED. Use "Buscar no GED".'
+            : r.ultimo_resultado ? `${r.ultimo_resultado} · ${r.qtd_envios} envio(s) no GED` : 'Nenhum envio no GED360';
+        const vinculo = r.vinculo
+            ? `<div class="small text-muted mt-1"><i class="bi bi-link-45deg"></i> ${esc(r.vinculo)}</div>`
+            : (r.situacao === 'APTO' && !r.venda_id ? '<div class="small text-danger mt-1">Nenhuma venda criada</div>' : '');
+        const venda = r.venda_id
+            ? `<div class="small text-nowrap">${esc(fmtDataHora(r.data_venda))}</div>
+               ${r.ordem_servico ? `<div class="small text-muted">O.S. ${destacar(r.ordem_servico)}</div>` : ''}
+               ${r.status_esteira ? `<span class="badge bg-light text-muted border">${esc(r.status_esteira)}</span>` : ''}
+               ${r.status_tratamento ? `<div class="small text-muted" title="Status de tratamento no CRM">${esc(r.status_tratamento)}</div>` : ''}`
+            : '<span class="small text-muted">Sem venda no CRM</span>';
+        const repescar = r.repescavel
+            ? `<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Sim</span>
+               <div class="small text-muted mt-1">${esc(r.motivo_repescagem || '')}</div>
+               <div class="mt-1">${btnEnviarTemplate('BIO', r.cpf, r)}</div>`
+            : `<span class="badge bg-light text-muted border"><i class="bi bi-x-circle me-1"></i>Não</span>
+               <div class="small text-muted mt-1">${esc(r.motivo_repescagem || '')}</div>`;
+        const envio = r.ultimo_envio
+            ? `<div class="small text-nowrap">${esc(fmtDataHora(r.ultimo_envio))}</div>
+               <div class="small text-muted">${esc(r.ultima_origem || '')}${r.login_ged ? ` · ${esc(r.login_ged)}` : ''}</div>
+               ${r.protocolo ? `<div class="small text-muted font-monospace">Prot. ${destacar(r.protocolo)}</div>` : ''}`
+            : '<span class="small text-muted">—</span>';
+        return `
+            <tr class="funil-row-anim">
+                <td class="ps-4 fw-medium text-dark">${destacar(r.nome_cliente || '—')}</td>
+                <td class="text-muted small text-nowrap">${destacar(r.cpf || '—')}</td>
+                <td>${venda}</td>
+                <td class="small">${destacar(r.vendedor || '—')}</td>
+                <td class="text-nowrap"><span class="badge badge-nio ${s.cls}" title="${esc(dica)}"><i class="bi ${s.icone} me-1"></i>${s.rotulo}</span>
+                    ${r.ultimo_resultado ? `<div class="small text-muted mt-1">${esc(r.ultimo_resultado)}</div>` : ''}${vinculo}</td>
+                <td>${envio}</td>
+                <td class="small text-nowrap">${destacar(r.telefone || '—')}</td>
+                <td class="text-end pe-4" style="max-width: 200px;">${repescar}</td>
+            </tr>`;
+    }
+
+    async function carregarBio({ rolarTopo = false } = {}) {
+        const tbody = document.getElementById('tbody-resultados');
+        const scroll = document.getElementById('funil-scroll');
+        if (histAbort) histAbort.abort();
+        histAbort = new AbortController();
+        const sinal = histAbort.signal;
+        const reqId = ++histReqId;
+
+        // Sempre skeleton ao filtrar: evita ficar com lista antiga (ex.: "Não") com o chip SIM ativo.
+        tbody.innerHTML = linhasSkeleton(Math.min(histState.pageSize, 8));
+        scroll.classList.remove('funil-carregando');
+
+        const params = new URLSearchParams({ page: String(histState.page), page_size: String(histState.pageSize) });
+        if (histState.de) params.set('de', histState.de);
+        if (histState.ate) params.set('ate', histState.ate);
+        if (histState.q) params.set('busca', histState.q);
+        if (histState.bio) params.set('situacao', histState.bio);
+        // `rep` alinha com a URL do funil; `repescavel` mantém compatibilidade com a API.
+        if (histState.rep) {
+            params.set('rep', histState.rep);
+            params.set('repescavel', histState.rep);
+        }
+
+        try {
+            const r = await fetch(API_BIO + '?' + params.toString(), {
+                headers: { 'Authorization': 'Bearer ' + getToken() },
+                signal: sinal,
+                cache: 'no-store',
+            });
+            const data = await r.json().catch(() => ({}));
+            if (sinal.aborted || reqId !== histReqId) return;
+            if (!r.ok) {
+                const detalhe = data.detail || `Erro HTTP ${r.status} ao carregar a Repescagem Bio.`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">${esc(detalhe)}</td></tr>`;
+                return;
+            }
+            // API nova ecoa filtro_repescavel; se o chip está ativo e a API não aplicou, não renderiza lixo.
+            if (histState.rep && Object.prototype.hasOwnProperty.call(data, 'filtro_repescavel')
+                && data.filtro_repescavel !== histState.rep) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">Filtro Repescável não aplicado pela API. Atualize a página.</td></tr>`;
+                return;
+            }
+
+            const pag = data.paginacao || {};
+            histMeta = { page: pag.page || 1, totalPages: Math.max(1, pag.total_pages || 1), count: pag.total || 0 };
+            histState.page = histMeta.page;
+            if (data.periodo) {
+                histState.de = data.periodo.de;
+                histState.ate = data.periodo.ate;
+                document.getElementById('f-de').value = histState.de;
+                document.getElementById('f-ate').value = histState.ate;
+            }
+            gravarEstadoNaUrl();
+            renderPaginacao();
+
+            const contagens = data.contagens || {};
+            const totalCpfs = Object.keys(BIO_SITUACAO).reduce((a, k) => a + (contagens[k] || 0), 0);
+            document.getElementById('count-bio').textContent = totalCpfs.toLocaleString('pt-BR');
+            atualizarContagensSelect('f-bio', contagens);
+            atualizarContagensSelect('f-rep', data.contagens_repescavel || {});
+            const ult = data.ultima_importacao;
+            document.getElementById('rodape-info').textContent = 'Uma linha por CPF: quem enviou biometria no GED360 ou tem venda criada no período. Valem os envios a partir de 7 dias antes da venda; se algum foi apto, o CPF conta como apto, senão vale o mais recente. Repescável: último envio no GED há mais de 48 horas (fora risco/reprovado e fora DUPLICIDADE), sem venda no CRM ou com venda sem O.S. há mais de 48 horas. CONSTA PEDIDO: consulta o PAP Nio e só libera após 30 dias do pedido.'
+                + (ult ? ` Última busca no GED: ${fmtDataIso(ult.data_inicial)} a ${fmtDataIso(ult.data_final)} (${fmtDataHora(ult.finalizado_em)}).` : '');
+            const aviso = document.getElementById('bio-cobertura');
+            const fimPeriodo = new Date(`${histState.ate}T23:59:59`);
+            const buscadoAte = data.ged_buscado_ate ? new Date(data.ged_buscado_ate) : null;
+            if (!buscadoAte) {
+                aviso.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> O início deste período ainda não foi buscado no GED. Vendas sem dados do GED aparecem como <strong>Aguardando GED</strong>: use <strong>Buscar no GED</strong>.';
+                aviso.classList.remove('d-none');
+            } else if (buscadoAte < fimPeriodo && buscadoAte < new Date(Date.now() - 30 * 60000)) {
+                aviso.innerHTML = `<i class="bi bi-info-circle-fill me-1"></i> GED buscado até <strong>${esc(fmtDataHora(data.ged_buscado_ate))}</strong>. Vendas depois disso aparecem como <strong>Aguardando GED</strong> até a próxima busca.`;
+                aviso.classList.remove('d-none');
+            } else {
+                aviso.classList.add('d-none');
+            }
+
+            let itens = data.lista || [];
+            // Defesa: se a API devolver linhas fora do chip, não mostra "Não" com SIM ativo.
+            if (histState.rep === 'SIM') itens = itens.filter(r => !!r.repescavel);
+            else if (histState.rep === 'NAO') itens = itens.filter(r => !r.repescavel);
+            if (!itens.length) {
+                const temFiltro = !!(histState.q || histState.bio || histState.rep);
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>
+                    ${temFiltro ? 'Nenhum cliente para esses filtros.' : 'Nenhuma biometria nem venda neste período. Use "Buscar no GED" para baixar o relatório.'}
+                    ${temFiltro ? '<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="document.getElementById(\'f-limpar\').click()"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button></div>' : ''}
+                </td></tr>`;
+            } else {
+                tbody.innerHTML = itens.map(linhaBio).join('');
+            }
+            if (rolarTopo) scroll.scrollTop = 0;
+        } catch (e) {
+            if (e.name === 'AbortError' || reqId !== histReqId) return;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">Erro ao carregar a Repescagem Bio: ${esc(e.message)}</td></tr>`;
+        } finally {
+            if (!sinal.aborted && reqId === histReqId) scroll.classList.remove('funil-carregando');
+        }
+        if (!bioPoll && reqId === histReqId) verificarImportacaoBio();
+    }
+
+    function linhaMailing(r) {
+        const wa = r.telefone
+            ? `<a class="btn btn-sm btn-success rounded-pill" target="_blank" rel="noopener" href="https://wa.me/${esc(r.telefone)}"><i class="bi bi-whatsapp"></i></a>`
+            : '';
+        const tratar = r.status === 'RESPONDEU'
+            ? `<button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-semibold ms-1 btn-mailing-tratar" data-id="${r.id}">Tratar</button>`
+            : `<span class="badge bg-secondary">${esc(r.status)}</span>`;
+        return `<tr class="funil-row-anim">
+            <td class="ps-4">${esc(r.nome || '—')}</td>
+            <td>${esc(r.cpf || '—')}</td>
+            <td>${esc(r.telefone || '—')}</td>
+            <td>${esc(r.cidade || r.bairro || '—')}</td>
+            <td><span class="badge bg-info text-dark">${esc(r.situacao)}</span><div class="small text-muted">${esc(r.situacao_origem || '')}</div></td>
+            <td class="small">${esc(r.lote_nome || '')}</td>
+            <td class="small">${esc(r.resposta_texto || '—')}<div class="text-muted">${esc(r.respondido_em ? fmtDataHora(r.respondido_em) : '')}</div></td>
+            <td class="text-end pe-4">${wa}${tratar}</td>
+        </tr>`;
+    }
+
+    async function carregarMailing({ rolarTopo = false } = {}) {
+        const tbody = document.getElementById('tbody-resultados');
+        const scroll = document.getElementById('funil-scroll');
+        if (histAbort) histAbort.abort();
+        histAbort = new AbortController();
+        const sinal = histAbort.signal;
+        if (tbody.querySelector('.funil-row-anim')) scroll.classList.add('funil-carregando');
+        else tbody.innerHTML = linhasSkeleton(Math.min(histState.pageSize, 8));
+
+        const statusFiltro = document.getElementById('f-mailing-status').value || 'NOVO';
+        const loteSel = document.getElementById('f-mailing-lote').value || '';
+        const params = new URLSearchParams({
+            status: statusFiltro,
+            page: String(histState.page),
+            page_size: String(histState.pageSize),
+        });
+        if (loteSel) params.set('lote_id', loteSel);
+        if (histState.q) params.set('q', histState.q);
+
+        try {
+            const r = await fetch(API_MAILING + 'funil/?' + params.toString(), {
+                headers: { 'Authorization': 'Bearer ' + getToken() },
+                signal: sinal,
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">${esc(data.detail || 'Erro ao carregar mailings.')}</td></tr>`;
+                return;
+            }
+            const pag = data.paginacao || {};
+            histMeta = { page: pag.page || 1, totalPages: Math.max(1, pag.total_pages || 1), count: pag.total || 0 };
+            histState.page = histMeta.page;
+            gravarEstadoNaUrl();
+            renderPaginacao();
+            const cont = data.contagens || {};
+            document.getElementById('count-mailing').textContent = (cont.NOVO || cont.TOTAL || 0).toLocaleString('pt-BR');
+            document.getElementById('rodape-info').textContent =
+                'Mailings: filtre por lote e status. "Na fila" = importados prontos para disparo. Respostas ao template Meta aparecem em "Respostas".';
+            preencherSelectLotes(data.lotes || []);
+            renderLotesMailingInfo(data.lotes || []);
+            const itens = data.lista || [];
+            if (!itens.length) {
+                const dica = statusFiltro === 'RESPONDEU'
+                    ? 'Ainda não há respostas. Dispare o lote e aguarde o cliente clicar em "Falar conosco".'
+                    : 'Nenhum contato neste filtro. Troque o status para "Na fila (importados)" ou "Todos do lote".';
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>${dica}
+                </td></tr>`;
+            } else {
+                tbody.innerHTML = itens.map(linhaMailing).join('');
+            }
+            if (rolarTopo) scroll.scrollTop = 0;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">Erro: ${esc(e.message)}</td></tr>`;
+        } finally {
+            if (!sinal.aborted) scroll.classList.remove('funil-carregando');
+        }
+    }
+
+    function preencherSelectLotes(lotes) {
+        const sel = document.getElementById('f-mailing-lote');
+        const atual = sel.value;
+        const opts = ['<option value="">Todos os lotes</option>'].concat(
+            (lotes || []).map(l => `<option value="${l.id}">#${l.id} ${esc(l.nome)} (${l.tipo_layout} · ${l.total_validos} válidos)</option>`)
+        );
+        sel.innerHTML = opts.join('');
+        if (atual && [...sel.options].some(o => o.value === atual)) sel.value = atual;
+        else if (!atual && lotes && lotes[0]) sel.value = String(lotes[0].id);
+    }
+
+    function renderLotesMailingInfo(lotes) {
+        const box = document.getElementById('mailing-lote-info');
+        const btn = document.getElementById('btn-mailing-disparar');
+        if (histState.tipo !== 'MAILING' || !lotes || !lotes.length) {
+            box.classList.add('d-none');
+            btn.classList.add('d-none');
+            mailingLoteAtivo = null;
+            return;
+        }
+        const loteId = document.getElementById('f-mailing-lote').value;
+        const lote = (loteId && lotes.find(l => String(l.id) === loteId)) || lotes[0];
+        mailingLoteAtivo = lote;
+        box.classList.remove('d-none');
+        btn.classList.remove('d-none');
+        const linhas = lotes.map(l => {
+            const cont = l.contagens_situacao || {};
+            const sits = Object.entries(cont).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—';
+            const ativo = lote && l.id === lote.id ? ' <span class="badge bg-primary">selecionado</span>' : '';
+            return `<div class="mb-1"><strong>Lote #${l.id}</strong> ${esc(l.nome)} · ${esc(l.tipo_layout)} ·
+                <strong>${esc(l.status)}</strong> · ${l.total_validos} válidos ·
+                enviados ${l.total_enviados} · falhas ${l.total_falhas} · respostas ${l.total_respostas}${ativo}
+                <div class="text-muted">${esc(sits)}</div></div>`;
+        }).join('');
+        box.innerHTML = linhas;
+        btn.disabled = !lote || lote.status === 'DISPARANDO';
+        btn.innerHTML = lote && lote.status === 'DISPARANDO'
+            ? '<span class="spinner-border spinner-border-sm me-2"></span>Disparando…'
+            : '<i class="bi bi-send me-2"></i>Disparar lote';
+    }
+
+    const API_BIO_IMPORTACAO = API_BIO + 'importacoes/';
+
+    function renderImportacaoBio(imp) {
+        const box = document.getElementById('bio-prog');
+        bioImportacaoAtual = imp;
+        const emAndamento = imp && imp.status === 'EM_ANDAMENTO';
+        document.getElementById('btn-bio-buscar').disabled = !!emAndamento;
+        if (!imp || histState.tipo !== 'BIO') { box.classList.add('d-none'); return; }
+        box.classList.remove('d-none');
+        document.getElementById('bio-prog-spin').classList.toggle('d-none', !emAndamento);
+        const barra = document.getElementById('bio-prog-barra');
+        barra.classList.toggle('indeterminada', !!emAndamento);
+        barra.firstElementChild.style.width = emAndamento ? '' : '100%';
+        const titulos = { EM_ANDAMENTO: 'Buscando no GED360…', CONCLUIDO: 'Última busca no GED360 concluída', ERRO: 'Busca no GED360 com erro' };
+        document.getElementById('bio-prog-titulo').textContent = titulos[imp.status] || 'Busca no GED360';
+        document.getElementById('bio-prog-periodo').textContent = `Envios de ${fmtDataIso(imp.data_inicial)} a ${fmtDataIso(imp.data_final)}`;
+        const quando = imp.finalizado_em ? ` · ${fmtDataHora(imp.finalizado_em)}` : '';
+        document.getElementById('bio-prog-msg').textContent = (emAndamento ? (imp.etapa || 'Iniciando…') : (imp.mensagem || '')) + quando;
+    }
+
+    async function verificarImportacaoBio() {
+        try {
+            const r = await fetch(API_BIO_IMPORTACAO, { headers: { 'Authorization': 'Bearer ' + getToken() } });
+            if (!r.ok) return;
+            const { importacao } = await r.json();
+            const estavaRodando = bioImportacaoAtual && bioImportacaoAtual.status === 'EM_ANDAMENTO';
+            renderImportacaoBio(importacao);
+            const rodando = importacao && importacao.status === 'EM_ANDAMENTO';
+            if (rodando && !bioPoll) bioPoll = setInterval(verificarImportacaoBio, 3000);
+            if (!rodando && bioPoll) { clearInterval(bioPoll); bioPoll = null; }
+            if (estavaRodando && !rodando && histState.tipo === 'BIO') carregarPedidos();
+        } catch (e) {}
+    }
+
+    document.getElementById('btn-bio-buscar').addEventListener('click', async () => {
+        if (!histState.de || !histState.ate) { alert('Informe a data inicial e a final do período.'); return; }
+        // Um dia antes do período: a biometria pode ter sido feita na véspera da venda.
+        const hoje = ultimosDias(1).ate;
+        const ate = histState.ate > hoje ? hoje : histState.ate;
+        const vespera = new Date(`${histState.de}T12:00:00`);
+        vespera.setDate(vespera.getDate() - 1);
+        const de = vespera.toISOString().slice(0, 10);
+        if (!confirm(`Buscar no GED360 as biometrias enviadas de ${fmtDataIso(de)} a ${fmtDataIso(ate)}?`)) return;
+        try {
+            const r = await fetch(API_BIO_IMPORTACAO, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data_inicial: de, data_final: ate }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) { alert(data.detail || `Erro HTTP ${r.status} ao iniciar a busca.`); return; }
+            if (!data.criada) alert('Já existe uma busca no GED em andamento. Acompanhando o progresso.');
+            renderImportacaoBio(data.importacao);
+            if (!bioPoll) bioPoll = setInterval(verificarImportacaoBio, 3000);
+        } catch (e) {
+            alert('Erro ao iniciar a busca: ' + e.message);
+        }
+    });
+
+    document.getElementById('mailing-file').addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('arquivo', file);
+        fd.append('nome', file.name.replace(/\.[^.]+$/, ''));
+        try {
+            const r = await fetch(API_MAILING, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + getToken() },
+                body: fd,
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) { alert(data.detail || `Erro HTTP ${r.status}`); return; }
+            alert(`Lote #${data.id} importado: ${data.total_validos} telefones válidos de ${data.total_contatos} contatos.`);
+            document.getElementById('f-mailing-status').value = 'NOVO';
+            if (histState.tipo === 'MAILING') {
+                histState.page = 1;
+                carregarMailing({ rolarTopo: true });
+            }
+        } catch (err) {
+            alert('Falha no upload: ' + err.message);
+        }
+    });
+
+    document.getElementById('btn-mailing-disparar').addEventListener('click', async () => {
+        if (!mailingLoteAtivo) { alert('Importe um XLS primeiro.'); return; }
+        if (!confirm(`Disparar templates Meta do lote #${mailingLoteAtivo.id}? Mensagens sem oferta, só pedido de contato.`)) return;
+        try {
+            const r = await fetch(API_MAILING + mailingLoteAtivo.id + '/disparo/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + getToken() },
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) { alert(data.detail || `Erro HTTP ${r.status}`); return; }
+            alert(`Ciclo iniciado: +${(data.ciclo && data.ciclo.enviados) || 0} enviados. O scheduler continua o resto.`);
+            document.getElementById('f-mailing-status').value = 'ENVIADO';
+            carregarMailing({ rolarTopo: true });
+        } catch (err) {
+            alert('Falha ao disparar: ' + err.message);
+        }
+    });
+
+    document.getElementById('f-mailing-status').addEventListener('change', () => {
+        if (histState.tipo === 'MAILING') { histState.page = 1; carregarMailing({ rolarTopo: true }); }
+    });
+    document.getElementById('f-mailing-lote').addEventListener('change', () => {
+        if (histState.tipo === 'MAILING') { histState.page = 1; carregarMailing({ rolarTopo: true }); }
+    });
+
+    document.getElementById('tbody-resultados').addEventListener('click', async (e) => {
+        const btnMail = e.target.closest('.btn-mailing-tratar');
+        if (btnMail) {
+            const id = btnMail.getAttribute('data-id');
+            try {
+                const r = await fetch(API_MAILING + 'contatos/' + id + '/tratar/', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getToken() },
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) { alert(data.detail || 'Erro ao marcar tratado.'); return; }
+                carregarMailing({});
+            } catch (err) {
+                alert(err.message);
+            }
+            return;
+        }
+
+        const btnTmpl = e.target.closest('.btn-funil-tmpl');
+        if (!btnTmpl || btnTmpl.disabled) return;
+        const aba = btnTmpl.getAttribute('data-aba');
+        const id = btnTmpl.getAttribute('data-id');
+        const preview = btnTmpl.getAttribute('title') || '';
+        if (!confirm(`Enviar template Meta (${aba})?\n\n${preview}`)) return;
+        btnTmpl.disabled = true;
+        try {
+            const r = await fetch(API_FUNIL_TMPL + 'enviar/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ aba, id }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data.ok) {
+                alert(data.detail || 'Falha no envio do template.');
+                btnTmpl.disabled = false;
+                return;
+            }
+            alert('Template enviado com sucesso.');
+            carregarPedidos({});
+        } catch (err) {
+            alert('Erro ao enviar: ' + err.message);
+            btnTmpl.disabled = false;
+        }
+    });
 
     function linhaPedido(p) {
         const [dia, hora] = String(p.data_status || '').split(' ');
+        const acao = (String(p.tipo_venda || histState.tipo || '').toUpperCase() === 'INTERESSE')
+            ? btnEnviarTemplate('INTERESSE', p.id, p)
+            : `<button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="alert('Funcionalidade de Tratamento em desenvolvimento')">Tratar</button>`;
         return `
             <tr class="funil-row-anim">
-                <td class="ps-4 fw-bold font-monospace text-primary">${destacar(p.protocolo || '-')}</td>
+                <td class="ps-4 fw-bold font-monospace text-primary">${destacar(p.protocolo || '-')}${p.os_instalacao ? `<div class="small fw-normal text-muted">O.S. ${destacar(p.os_instalacao)}</div>` : ''}</td>
                 <td class="fw-medium text-dark">${destacar(p.cliente || 'Desconhecido')}</td>
                 <td class="text-muted small text-nowrap">${destacar(p.documento || '-')}</td>
                 <td><span class="badge bg-secondary badge-status">${esc((p.status_primario || 'Desconhecido').replace(/_/g, ' '))}</span></td>
@@ -825,9 +1774,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                         ? '<span class="badge bg-success-subtle text-success border border-success-subtle badge-status"><i class="bi bi-stars"></i> Novo</span>'
                         : '<span class="badge bg-light text-muted border badge-status">Já na Base</span>'}
                 </td>
-                <td class="text-end pe-4">
-                    <button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="alert('Funcionalidade de Tratamento em desenvolvimento')">Tratar</button>
-                </td>
+                <td class="text-end pe-4">${acao}</td>
             </tr>`;
     }
 
@@ -836,6 +1783,9 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         const scroll = document.getElementById('funil-scroll');
         sincronizarControles();
         gravarEstadoNaUrl();
+        if (histState.tipo === 'CHURN') return carregarChurn({ rolarTopo });
+        if (histState.tipo === 'BIO') return carregarBio({ rolarTopo });
+        if (histState.tipo === 'MAILING') return carregarMailing({ rolarTopo });
 
         if (histAbort) histAbort.abort();
         histAbort = new AbortController();
@@ -879,6 +1829,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             renderPaginacao();
             document.getElementById('exportar-qtd').textContent = histMeta.count.toLocaleString('pt-BR');
             document.getElementById('btn-exportar-filtro').disabled = !histMeta.count;
+            if (rodapePapHtml) document.getElementById('rodape-info').innerHTML = rodapePapHtml;
 
             const itens = data.results || [];
             if (!itens.length) {

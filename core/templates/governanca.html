@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 
+{% block page_title %}Governança{% endblock %}
+{% block header_back_class %}{% endblock %}
+{% block header_user_menu_class %}{% endblock %}
+{% block header_nav %}{% endblock %}
+
+
 {% load static %}
 
 {% block title %}Governança - {{ SITE_BRAND }}{% endblock %}
@@ -259,10 +265,7 @@
 </style>
 {% endblock %}
 
-{% block header_nav %}
-    <li><a href="/area-interna/">Voltar</a></li>
-                        <li><button onclick="logout()" class="nav-button logout-button">Sair</button></li>
-{% endblock %}
+
 
 {% block content %}
 <div class="admin-wrapper governanca-page">
@@ -1502,10 +1505,18 @@
         if (secaoAlvo) secaoAlvo.classList.add('active');
         document.querySelectorAll('.admin-nav-link').forEach(l => l.classList.remove('active'));
         if (menuItem) menuItem.classList.add('active');
+        try {
+            if (idSecao && history.replaceState) {
+                history.replaceState(null, '', '#' + idSecao);
+            } else if (idSecao) {
+                location.hash = idSecao;
+            }
+        } catch (e) {}
         if (idSecao === 'permissoes_sistema') carregarPermissoesSistema();
         if (idSecao === 'perfis') carregarPerfis();
         if (idSecao === 'usuarios') carregarOpcoesFiltrosUsuarios();
         if (idSecao === 'pap-logins') carregarHistoricoConsultasPapBo();
+        if (idSecao === 'robos-pap' && typeof carregarPapLogins === 'function') carregarPapLogins();
     }
     var perfisFiltroCarregados = false;
     async function carregarOpcoesFiltrosUsuarios() {
@@ -4538,8 +4549,19 @@
         carregarRegrasAutomacao();
         carregarGruposExternos(false);
 
-        const link = document.querySelector('.admin-nav-link');
-        if(link) mostrarSecao(null, 'usuarios', link);
+        const hashSecao = (location.hash || '').replace(/^#/, '').trim();
+        const linkHash = hashSecao
+            ? document.querySelector(`.admin-nav-link[onclick*="'${hashSecao}'"]`)
+            : null;
+        if (linkHash) {
+            mostrarSecao(null, hashSecao, linkHash);
+            if (hashSecao === 'robos-pap' && typeof carregarPapLogins === 'function') {
+                carregarPapLogins();
+            }
+        } else {
+            const link = document.querySelector('.admin-nav-link');
+            if (link) mostrarSecao(null, 'usuarios', link);
+        }
 
         // Carregar usuários iniciais com paginação
         carregarUsuarios('ativos', 1).then(() => {
