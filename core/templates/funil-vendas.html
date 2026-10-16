@@ -623,6 +623,8 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
 {% endblock %}
 
 {% block extra_js %}
+{% load static %}
+<script src="{% static 'js/auth.js' %}?v=8.1"></script>
 <script>
     const API_BASE = '/api/crm/funil-venda-wpp/tentativas/';
     const API_HIST = '/api/crm/funil-venda-wpp/historico-pap/';

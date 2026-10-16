@@ -469,6 +469,10 @@ function iniciarMonitoramentoToken() {
         console.warn('Indicador de token não encontrado na página');
         return;
     }
+    if (tokenMonitorInterval) {
+        clearInterval(tokenMonitorInterval);
+        tokenMonitorInterval = null;
+    }
     
     const icon = indicator.querySelector('i');
     

@@ -242,8 +242,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span id="token-time">--:--</span>
             `;
             tokenAnchor.parentNode.insertBefore(tokenIndicator, tokenAnchor);
-            if (typeof iniciarMonitoramentoToken === 'function') {
-                iniciarMonitoramentoToken();
+            const startMonitor = () => {
+                if (typeof iniciarMonitoramentoToken === 'function') {
+                    iniciarMonitoramentoToken();
+                    return true;
+                }
+                return false;
+            };
+            // auth.js costuma vir no extra_js depois do menu.js — tenta agora e no load
+            if (!startMonitor()) {
+                window.addEventListener('load', () => { startMonitor(); }, { once: true });
             }
         }
     }
