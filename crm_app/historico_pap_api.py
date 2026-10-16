@@ -30,6 +30,17 @@ def _parse_date(valor, fallback: date) -> date:
     return fallback
 
 
+def _assertiva_disponivel() -> bool:
+    """Só site-record (e quem tiver plano Assertiva) deve consultar a API."""
+    from django.conf import settings as dj_settings
+
+    return bool(
+        getattr(dj_settings, "ASSERTIVA_CREDITO_ENABLED", False)
+        and getattr(dj_settings, "ASSERTIVA_CLIENT_ID", "")
+        and getattr(dj_settings, "ASSERTIVA_CLIENT_SECRET", "")
+    )
+
+
 class FunilHistoricoPapConfigView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -64,6 +75,7 @@ class FunilHistoricoPapConfigView(APIView):
                 "pool": pool,
                 "sessao_pap": sessao_info,
                 "rotina_automatica_pausada": pausa_rotina,
+                "assertiva_disponivel": _assertiva_disponivel(),
                 "pedidos_conhecidos": HistoricoPapPedido.objects.count(),
                 "grava_venda": False,
                 "busca_em_andamento": serializar_busca(busca, em_andamento=True) if busca else None,
@@ -632,6 +644,11 @@ class FunilHistoricoPapAssertivaMatchView(APIView):
     def post(self, request, pedido_id: int):
         if not is_member(request.user, ["Diretoria", "Admin"]):
             return Response({"detail": "Sem permissão."}, status=403)
+        if not _assertiva_disponivel():
+            return Response(
+                {"ok": False, "detail": "Assertiva não disponível neste site."},
+                status=403,
+            )
         forcar = bool(request.data.get("forcar"))
         from crm_app.services.assertiva_match_interesse_service import (
             match_interesse_assertiva,
@@ -651,6 +668,11 @@ class FunilHistoricoPapAssertivaMatchLoteView(APIView):
     def post(self, request):
         if not is_member(request.user, ["Diretoria", "Admin"]):
             return Response({"detail": "Sem permissão."}, status=403)
+        if not _assertiva_disponivel():
+            return Response(
+                {"ok": False, "detail": "Assertiva não disponível neste site."},
+                status=403,
+            )
         from crm_app.services.assertiva_match_interesse_service import (
             listar_candidatos_match_assertiva,
             match_interesse_assertiva,

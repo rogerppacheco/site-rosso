@@ -874,6 +874,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         q: '', status: '', situacao: '', de: '', ate: '', ordem: 'recentes', nio: '', bio: '', rep: '',
     };
     let histMeta = { page: 1, totalPages: 1, count: 0 };
+    let assertivaDisponivel = false;
     let histAbort = null;
     let histReqId = 0; // ignora resposta atrasada quando outro carregamento já começou
     let rodapePapHtml = '';
@@ -1298,7 +1299,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             : 'Data do pedido no PAP';
         document.getElementById('acoes-pap').classList.toggle('d-none', !pap);
         const btnMatchLote = document.getElementById('btn-assertiva-match-lote');
-        if (btnMatchLote) btnMatchLote.classList.toggle('d-none', !interesse);
+        if (btnMatchLote) btnMatchLote.classList.toggle('d-none', !(interesse && assertivaDisponivel));
         document.getElementById('acoes-churn').classList.toggle('d-none', !churn);
         document.getElementById('acoes-bio').classList.toggle('d-none', !bio);
         document.getElementById('acoes-mailing').classList.toggle('d-none', !mailing);
@@ -1621,7 +1622,9 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             const r = await fetch(API_HIST + 'config/', { headers: { 'Authorization': 'Bearer ' + getToken() } });
             if (!r.ok) return;
             const cfg = await r.json();
-            
+            assertivaDisponivel = !!cfg.assertiva_disponivel;
+            sincronizarControles();
+
             const andamento = cfg.busca_em_andamento;
             if (andamento) {
                 mostrarProgHist(andamento);
@@ -1705,6 +1708,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     }
 
     function btnAssertivaMatch(p) {
+        if (!assertivaDisponivel) return '';
         const m = p.assertiva_match || null;
         const ok = m && m.status === 'match_unico' && m.cpf;
         const title = ok
@@ -1719,6 +1723,10 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     }
 
     async function matchAssertivaLote() {
+        if (!assertivaDisponivel) {
+            alert('Assertiva não está disponível neste site.');
+            return;
+        }
         const btn = document.getElementById('btn-assertiva-match-lote');
         const raw = prompt(
             'Quantos interesses sem CPF deseja consultar na Assertiva?\n\n' +

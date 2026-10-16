@@ -172,10 +172,12 @@ def match_interesse_assertiva(pedido_id: int, *, forcar: bool = False) -> dict:
     """
     from crm_app.models import HistoricoPapPedido
 
-    if not getattr(settings, "ASSERTIVA_CLIENT_ID", "") or not getattr(
-        settings, "ASSERTIVA_CLIENT_SECRET", ""
+    if not (
+        getattr(settings, "ASSERTIVA_CREDITO_ENABLED", False)
+        and getattr(settings, "ASSERTIVA_CLIENT_ID", "")
+        and getattr(settings, "ASSERTIVA_CLIENT_SECRET", "")
     ):
-        return {"ok": False, "detail": "Assertiva não configurada neste ambiente."}
+        return {"ok": False, "detail": "Assertiva não disponível neste site."}
 
     ped = HistoricoPapPedido.objects.filter(pk=pedido_id).first()
     if not ped:
