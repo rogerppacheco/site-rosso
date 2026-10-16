@@ -211,6 +211,9 @@
     border-top: 1px solid var(--border-color, #e4e9f2); background: var(--bg-surface, #fff);
 }
 .funil-filtros-foot .btn { flex: 1 1 auto; border-radius: 10px; font-weight: 700; }
+.funil-filtros-busca .funil-busca-hint {
+    margin: 0.35rem 0 0; font-size: 0.7rem; color: var(--text-secondary, #5b6b7d);
+}
 .funil-chips-bar {
     display: none; flex-wrap: wrap; align-items: center; gap: 0.3rem;
     padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
@@ -748,12 +751,11 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     </div>
     <div class="funil-filtros-busca">
         <i class="bi bi-search" aria-hidden="true"></i>
-        <input type="search" id="funil-sheet-busca" placeholder="Buscar… (atalhos: apto, link, repescar)" aria-label="Busca" autocomplete="off">
+        <input type="search" id="funil-sheet-busca" placeholder="Buscar… aplica na hora (atalhos: apto, link, repescar)" aria-label="Busca" autocomplete="off">
     </div>
     <div class="funil-filtros-body" id="funil-filtros-body"></div>
     <div class="funil-filtros-foot">
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="funil-sheet-limpar">Limpar</button>
-        <button type="button" class="btn btn-primary btn-sm" id="funil-sheet-aplicar">Ver resultados</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="funil-sheet-limpar">Limpar filtros</button>
     </div>
 </aside>
 {% endblock %}
@@ -1230,25 +1232,25 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     });
     document.getElementById('funil-filtros-fechar').addEventListener('click', fecharPainelFiltros);
     document.getElementById('funil-filtros-scrim').addEventListener('click', fecharPainelFiltros);
-    document.getElementById('funil-sheet-aplicar').addEventListener('click', fecharPainelFiltros);
     document.getElementById('funil-sheet-limpar').addEventListener('click', () => {
         document.getElementById('f-limpar').click();
         renderSheetFiltros();
     });
 
+    // Busca independente: aplica enquanto digita (não precisa de botão).
     let sheetBuscaDebounce = null;
     document.getElementById('funil-sheet-busca').addEventListener('input', (e) => {
         const valor = e.target.value;
         document.getElementById('f-busca').value = valor;
         clearTimeout(sheetBuscaDebounce);
-        sheetBuscaDebounce = setTimeout(() => aplicarBuscaDaCaixa(valor), 350);
+        sheetBuscaDebounce = setTimeout(() => aplicarBuscaDaCaixa(valor), 300);
     });
     document.getElementById('funil-sheet-busca').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
+            e.preventDefault();
             clearTimeout(sheetBuscaDebounce);
             document.getElementById('f-busca').value = e.target.value;
             aplicarBuscaDaCaixa(e.target.value);
-            fecharPainelFiltros();
         }
         if (e.key === 'Escape') fecharPainelFiltros();
     });
