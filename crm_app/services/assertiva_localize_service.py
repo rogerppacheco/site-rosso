@@ -45,6 +45,7 @@ class DadosCreditoAssertiva:
     telefones: tuple[str, ...]
     emails: tuple[str, ...]
     endereco: Optional[EnderecoAssertiva]
+    nome: str = ""
 
     @property
     def telefone_principal(self) -> Optional[str]:
@@ -57,6 +58,11 @@ class DadosCreditoAssertiva:
     @property
     def email_principal(self) -> Optional[str]:
         return self.emails[0] if self.emails else None
+
+    @property
+    def primeiro_nome(self) -> str:
+        partes = (self.nome or "").strip().split()
+        return partes[0].title() if partes else ""
 
 
 class AssertivaLocalizeService:
@@ -126,6 +132,7 @@ class AssertivaLocalizeService:
             telefones=self._selecionar_telefones(resposta),
             emails=self._selecionar_emails(resposta),
             endereco=self._selecionar_endereco(resposta),
+            nome=self._selecionar_nome(resposta),
         )
 
     def _validar_configuracao(self) -> None:
@@ -139,10 +146,26 @@ class AssertivaLocalizeService:
         endpoint: str,
         documento: str,
     ) -> dict[str, Any]:
+        return self._get_localize(
+            endpoint,
+            {endpoint: documento, "idFinalidade": 2},
+            operacao="consulta cadastral",
+        )
+
+    def _get_localize(
+        self,
+        path: str,
+        params: dict[str, Any],
+        *,
+        operacao: str,
+    ) -> dict[str, Any]:
+        """GET autenticado em /localize/v3/{path} com retry em 401."""
+        self._validar_configuracao()
         token = self._obter_token()
+        url = f"{self.base_url}/localize/v3/{path.lstrip('/')}"
         response = self.http.get(
-            f"{self.base_url}/localize/v3/{endpoint}",
-            params={endpoint: documento, "idFinalidade": 2},
+            url,
+            params=params,
             headers={"Authorization": f"Bearer {token}"},
             timeout=self.timeout_seconds,
         )
@@ -150,12 +173,70 @@ class AssertivaLocalizeService:
             self._invalidar_token()
             token = self._obter_token()
             response = self.http.get(
-                f"{self.base_url}/localize/v3/{endpoint}",
-                params={endpoint: documento, "idFinalidade": 2},
+                url,
+                params=params,
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=self.timeout_seconds,
             )
-        return self._validar_resposta(response, "consulta cadastral")
+        try:
+            return self._validar_resposta(response, operacao)
+        except AssertivaError:
+            raise
+        except Exception as exc:
+            raise AssertivaError(f"Falha na {operacao}: {exc}") from exc
+
+    def consultar_por_telefone(
+        self,
+        telefone: str,
+        *,
+        id_finalidade: int = 1,
+    ) -> dict[str, Any]:
+        """Localiza pessoas pelo telefone (retorna payload bruto da Assertiva)."""
+        digitos = _DOCUMENTO_RE.sub("", telefone or "")
+        if digitos.startswith("55") and len(digitos) in (12, 13):
+            digitos = digitos[2:]
+        if len(digitos) not in (10, 11):
+            raise AssertivaError("Telefone inválido para consulta na Assertiva.")
+        return self._get_localize(
+            "telefone",
+            {"telefone": digitos, "idFinalidade": id_finalidade},
+            operacao="consulta telefone",
+        )
+
+    def consultar_por_nome(
+        self,
+        nome: str,
+        *,
+        id_finalidade: int = 1,
+        nome_exato: bool = True,
+        uf: str = "",
+        cidade: str = "",
+        cep: str = "",
+    ) -> dict[str, Any]:
+        """Localiza pessoas por nome (e filtros opcionais de endereço)."""
+        nome_limpo = (nome or "").strip()
+        if len(nome_limpo.split()) < 2:
+            raise AssertivaError("Informe nome e sobrenome para a consulta Assertiva.")
+        params: dict[str, Any] = {
+            "buscarPor": "pessoas",
+            "nomeOuRazaoSocial": nome_limpo,
+            "nomeOuRazaoSocialExata": "true" if nome_exato else "false",
+            "idFinalidade": id_finalidade,
+        }
+        uf_limpo = (uf or "").strip().upper()[:2]
+        cidade_limpa = (cidade or "").strip()
+        cep_limpo = _DOCUMENTO_RE.sub("", cep or "")
+        if uf_limpo:
+            params["uf"] = uf_limpo
+        if cidade_limpa and uf_limpo:
+            params["cidade"] = cidade_limpa
+        if len(cep_limpo) == 8:
+            params["cepOuNomeRua"] = cep_limpo
+        return self._get_localize(
+            "nome-endereco",
+            params,
+            operacao="consulta nome",
+        )
 
     def _obter_token(self) -> str:
         cache_key = self._token_cache_key()
@@ -329,3 +410,80 @@ class AssertivaLocalizeService:
         if not candidatos:
             return None
         return max(candidatos, key=lambda candidato: (candidato[0], candidato[1]))[2]
+
+    @staticmethod
+    def _selecionar_nome(resposta: dict[str, Any]) -> str:
+        """Extrai nome/razão social do payload Localize (vários formatos possíveis)."""
+        chaves = (
+            "nome",
+            "nomeCompleto",
+            "nomeCivil",
+            "razaoSocial",
+            "nomeRazaoSocial",
+            "nomeEmpresarial",
+        )
+        for chave in chaves:
+            valor = resposta.get(chave)
+            if isinstance(valor, str) and valor.strip():
+                return valor.strip()[:200]
+        for nested_key in ("cadastroBasico", "dadosCadastrais", "pessoa", "cadastro"):
+            nested = resposta.get(nested_key)
+            if not isinstance(nested, dict):
+                continue
+            for chave in chaves:
+                valor = nested.get(chave)
+                if isinstance(valor, str) and valor.strip():
+                    return valor.strip()[:200]
+        return ""
+
+
+_NOME_CACHE_TTL = 3600  # hot path curto; fonte da verdade = BD
+
+
+def obter_nome_por_cpf(cpf: str) -> Optional[str]:
+    """Devolve o nome completo: BD (persistente) → Assertiva → grava BD."""
+    digitos = _DOCUMENTO_RE.sub("", cpf or "")
+    if len(digitos) not in (11, 14):
+        return None
+
+    cache_key = f"assertiva:nome:{digitos}"
+    cached = cache.get(cache_key)
+    if isinstance(cached, str) and cached.strip():
+        return cached.strip()
+
+    from crm_app.models import AssertivaNomeCache
+
+    registro = (
+        AssertivaNomeCache.objects.filter(cpf=digitos)
+        .only("nome")
+        .first()
+    )
+    if registro:
+        nome_bd = (registro.nome or "").strip()
+        if nome_bd:
+            cache.set(cache_key, nome_bd, timeout=_NOME_CACHE_TTL)
+            return nome_bd
+
+    try:
+        dados = AssertivaLocalizeService().consultar_para_credito(digitos)
+    except AssertivaError as exc:
+        logger.info("[ASSERTIVA] Nome indisponível para %s: %s", digitos[-4:], exc)
+        return None
+
+    nome = (dados.nome or "").strip()
+    if not nome:
+        return None
+
+    AssertivaNomeCache.objects.update_or_create(
+        cpf=digitos,
+        defaults={"nome": nome[:200], "fonte": "assertiva"},
+    )
+    cache.set(cache_key, nome, timeout=_NOME_CACHE_TTL)
+    return nome
+
+
+def obter_primeiro_nome_por_cpf(cpf: str) -> Optional[str]:
+    nome = obter_nome_por_cpf(cpf)
+    if not nome:
+        return None
+    return nome.split()[0].title()

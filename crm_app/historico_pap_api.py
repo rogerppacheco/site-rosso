@@ -410,6 +410,13 @@ class FunilHistoricoPapPedidosView(APIView):
                 except Exception:
                     envio = {}
 
+            from crm_app.services.assertiva_match_interesse_service import serializar_match
+
+            match_info = serializar_match(payload) if (p.tipo_venda or "").upper() == "INTERESSE" else {}
+            # Preferir CPF já batido na Assertiva se o documento da lista vier vazio.
+            if not doc_val and match_info.get("assertiva_match"):
+                doc_val = match_info["assertiva_match"].get("cpf_formatado") or ""
+
             res.append({
                 "id": p.id,
                 "protocolo": mapped.get("pedido") or p.numero_pedido,
@@ -423,6 +430,7 @@ class FunilHistoricoPapPedidosView(APIView):
                 "novo_nesta_busca": num_norm in novos_set,
                 "data_status": mapped.get("data_pedido") or "",
                 **envio,
+                **match_info,
             })
 
         return Response({
@@ -614,3 +622,22 @@ class FunilHistoricoPapImportarView(APIView):
             },
             status=202,
         )
+
+
+class FunilHistoricoPapAssertivaMatchView(APIView):
+    """Match Assertiva: CPF + telefones para um Interesse do Funil."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pedido_id: int):
+        if not is_member(request.user, ["Diretoria", "Admin"]):
+            return Response({"detail": "Sem permissão."}, status=403)
+        forcar = bool(request.data.get("forcar"))
+        from crm_app.services.assertiva_match_interesse_service import (
+            match_interesse_assertiva,
+        )
+
+        out = match_interesse_assertiva(int(pedido_id), forcar=forcar)
+        if not out.get("ok"):
+            return Response({"ok": False, "detail": out.get("detail") or "Falha no match."}, status=400)
+        return Response(out)

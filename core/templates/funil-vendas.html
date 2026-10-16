@@ -1696,6 +1696,20 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         </button>`;
     }
 
+    function btnAssertivaMatch(p) {
+        const m = p.assertiva_match || null;
+        const ok = m && m.status === 'match_unico' && m.cpf;
+        const title = ok
+            ? `Match Assertiva: ${m.cpf_formatado || m.cpf}${(m.telefones_formatados || []).length ? ' · ' + m.telefones_formatados.join(', ') : ''} (clique para refazer)`
+            : 'Buscar CPF e telefones na Assertiva pelo nome';
+        const cls = ok ? 'btn-outline-info' : 'btn-outline-warning';
+        const label = ok ? 'Rematch' : 'Match';
+        return `<button type="button" class="btn btn-sm ${cls} rounded-pill fw-bold btn-assertiva-match"
+            data-id="${esc(String(p.id || ''))}" title="${esc(title)}">
+            <i class="bi bi-person-vcard me-1"></i>${label}
+        </button>`;
+    }
+
     function linhaChurn(r) {
         const motivo = r.DS_MOTIVO_RETIRADA || r.TP_RETIRADA || '—';
         return `
@@ -2305,6 +2319,49 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             return;
         }
 
+        const btnMatch = e.target.closest('.btn-assertiva-match');
+        if (btnMatch) {
+            const id = btnMatch.getAttribute('data-id');
+            const forcar = (btnMatch.textContent || '').includes('Rematch');
+            if (!confirm(forcar
+                ? 'Refazer match na Assertiva para este interesse?'
+                : 'Buscar CPF e telefones na Assertiva pelo nome deste interesse?')) {
+                return;
+            }
+            const label = btnMatch.innerHTML;
+            btnMatch.disabled = true;
+            btnMatch.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            try {
+                const r = await fetch(API_HIST + 'pedidos/' + id + '/assertiva-match/', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ forcar: !!forcar }),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok || !data.ok) {
+                    alert(data.detail || 'Falha no match Assertiva.');
+                    btnMatch.disabled = false;
+                    btnMatch.innerHTML = label;
+                    return;
+                }
+                const m = data.assertiva_match || {};
+                const tels = (m.telefones_formatados || []).join(', ') || '—';
+                alert(
+                    (data.detail || 'Match concluído.') +
+                    `\n\nStatus: ${m.status || '—'}` +
+                    `\nCPF: ${m.cpf_formatado || m.cpf || '—'}` +
+                    `\nTelefones: ${tels}` +
+                    `\nVia: ${m.via || '—'}`
+                );
+                carregarPedidos({});
+            } catch (err) {
+                alert('Erro no match: ' + err.message);
+                btnMatch.disabled = false;
+                btnMatch.innerHTML = label;
+            }
+            return;
+        }
+
         const btnTmpl = e.target.closest('.btn-funil-tmpl');
         if (!btnTmpl || btnTmpl.disabled) return;
         const aba = btnTmpl.getAttribute('data-aba');
@@ -2335,14 +2392,19 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     function linhaPedido(p) {
         const [dia, hora] = String(p.data_status || '').split(' ');
         const etapa = (p.etapa || p.status_secundario || '').replace(/_/g, ' ');
+        const m = p.assertiva_match || null;
+        const telsMatch = (m && m.telefones_formatados && m.telefones_formatados.length)
+            ? `<div class="small text-info mt-1"><i class="bi bi-telephone"></i> ${esc(m.telefones_formatados.slice(0, 2).join(' · '))}</div>`
+            : '';
+        const docCell = `${destacar(p.documento || '-')}${telsMatch}`;
         const acao = (String(p.tipo_venda || histState.tipo || '').toUpperCase() === 'INTERESSE')
-            ? btnEnviarTemplate('INTERESSE', p.id, p)
+            ? `<div class="d-flex flex-column align-items-end gap-1">${btnAssertivaMatch(p)}${btnEnviarTemplate('INTERESSE', p.id, p)}</div>`
             : `<button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="alert('Funcionalidade de Tratamento em desenvolvimento')">Tratar</button>`;
         return `
             <tr class="funil-row-anim">
                 <td class="ps-4 fw-bold font-monospace text-primary">${destacar(p.protocolo || '-')}${p.os_instalacao ? `<div class="small fw-normal text-muted">O.S. ${destacar(p.os_instalacao)}</div>` : ''}</td>
                 <td class="fw-medium text-dark">${destacar(p.cliente || 'Desconhecido')}</td>
-                <td class="text-muted small text-nowrap">${destacar(p.documento || '-')}</td>
+                <td class="text-muted small text-nowrap">${docCell}</td>
                 <td><span class="badge bg-secondary badge-status">${esc((p.status_primario || 'Desconhecido').replace(/_/g, ' '))}</span></td>
                 <td class="small text-nowrap">${etapa ? `<span class="badge bg-info-subtle text-info border border-info-subtle badge-status">${esc(etapa)}</span>` : '<span class="text-muted">—</span>'}</td>
                 <td class="text-muted small text-nowrap">${dia ? `${esc(dia)}${hora ? `<br><span class="opacity-75">${esc(hora)}</span>` : ''}` : '-'}</td>
