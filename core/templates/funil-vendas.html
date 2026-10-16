@@ -10,6 +10,10 @@
 <button class="btn btn-sm btn-primary" id="tab-hist" type="button" title="Histórico PAP">
     <i class="bi bi-cloud-download"></i><span class="header-action-label ms-1">Histórico PAP</span>
 </button>
+<button class="btn btn-sm btn-outline-primary funil-filtros-btn" id="btn-funil-filtros" type="button" title="Busca e filtros" aria-expanded="false" aria-controls="funil-filtros-sheet">
+    <i class="bi bi-funnel" aria-hidden="true"></i><span class="header-action-label ms-1">Filtros</span>
+    <span class="badge d-none ms-1" id="funil-filtros-count">0</span>
+</button>
 <button class="btn btn-sm btn-outline-primary" id="tab-wpp" type="button" title="WhatsApp (Vender)">
     <i class="bi bi-whatsapp"></i><span class="header-action-label ms-1">WhatsApp</span>
 </button>
@@ -18,7 +22,7 @@
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
 <style>
-:root { --funil-chrome: calc(var(--app-header-h, 52px) + 96px); }
+:root { --funil-chrome: calc(var(--app-header-h, 52px) + 72px); }
 .card-modern { border-radius: 12px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 .table-modern th { border-bottom: 2px solid #eaeaea; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.4px; }
 .table-modern td { vertical-align: middle; font-size: 0.84rem; border-bottom: 1px solid #f2f2f2; padding-top: 0.4rem; padding-bottom: 0.4rem; }
@@ -114,83 +118,119 @@
 .funil-toolbar .btn { border-radius: 10px; font-weight: 600; }
 #acoes-pap .btn, #acoes-churn .btn, #acoes-bio .btn, #acoes-mailing .btn { border-radius: 8px; font-size: 0.8rem; padding: 0.3rem 0.7rem; }
 
-/* Menu central de filtros (drill-down) */
-.funil-filtros-wrap { position: relative; flex: 0 0 auto; }
-.funil-filtros-btn {
-    display: inline-flex; align-items: center; gap: 0.35rem;
-    border-radius: 999px !important; font-weight: 700; font-size: 0.8rem;
-    padding: 0.3rem 0.85rem !important;
-}
+/* Sheet lateral de filtros (Opção C) */
 .funil-filtros-btn .badge {
-    min-width: 1.25rem; padding: 0.15em 0.4em; border-radius: 999px;
-    font-size: 0.72rem; font-weight: 800; background: var(--accent-primary, #0ea5e9); color: #fff;
+    min-width: 1.2rem; padding: 0.12em 0.38em; border-radius: 999px;
+    font-size: 0.7rem; font-weight: 800; background: var(--accent-primary, #0ea5e9); color: #fff;
 }
-.funil-filtros-btn.is-open {
+.funil-filtros-btn.is-open,
+.funil-filtros-btn[aria-expanded="true"] {
     background: var(--accent-primary, #0ea5e9); border-color: var(--accent-primary, #0ea5e9); color: #fff;
 }
-.funil-filtros-panel {
-    position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
-    width: min(360px, calc(100vw - 1.5rem));
-    border-radius: 12px; border: 1px solid var(--border-color, #e4e9f2);
-    background: var(--bg-card, #fff); box-shadow: 0 12px 36px rgba(15, 23, 42, 0.22);
-    overflow: hidden;
+.funil-filtros-scrim {
+    position: fixed; inset: 0; z-index: 1040;
+    background: rgba(15, 23, 42, 0.42); opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
 }
+.funil-filtros-scrim.is-open { opacity: 1; pointer-events: auto; }
+.funil-filtros-sheet {
+    position: fixed; top: 0; right: 0; z-index: 1050;
+    width: min(360px, 100vw); height: 100dvh;
+    display: flex; flex-direction: column;
+    background: var(--bg-card, #fff); color: var(--text-primary, #1a2332);
+    border-left: 1px solid var(--border-color, #e4e9f2);
+    box-shadow: -12px 0 40px rgba(15, 23, 42, 0.28);
+    transform: translateX(105%); transition: transform 0.22s ease;
+}
+.funil-filtros-sheet.is-open { transform: translateX(0); }
 .funil-filtros-head {
-    display: flex; align-items: center; gap: 0.35rem;
-    padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
-    background: var(--bg-surface, #fff);
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.85rem 1rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
+    flex: 0 0 auto;
 }
-.funil-filtros-titulo { flex: 1 1 auto; font-weight: 700; font-size: 0.88rem; min-width: 0; }
-.funil-filtros-voltar {
-    border: 0; background: transparent; color: var(--text-secondary, #5b6b7d);
-    padding: 0.15rem 0.35rem; border-radius: 8px; line-height: 1;
-}
-.funil-filtros-voltar:hover { background: var(--bg-secondary, #e8edf5); color: var(--text-primary, #1a2332); }
+.funil-filtros-titulo { flex: 1 1 auto; font-weight: 800; font-size: 1rem; }
 .funil-filtros-fechar {
     border: 0; background: transparent; color: var(--text-secondary, #5b6b7d);
-    width: 1.75rem; height: 1.75rem; border-radius: 8px; line-height: 1; font-size: 1.1rem;
+    width: 2rem; height: 2rem; border-radius: 8px; font-size: 1.25rem; line-height: 1;
 }
-.funil-filtros-fechar:hover { background: var(--bg-secondary, #e8edf5); }
-.funil-filtros-body { max-height: min(52vh, 380px); overflow-y: auto; padding: 0.25rem; }
-.funil-filtros-item {
-    display: flex; align-items: center; gap: 0.55rem; width: 100%;
-    padding: 0.55rem 0.65rem; border: 0; border-radius: 8px;
-    background: transparent; color: var(--text-primary, #1a2332); text-align: left;
+.funil-filtros-fechar:hover { background: var(--bg-secondary, #e8edf5); color: var(--text-primary, #1a2332); }
+.funil-filtros-busca {
+    position: relative; padding: 0.75rem 1rem 0.5rem; flex: 0 0 auto;
+    border-bottom: 1px solid var(--border-color, #e4e9f2);
 }
-.funil-filtros-item:hover { background: rgba(14, 165, 233, 0.08); }
-.funil-filtros-item.is-active { background: rgba(14, 165, 233, 0.14); }
-.funil-filtros-item-label { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 0.84rem; }
-.funil-filtros-item-meta {
-    flex: 0 1 45%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.funil-filtros-busca > .bi-search {
+    position: absolute; left: 1.55rem; top: 50%; transform: translateY(-35%);
+    color: var(--text-subtle, #8f9bb3); pointer-events: none;
+}
+.funil-filtros-busca input {
+    width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.15rem;
+    border-radius: 10px; border: 1px solid var(--border-color, #e4e9f2);
+    background: var(--bg-surface, #fff); color: inherit; font-size: 0.88rem;
+}
+.funil-filtros-body {
+    flex: 1 1 auto; overflow-y: auto; padding: 0.5rem 0.65rem 1rem;
+}
+.funil-acc {
+    border: 1px solid var(--border-color, #e4e9f2); border-radius: 10px;
+    margin-bottom: 0.45rem; overflow: hidden; background: var(--bg-surface, #fff);
+}
+.funil-acc-head {
+    display: flex; align-items: center; gap: 0.45rem; width: 100%;
+    padding: 0.65rem 0.75rem; border: 0; background: transparent;
+    color: inherit; text-align: left; cursor: pointer;
+}
+.funil-acc-head:hover { background: rgba(14, 165, 233, 0.06); }
+.funil-acc-head-label { flex: 1 1 auto; font-weight: 700; font-size: 0.84rem; }
+.funil-acc-head-meta {
+    flex: 0 1 42%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 0.74rem; color: var(--text-secondary, #5b6b7d); text-align: right;
 }
+.funil-acc-head .bi-chevron-down { transition: transform 0.15s ease; opacity: 0.5; }
+.funil-acc.is-open .funil-acc-head .bi-chevron-down { transform: rotate(180deg); }
+.funil-acc-body { display: none; padding: 0 0.35rem 0.45rem; border-top: 1px solid var(--border-color, #e4e9f2); }
+.funil-acc.is-open .funil-acc-body { display: block; }
+.funil-filtros-item {
+    display: flex; align-items: center; gap: 0.45rem; width: 100%;
+    padding: 0.45rem 0.55rem; border: 0; border-radius: 8px;
+    background: transparent; color: inherit; text-align: left; font-size: 0.82rem;
+}
+.funil-filtros-item:hover { background: rgba(14, 165, 233, 0.08); }
+.funil-filtros-item.is-active { background: rgba(14, 165, 233, 0.14); font-weight: 600; }
+.funil-filtros-item-label { flex: 1 1 auto; min-width: 0; }
 .funil-filtros-item-count {
     flex: 0 0 auto; font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums;
     color: var(--text-secondary, #5b6b7d);
 }
-.funil-filtros-item .bi-chevron-right { flex: 0 0 auto; opacity: 0.45; font-size: 0.85rem; }
 .funil-filtros-periodo {
-    display: flex; flex-direction: column; gap: 0.55rem; padding: 0.55rem 0.65rem 0.75rem;
+    display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.4rem 0.55rem;
 }
-.funil-filtros-periodo .funil-periodo { width: 100%; flex-wrap: wrap; }
-.funil-filtros-periodo .funil-periodo input { flex: 1 1 120px; width: auto; }
-.funil-chips {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem;
-    flex: 1 1 auto; min-width: 0;
+.funil-filtros-periodo .funil-periodo { width: 100%; flex-wrap: wrap; gap: 0.35rem; }
+.funil-filtros-periodo .funil-periodo input { flex: 1 1 110px; width: auto; }
+.funil-filtros-foot {
+    flex: 0 0 auto; display: flex; gap: 0.5rem; padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border-color, #e4e9f2); background: var(--bg-surface, #fff);
 }
+.funil-filtros-foot .btn { flex: 1 1 auto; border-radius: 10px; font-weight: 700; }
+.funil-chips-bar {
+    display: none; flex-wrap: wrap; align-items: center; gap: 0.3rem;
+    padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
+    background: var(--bg-surface, #fff);
+}
+.funil-chips-bar.has-chips { display: flex; }
 .funil-chip {
     display: inline-flex; align-items: center; gap: 0.25rem;
-    max-width: 100%; padding: 0.15rem 0.35rem 0.15rem 0.55rem;
-    border-radius: 999px; font-size: 0.72rem; font-weight: 600;
+    max-width: 100%; padding: 0.12rem 0.3rem 0.12rem 0.5rem;
+    border-radius: 999px; font-size: 0.7rem; font-weight: 600;
     background: rgba(14, 165, 233, 0.12); color: var(--text-primary, #1a2332);
     border: 1px solid rgba(14, 165, 233, 0.28);
 }
-.funil-chip-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14rem; }
+.funil-chip-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12rem; }
 .funil-chip-x {
     border: 0; background: transparent; color: inherit; opacity: 0.65;
-    width: 1.2rem; height: 1.2rem; border-radius: 999px; line-height: 1; padding: 0; font-size: 0.95rem;
+    width: 1.15rem; height: 1.15rem; border-radius: 999px; line-height: 1; padding: 0; font-size: 0.9rem;
 }
 .funil-chip-x:hover { opacity: 1; background: rgba(0,0,0,0.08); }
+body.funil-sheet-open { overflow: hidden; }
 .funil-page { width: 100%; max-width: none; padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
 .funil-page .card { border-radius: 12px; }
 .funil-tabs-row {
@@ -438,86 +478,65 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             </div>
 
             <div class="card card-modern border-top-0 shadow-sm funil-card" style="border-top-left-radius: 0;">
-                <div class="funil-toolbar">
-                    <div class="funil-search">
-                        <i class="bi bi-search"></i>
-                        <input type="search" id="f-busca" class="form-control form-control-sm" placeholder="Busca inteligente: nome, CPF, O.S., vendedor… ou atalhos: apto, link, repescar, adimplente" aria-label="Busca inteligente" autocomplete="off">
-                        <kbd class="funil-kbd" title="Atalho: / foca a busca">/</kbd>
-                    </div>
-                    <div class="funil-filtros-wrap">
-                        <button type="button" class="btn btn-sm btn-outline-primary funil-filtros-btn" id="btn-funil-filtros" aria-expanded="false" aria-controls="funil-filtros-panel">
-                            <i class="bi bi-funnel" aria-hidden="true"></i>
-                            <span>Filtros</span>
-                            <span class="badge d-none" id="funil-filtros-count">0</span>
-                        </button>
-                        <div id="funil-filtros-panel" class="funil-filtros-panel d-none" role="dialog" aria-label="Filtros do funil" aria-modal="false">
-                            <div class="funil-filtros-head">
-                                <button type="button" class="funil-filtros-voltar d-none" id="funil-filtros-voltar" title="Voltar" aria-label="Voltar">
-                                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
-                                </button>
-                                <span class="funil-filtros-titulo" id="funil-filtros-titulo">Filtros</span>
-                                <button type="button" class="funil-filtros-fechar" id="funil-filtros-fechar" title="Fechar" aria-label="Fechar">&times;</button>
-                            </div>
-                            <div class="funil-filtros-body" id="funil-filtros-body"></div>
-                        </div>
-                    </div>
-                    <div class="funil-chips" id="funil-chips" aria-live="polite"></div>
+                <div class="funil-chips-bar" id="funil-chips-bar" aria-live="polite">
+                    <div class="funil-chips" id="funil-chips"></div>
                     <button type="button" id="f-limpar" class="btn btn-sm funil-limpar d-none"><i class="bi bi-x-circle me-1"></i>Limpar</button>
+                </div>
 
-                    <!-- Controles legados (sincronizados pelo menu; fora da vista) -->
-                    <div id="funil-filtros-hidden" class="d-none" aria-hidden="true">
-                        <select id="f-status" class="form-select form-select-sm funil-select" aria-label="Filtrar por status PAP">
-                            <option value="">Todos os status</option>
-                        </select>
-                        <div class="funil-seg" id="funil-seg" role="group" aria-label="Situação no CRM">
-                            <button type="button" class="active" data-situacao="">Todos</button>
-                            <button type="button" data-situacao="novos"><i class="bi bi-stars"></i> Novos</button>
-                            <button type="button" data-situacao="base">Já na base</button>
-                        </div>
-                        <select id="f-nio" class="form-select form-select-sm funil-select" aria-label="Situação de débito na Nio">
-                            <option value="">Débito Nio: todos</option>
-                            <option value="ADIMPLENTE">Adimplentes</option>
-                            <option value="INADIMPLENTE">Inadimplentes</option>
-                            <option value="A_VENCER">A vencer</option>
-                            <option value="NAO_CONSULTADO">Não consultados</option>
-                            <option value="ERRO">Erro</option>
-                        </select>
-                        <select id="f-bio" class="form-select form-select-sm funil-select funil-select-wide" aria-label="Situação da biometria">
-                            <option value="">Biometria: todas</option>
-                            <option value="APTO">Fez (apto)</option>
-                            <option value="EM_ANALISE">Em análise</option>
-                            <option value="LINK_ENVIADO">Link enviado</option>
-                            <option value="REFAZER">Refazer</option>
-                            <option value="RISCO">Risco/Reprovado</option>
-                            <option value="SEM_BIOMETRIA">Sem biometria</option>
-                            <option value="APTO_SEM_VENDA">Apto sem venda</option>
-                            <option value="NAO_VERIFICADO">Aguardando GED</option>
-                        </select>
-                        <select id="f-rep" class="form-select form-select-sm funil-select" aria-label="Repescável" title="Biometria há mais de 48h, sem O.S. ou sem venda; fora risco e DUPLICIDADE; CONSTA PEDIDO após 30 dias no PAP">
-                            <option value="">Repescável: todos</option>
-                            <option value="SIM">Só repescáveis</option>
-                            <option value="NAO">Só não repescáveis</option>
-                        </select>
-                        <select id="f-mes" class="form-select form-select-sm funil-select" aria-label="Mês da data do pedido" title="Mês pela Data do pedido">
-                            <option value="">Todos os meses</option>
-                        </select>
-                        <div class="funil-periodo" id="funil-periodo" title="Data do pedido no PAP">
-                            <i class="bi bi-calendar3"></i>
-                            <input type="date" id="f-de" class="form-control form-control-sm" aria-label="Data do pedido a partir de">
-                            <span>até</span>
-                            <input type="date" id="f-ate" class="form-control form-control-sm" aria-label="Data do pedido até">
-                        </div>
-                        <select id="f-mailing-lote" class="form-select form-select-sm funil-select" aria-label="Lote" title="Qual lote exibir">
-                            <option value="">Todos os lotes</option>
-                        </select>
-                        <select id="f-mailing-status" class="form-select form-select-sm funil-select" aria-label="Status mailing">
-                            <option value="NOVO" selected>Na fila (importados)</option>
-                            <option value="ENVIADO">Enviados (sem resposta)</option>
-                            <option value="RESPONDEU">Respostas</option>
-                            <option value="TRATADO">Tratados</option>
-                            <option value="TODOS">Todos do lote</option>
-                        </select>
+                <!-- Controles legados (sincronizados pelo sheet; fora da vista) -->
+                <div id="funil-filtros-hidden" class="d-none" aria-hidden="true">
+                    <input type="search" id="f-busca" value="" aria-label="Busca">
+                    <select id="f-status" class="form-select form-select-sm funil-select" aria-label="Filtrar por status PAP">
+                        <option value="">Todos os status</option>
+                    </select>
+                    <div class="funil-seg" id="funil-seg" role="group" aria-label="Situação no CRM">
+                        <button type="button" class="active" data-situacao="">Todos</button>
+                        <button type="button" data-situacao="novos"><i class="bi bi-stars"></i> Novos</button>
+                        <button type="button" data-situacao="base">Já na base</button>
                     </div>
+                    <select id="f-nio" class="form-select form-select-sm funil-select" aria-label="Situação de débito na Nio">
+                        <option value="">Débito Nio: todos</option>
+                        <option value="ADIMPLENTE">Adimplentes</option>
+                        <option value="INADIMPLENTE">Inadimplentes</option>
+                        <option value="A_VENCER">A vencer</option>
+                        <option value="NAO_CONSULTADO">Não consultados</option>
+                        <option value="ERRO">Erro</option>
+                    </select>
+                    <select id="f-bio" class="form-select form-select-sm funil-select funil-select-wide" aria-label="Situação da biometria">
+                        <option value="">Biometria: todas</option>
+                        <option value="APTO">Fez (apto)</option>
+                        <option value="EM_ANALISE">Em análise</option>
+                        <option value="LINK_ENVIADO">Link enviado</option>
+                        <option value="REFAZER">Refazer</option>
+                        <option value="RISCO">Risco/Reprovado</option>
+                        <option value="SEM_BIOMETRIA">Sem biometria</option>
+                        <option value="APTO_SEM_VENDA">Apto sem venda</option>
+                        <option value="NAO_VERIFICADO">Aguardando GED</option>
+                    </select>
+                    <select id="f-rep" class="form-select form-select-sm funil-select" aria-label="Repescável" title="Biometria há mais de 48h, sem O.S. ou sem venda; fora risco e DUPLICIDADE; CONSTA PEDIDO após 30 dias no PAP">
+                        <option value="">Repescável: todos</option>
+                        <option value="SIM">Só repescáveis</option>
+                        <option value="NAO">Só não repescáveis</option>
+                    </select>
+                    <select id="f-mes" class="form-select form-select-sm funil-select" aria-label="Mês da data do pedido" title="Mês pela Data do pedido">
+                        <option value="">Todos os meses</option>
+                    </select>
+                    <div class="funil-periodo" id="funil-periodo" title="Data do pedido no PAP">
+                        <i class="bi bi-calendar3"></i>
+                        <input type="date" id="f-de" class="form-control form-control-sm" aria-label="Data do pedido a partir de">
+                        <span>até</span>
+                        <input type="date" id="f-ate" class="form-control form-control-sm" aria-label="Data do pedido até">
+                    </div>
+                    <select id="f-mailing-lote" class="form-select form-select-sm funil-select" aria-label="Lote" title="Qual lote exibir">
+                        <option value="">Todos os lotes</option>
+                    </select>
+                    <select id="f-mailing-status" class="form-select form-select-sm funil-select" aria-label="Status mailing">
+                        <option value="NOVO" selected>Na fila (importados)</option>
+                        <option value="ENVIADO">Enviados (sem resposta)</option>
+                        <option value="RESPONDEU">Respostas</option>
+                        <option value="TRATADO">Tratados</option>
+                        <option value="TODOS">Todos do lote</option>
+                    </select>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive funil-scroll" id="funil-scroll">
@@ -720,6 +739,23 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         </div>
     </div>
 </div>
+
+<div id="funil-filtros-scrim" class="funil-filtros-scrim" hidden></div>
+<aside id="funil-filtros-sheet" class="funil-filtros-sheet" role="dialog" aria-modal="true" aria-labelledby="funil-filtros-titulo" hidden>
+    <div class="funil-filtros-head">
+        <span class="funil-filtros-titulo" id="funil-filtros-titulo">Busca e filtros</span>
+        <button type="button" class="funil-filtros-fechar" id="funil-filtros-fechar" title="Fechar" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="funil-filtros-busca">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" id="funil-sheet-busca" placeholder="Buscar… (atalhos: apto, link, repescar)" aria-label="Busca" autocomplete="off">
+    </div>
+    <div class="funil-filtros-body" id="funil-filtros-body"></div>
+    <div class="funil-filtros-foot">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="funil-sheet-limpar">Limpar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="funil-sheet-aplicar">Ver resultados</button>
+    </div>
+</aside>
 {% endblock %}
 
 {% block extra_js %}
@@ -1041,16 +1077,24 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         return chips;
     }
 
+    const funilAccOpen = new Set(); // dimensões com accordion aberto
+
+    function sheetAberto() {
+        return document.getElementById('funil-filtros-sheet').classList.contains('is-open');
+    }
+
     function renderChips() {
         const box = document.getElementById('funil-chips');
+        const bar = document.getElementById('funil-chips-bar');
         const chips = chipsAtivos();
         const badge = document.getElementById('funil-filtros-count');
-        const nFiltro = chips.filter(c => c.id !== 'q').length;
+        const nFiltro = chips.length;
         if (badge) {
             badge.textContent = String(nFiltro);
             badge.classList.toggle('d-none', nFiltro === 0);
         }
         document.getElementById('f-limpar').classList.toggle('d-none', chips.length === 0);
+        if (bar) bar.classList.toggle('has-chips', chips.length > 0);
         if (!box) return;
         box.innerHTML = chips.map(c => `
             <span class="funil-chip" data-chip="${esc(c.id)}">
@@ -1059,139 +1103,188 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             </span>`).join('');
     }
 
-    let funilFiltrosDim = null; // dimensão aberta no nível 2
-
-    function fecharPainelFiltros() {
-        const panel = document.getElementById('funil-filtros-panel');
-        const btn = document.getElementById('btn-funil-filtros');
-        panel.classList.add('d-none');
-        btn.classList.remove('is-open');
-        btn.setAttribute('aria-expanded', 'false');
-        funilFiltrosDim = null;
-    }
-
-    function abrirPainelFiltros() {
-        const panel = document.getElementById('funil-filtros-panel');
-        const btn = document.getElementById('btn-funil-filtros');
-        panel.classList.remove('d-none');
-        btn.classList.add('is-open');
-        btn.setAttribute('aria-expanded', 'true');
-        funilFiltrosDim = null;
-        renderListaDimensoes();
-    }
-
-    function renderListaDimensoes() {
-        funilFiltrosDim = null;
-        document.getElementById('funil-filtros-voltar').classList.add('d-none');
-        document.getElementById('funil-filtros-titulo').textContent = 'Filtros';
-        const body = document.getElementById('funil-filtros-body');
-        body.innerHTML = dimensoesDaAba().map(dim => `
-            <button type="button" class="funil-filtros-item" data-dim="${esc(dim.id)}">
-                <span class="funil-filtros-item-label">${esc(dim.label)}</span>
-                <span class="funil-filtros-item-meta">${esc(resumoDimensao(dim))}</span>
-                <i class="bi bi-chevron-right" aria-hidden="true"></i>
-            </button>`).join('');
-    }
-
-    function renderOpcoesDimensao(dim) {
-        funilFiltrosDim = dim;
-        document.getElementById('funil-filtros-voltar').classList.remove('d-none');
-        document.getElementById('funil-filtros-titulo').textContent = dim.label;
-        const body = document.getElementById('funil-filtros-body');
-
+    function htmlOpcoesDim(dim) {
         if (dim.kind === 'periodo') {
-            body.innerHTML = `
-                <div class="funil-filtros-periodo">
-                    <div class="funil-periodo" title="Período">
-                        <i class="bi bi-calendar3"></i>
-                        <input type="date" id="funil-filtro-de" class="form-control form-control-sm" value="${esc(histState.de || '')}" aria-label="Data inicial">
-                        <span>até</span>
-                        <input type="date" id="funil-filtro-ate" class="form-control form-control-sm" value="${esc(histState.ate || '')}" aria-label="Data final">
-                    </div>
-                    <button type="button" class="btn btn-sm btn-primary" id="funil-filtro-periodo-ok">Aplicar período</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="funil-filtro-periodo-limpar">Qualquer data</button>
-                </div>`;
-            document.getElementById('funil-filtro-periodo-ok').onclick = () => {
-                const de = document.getElementById('funil-filtro-de').value;
-                const ate = document.getElementById('funil-filtro-ate').value;
-                aplicarFiltros({ de, ate });
-                renderListaDimensoes();
-            };
-            document.getElementById('funil-filtro-periodo-limpar').onclick = () => {
-                aplicarFiltros({ de: '', ate: '' });
-                renderListaDimensoes();
-            };
-            return;
+            return `<div class="funil-filtros-periodo">
+                <div class="funil-periodo">
+                    <input type="date" class="form-control form-control-sm" data-periodo="de" value="${esc(histState.de || '')}" aria-label="Data inicial">
+                    <span>até</span>
+                    <input type="date" class="form-control form-control-sm" data-periodo="ate" value="${esc(histState.ate || '')}" aria-label="Data final">
+                </div>
+                <button type="button" class="btn btn-sm btn-primary" data-periodo-ok>Aplicar período</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-periodo-limpar>Qualquer data</button>
+            </div>`;
         }
-
         if (dim.kind === 'situacao') {
             const opts = [
                 { value: '', label: 'Todos' },
                 { value: 'novos', label: 'Novos' },
                 { value: 'base', label: 'Já na base' },
             ];
-            body.innerHTML = opts.map(o => `
-                <button type="button" class="funil-filtros-item ${histState.situacao === o.value ? 'is-active' : ''}" data-opt="${esc(o.value)}">
+            return opts.map(o => `
+                <button type="button" class="funil-filtros-item ${histState.situacao === o.value ? 'is-active' : ''}" data-dim-id="${esc(dim.id)}" data-opt="${esc(o.value)}">
                     <span class="funil-filtros-item-label">${esc(o.label)}</span>
                     ${histState.situacao === o.value ? '<i class="bi bi-check2" aria-hidden="true"></i>' : ''}
                 </button>`).join('');
-            body.querySelectorAll('[data-opt]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    aplicarFiltros({ situacao: btn.getAttribute('data-opt') || '' });
-                    renderListaDimensoes();
-                });
-            });
-            return;
         }
-
         const sel = document.getElementById(dim.selectId);
-        if (!sel) { body.innerHTML = '<div class="p-3 text-muted small">Sem opções.</div>'; return; }
+        if (!sel) return '<div class="p-2 text-muted small">Sem opções.</div>';
         const atual = sel.value;
-        body.innerHTML = [...sel.options].map(opt => {
+        return [...sel.options].map(opt => {
             const label = (opt.dataset.label || opt.textContent).replace(/\s*\([\d.]+\)\s*$/, '').trim();
             const m = opt.textContent.match(/\(([\d.]+)\)\s*$/);
             const count = m ? m[1] : '';
             const active = opt.value === atual;
-            return `<button type="button" class="funil-filtros-item ${active ? 'is-active' : ''}" data-opt="${esc(opt.value)}">
+            return `<button type="button" class="funil-filtros-item ${active ? 'is-active' : ''}" data-dim-id="${esc(dim.id)}" data-opt="${esc(opt.value)}">
                 <span class="funil-filtros-item-label">${esc(label)}</span>
                 ${count ? `<span class="funil-filtros-item-count">${esc(count)}</span>` : ''}
                 ${active ? '<i class="bi bi-check2" aria-hidden="true"></i>' : ''}
             </button>`;
         }).join('');
-        body.querySelectorAll('[data-opt]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const v = btn.getAttribute('data-opt') || '';
-                sel.value = v;
-                if (dim.kind === 'mailing') {
-                    histState.page = 1;
-                    carregarMailing({ rolarTopo: true });
-                } else if (dim.kind === 'mes') {
-                    if (v === 'custom') return;
-                    aplicarFiltros(v ? limitesDoMes(v) : { de: '', ate: '' });
-                } else if (dim.stateKey) {
-                    aplicarFiltros({ [dim.stateKey]: v });
-                } else {
-                    sel.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                renderListaDimensoes();
+    }
+
+    function renderSheetFiltros() {
+        const body = document.getElementById('funil-filtros-body');
+        const dims = dimensoesDaAba();
+        // Se nada aberto ainda, abre a primeira dimensão com valor ativo (ou a 1ª)
+        if (!funilAccOpen.size) {
+            const ativa = dims.find(d => {
+                const r = resumoDimensao(d);
+                return r && r !== 'Todos' && r !== 'Qualquer' && r !== 'Na fila (importados)';
             });
+            funilAccOpen.add((ativa || dims[0]).id);
+        }
+        body.innerHTML = dims.map(dim => {
+            const open = funilAccOpen.has(dim.id);
+            return `<div class="funil-acc ${open ? 'is-open' : ''}" data-acc="${esc(dim.id)}">
+                <button type="button" class="funil-acc-head" data-acc-toggle="${esc(dim.id)}" aria-expanded="${open ? 'true' : 'false'}">
+                    <span class="funil-acc-head-label">${esc(dim.label)}</span>
+                    <span class="funil-acc-head-meta">${esc(resumoDimensao(dim))}</span>
+                    <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                </button>
+                <div class="funil-acc-body">${htmlOpcoesDim(dim)}</div>
+            </div>`;
+        }).join('');
+        const sheetBusca = document.getElementById('funil-sheet-busca');
+        if (sheetBusca && document.activeElement !== sheetBusca) sheetBusca.value = histState.q || '';
+        sheetBusca.placeholder = document.getElementById('f-busca').placeholder || 'Buscar…';
+    }
+
+    function fecharPainelFiltros() {
+        const sheet = document.getElementById('funil-filtros-sheet');
+        const scrim = document.getElementById('funil-filtros-scrim');
+        const btn = document.getElementById('btn-funil-filtros');
+        sheet.classList.remove('is-open');
+        scrim.classList.remove('is-open');
+        sheet.hidden = true;
+        scrim.hidden = true;
+        btn.classList.remove('is-open');
+        btn.setAttribute('aria-expanded', 'false');
+        document.body.classList.remove('funil-sheet-open');
+    }
+
+    function abrirPainelFiltros({ focusBusca = false } = {}) {
+        const sheet = document.getElementById('funil-filtros-sheet');
+        const scrim = document.getElementById('funil-filtros-scrim');
+        const btn = document.getElementById('btn-funil-filtros');
+        sheet.hidden = false;
+        scrim.hidden = false;
+        requestAnimationFrame(() => {
+            sheet.classList.add('is-open');
+            scrim.classList.add('is-open');
         });
+        btn.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        document.body.classList.add('funil-sheet-open');
+        renderSheetFiltros();
+        if (focusBusca) {
+            const inp = document.getElementById('funil-sheet-busca');
+            setTimeout(() => { inp.focus(); inp.select(); }, 50);
+        }
+    }
+
+    function aplicarOpcaoDim(dim, value) {
+        if (dim.kind === 'situacao') {
+            aplicarFiltros({ situacao: value });
+            return;
+        }
+        const sel = document.getElementById(dim.selectId);
+        if (sel) sel.value = value;
+        if (dim.kind === 'mailing') {
+            histState.page = 1;
+            carregarMailing({ rolarTopo: true });
+        } else if (dim.kind === 'mes') {
+            if (value === 'custom') return;
+            aplicarFiltros(value ? limitesDoMes(value) : { de: '', ate: '' });
+        } else if (dim.stateKey) {
+            aplicarFiltros({ [dim.stateKey]: value });
+        } else if (sel) {
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     }
 
     document.getElementById('btn-funil-filtros').addEventListener('click', (e) => {
         e.stopPropagation();
-        const panel = document.getElementById('funil-filtros-panel');
-        if (panel.classList.contains('d-none')) abrirPainelFiltros();
-        else fecharPainelFiltros();
+        if (sheetAberto()) fecharPainelFiltros();
+        else abrirPainelFiltros({ focusBusca: true });
     });
     document.getElementById('funil-filtros-fechar').addEventListener('click', fecharPainelFiltros);
-    document.getElementById('funil-filtros-voltar').addEventListener('click', renderListaDimensoes);
-    document.getElementById('funil-filtros-body').addEventListener('click', (e) => {
-        const dimBtn = e.target.closest('[data-dim]');
-        if (!dimBtn || funilFiltrosDim) return;
-        const dim = dimensoesDaAba().find(d => d.id === dimBtn.getAttribute('data-dim'));
-        if (dim) renderOpcoesDimensao(dim);
+    document.getElementById('funil-filtros-scrim').addEventListener('click', fecharPainelFiltros);
+    document.getElementById('funil-sheet-aplicar').addEventListener('click', fecharPainelFiltros);
+    document.getElementById('funil-sheet-limpar').addEventListener('click', () => {
+        document.getElementById('f-limpar').click();
+        renderSheetFiltros();
     });
+
+    let sheetBuscaDebounce = null;
+    document.getElementById('funil-sheet-busca').addEventListener('input', (e) => {
+        const valor = e.target.value;
+        document.getElementById('f-busca').value = valor;
+        clearTimeout(sheetBuscaDebounce);
+        sheetBuscaDebounce = setTimeout(() => aplicarBuscaDaCaixa(valor), 350);
+    });
+    document.getElementById('funil-sheet-busca').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            clearTimeout(sheetBuscaDebounce);
+            document.getElementById('f-busca').value = e.target.value;
+            aplicarBuscaDaCaixa(e.target.value);
+            fecharPainelFiltros();
+        }
+        if (e.key === 'Escape') fecharPainelFiltros();
+    });
+
+    document.getElementById('funil-filtros-body').addEventListener('click', (e) => {
+        const toggle = e.target.closest('[data-acc-toggle]');
+        if (toggle) {
+            const id = toggle.getAttribute('data-acc-toggle');
+            if (funilAccOpen.has(id)) funilAccOpen.delete(id);
+            else funilAccOpen.add(id);
+            renderSheetFiltros();
+            return;
+        }
+        const periodoOk = e.target.closest('[data-periodo-ok]');
+        if (periodoOk) {
+            const wrap = periodoOk.closest('.funil-filtros-periodo');
+            const de = wrap.querySelector('[data-periodo="de"]').value;
+            const ate = wrap.querySelector('[data-periodo="ate"]').value;
+            aplicarFiltros({ de, ate });
+            renderSheetFiltros();
+            return;
+        }
+        const periodoLimpar = e.target.closest('[data-periodo-limpar]');
+        if (periodoLimpar) {
+            aplicarFiltros({ de: '', ate: '' });
+            renderSheetFiltros();
+            return;
+        }
+        const opt = e.target.closest('[data-opt]');
+        if (!opt) return;
+        const dim = dimensoesDaAba().find(d => d.id === opt.getAttribute('data-dim-id'));
+        if (!dim) return;
+        aplicarOpcaoDim(dim, opt.getAttribute('data-opt') || '');
+        renderSheetFiltros();
+    });
+
     document.getElementById('funil-chips').addEventListener('click', (e) => {
         const x = e.target.closest('[data-chip-clear]');
         if (!x) return;
@@ -1207,14 +1300,10 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         }
         if (chip.clear) aplicarFiltros(chip.clear);
     });
-    document.addEventListener('click', (e) => {
-        const wrap = document.querySelector('.funil-filtros-wrap');
-        if (!wrap || wrap.contains(e.target)) return;
-        if (!document.getElementById('funil-filtros-panel').classList.contains('d-none')) fecharPainelFiltros();
-    });
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !document.getElementById('funil-filtros-panel').classList.contains('d-none')) {
+        if (e.key === 'Escape' && sheetAberto()) {
             fecharPainelFiltros();
+            e.preventDefault();
         }
     });
 
@@ -1269,15 +1358,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                     : 'Busca: protocolo, O.S., cliente, CPF… atalhos: novos, base';
         document.getElementById('f-mes').title = churn ? 'Mês da retirada do churn' : 'Mês pela Data do pedido';
         renderChips();
-        if (!document.getElementById('funil-filtros-panel').classList.contains('d-none')) {
-            if (funilFiltrosDim) {
-                const dim = dimensoesDaAba().find(d => d.id === funilFiltrosDim.id);
-                if (dim) renderOpcoesDimensao(dim);
-                else renderListaDimensoes();
-            } else {
-                renderListaDimensoes();
-            }
-        }
+        if (sheetAberto()) renderSheetFiltros();
     }
 
     /** Interpreta atalhos na busca (ex.: "repescar", "apto joao") e devolve { q, ...filtros }. */
@@ -1363,6 +1444,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                 mudancas.ate = periodoPap.ate;
                 periodoPap = null;
             }
+            funilAccOpen.clear();
             aplicarFiltros(mudancas);
         });
     });
@@ -1434,7 +1516,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         const tag = (e.target.tagName || '').toLowerCase();
         if (['input', 'select', 'textarea'].includes(tag) || e.target.isContentEditable) return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
-        if (e.key === '/') { e.preventDefault(); document.getElementById('f-busca').focus(); }
+        if (e.key === '/') { e.preventDefault(); abrirPainelFiltros({ focusBusca: true }); }
         else if (e.key === 'ArrowLeft') { e.preventDefault(); irParaPagina(histState.page - 1); }
         else if (e.key === 'ArrowRight') { e.preventDefault(); irParaPagina(histState.page + 1); }
     });
