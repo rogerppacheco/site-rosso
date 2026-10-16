@@ -18,31 +18,70 @@
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/jwt-decode@3.1.2/build/jwt-decode.min.js"></script>
 <style>
-:root { --funil-chrome: calc(var(--app-header-h, 52px) + 118px); }
+:root { --funil-chrome: calc(var(--app-header-h, 52px) + 96px); }
 .card-modern { border-radius: 12px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 .table-modern th { border-bottom: 2px solid #eaeaea; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.4px; }
 .table-modern td { vertical-align: middle; font-size: 0.84rem; border-bottom: 1px solid #f2f2f2; padding-top: 0.4rem; padding-bottom: 0.4rem; }
 .badge-status { font-weight: 500; padding: 0.3em 0.65em; border-radius: 6px; font-size: 0.7rem;}
-.hist-prog {
-    display: flex; align-items: center; gap: 1rem; margin: 0 0 0.85rem; padding: 0.9rem 1.1rem;
-    border-radius: 12px; border: 1px solid var(--border-color, #e4e9f2); border-left: 4px solid var(--accent-primary, #0ea5e9);
-    background: var(--bg-card, #fff); color: var(--text-primary, #1a2332); box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+/* Faixa compacta: 1 linha; detalhes só ao expandir (ou enquanto roda) */
+.hist-prog, .funil-status {
+    display: flex; flex-direction: column; gap: 0;
+    margin: 0 0 0.35rem; padding: 0; color: var(--text-primary, #1a2332);
+    border-radius: 8px; border: 1px solid var(--border-color, #e4e9f2);
+    border-left: 3px solid var(--accent-primary, #0ea5e9);
+    background: var(--bg-card, #fff); box-shadow: none; overflow: hidden;
 }
-.hist-prog .spinner-border { width: 1.6rem; height: 1.6rem; flex: 0 0 auto; color: var(--accent-primary, #0ea5e9); }
+.hist-prog.is-ok { border-left-color: #16a34a; }
+.hist-prog.is-warn, .funil-status.is-warn { border-left-color: #d97706; }
+.hist-prog.is-error { border-left-color: #dc2626; }
+.hist-prog-sumario {
+    display: flex; align-items: center; gap: 0.45rem; width: 100%; min-height: 1.95rem;
+    padding: 0.28rem 0.55rem 0.28rem 0.6rem; border: 0; background: transparent;
+    color: inherit; text-align: left; cursor: pointer; font-size: 0.78rem; line-height: 1.25;
+}
+.hist-prog-sumario:hover { background: rgba(14, 165, 233, 0.07); }
+.hist-prog.is-running .hist-prog-sumario { cursor: default; }
+.hist-prog.is-running .hist-prog-sumario:hover { background: transparent; }
+.hist-prog-ico { flex: 0 0 auto; font-size: 0.95rem; color: var(--accent-primary, #0ea5e9); }
+.hist-prog.is-ok .hist-prog-ico { color: #16a34a; }
+.hist-prog.is-warn .hist-prog-ico, .funil-status.is-warn .hist-prog-ico { color: #d97706; }
+.hist-prog.is-error .hist-prog-ico { color: #dc2626; }
+.hist-prog .spinner-border {
+    width: 0.9rem; height: 0.9rem; border-width: 0.12em; flex: 0 0 auto;
+    color: var(--accent-primary, #0ea5e9);
+}
+.hist-prog-titulo { font-weight: 700; font-size: 0.78rem; white-space: nowrap; flex: 0 0 auto; }
+.hist-prog-resumo {
+    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text-secondary, #5b6b7d); font-size: 0.74rem; font-variant-numeric: tabular-nums;
+}
+.hist-prog-chevron {
+    flex: 0 0 auto; opacity: 0.5; font-size: 0.8rem; transition: transform 0.15s ease;
+}
+.hist-prog.is-open .hist-prog-chevron { transform: rotate(180deg); }
+.hist-prog.is-running .hist-prog-chevron { display: none; }
+.hist-prog-detalhe { display: none; padding: 0 0.65rem 0.4rem 2rem; }
+.hist-prog.is-open .hist-prog-detalhe,
+.hist-prog.is-running .hist-prog-detalhe { display: block; }
 .hist-prog-corpo { flex: 1 1 auto; min-width: 0; }
-.hist-prog-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; }
-.hist-prog-titulo { font-weight: 700; font-size: 0.95rem; }
-.hist-prog-tempo { font-size: 0.8rem; color: var(--text-secondary, #5b6b7d); font-variant-numeric: tabular-nums; }
-.hist-prog-barra { height: 8px; margin: 0.55rem 0 0.45rem; border-radius: 999px; overflow: hidden; background: rgba(148, 163, 184, 0.28); }
+.hist-prog-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.2rem 0.75rem; }
+.hist-prog-tempo { font-size: 0.74rem; color: var(--text-secondary, #5b6b7d); font-variant-numeric: tabular-nums; }
+.hist-prog-barra {
+    height: 3px; margin: 0.2rem 0 0.3rem; border-radius: 999px; overflow: hidden;
+    background: rgba(148, 163, 184, 0.28);
+}
 .hist-prog-barra > div {
     height: 100%; width: 0; border-radius: 999px; background: var(--accent-primary, #0ea5e9); transition: width 0.6s ease;
 }
 .hist-prog-barra.indeterminada > div { width: 35%; animation: histProgInd 1.4s infinite ease-in-out; }
 @keyframes histProgInd { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
-.hist-prog-info { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; font-size: 0.82rem; color: var(--text-secondary, #5b6b7d); }
+.hist-prog-info { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; font-size: 0.74rem; color: var(--text-secondary, #5b6b7d); }
 .hist-prog-info strong { color: var(--text-primary, #1a2332); font-variant-numeric: tabular-nums; }
-.hist-prog-etapa { margin-top: 0.3rem; font-size: 0.8rem; color: var(--text-secondary, #5b6b7d); }
-.hist-prog-tela img { display: block; max-width: 420px; width: 100%; margin-top: 0.4rem; border-radius: 8px; border: 1px solid var(--border-color, #e4e9f2); }
+.hist-prog-etapa { margin-top: 0.15rem; font-size: 0.74rem; color: var(--text-secondary, #5b6b7d); }
+.hist-prog-tela img { display: block; max-width: 360px; width: 100%; margin-top: 0.35rem; border-radius: 8px; border: 1px solid var(--border-color, #e4e9f2); }
+#bio-cobertura.funil-status .hist-prog-sumario { cursor: default; }
+#bio-cobertura.funil-status .hist-prog-sumario:hover { background: transparent; }
+#mailing-lote-info.funil-status { border-left-color: var(--accent-primary, #0ea5e9); }
 
 .tab-res-custom { transition: all 0.2s; font-size: 0.95rem; }
 .tab-res-custom:hover { background-color: #f8f9fa; }
@@ -96,10 +135,6 @@
 .tab-res-custom {
     border-radius: 8px 8px 0 0 !important; padding: 0.4rem 0.75rem !important;
     font-size: 0.76rem !important; white-space: nowrap; flex: 0 0 auto;
-}
-.tab-res-custom {
-    border-radius: 8px 8px 0 0 !important; padding: 0.4rem 0.75rem !important;
-    font-size: 0.76rem !important; white-space: nowrap; flex: 0 0 auto;
     display: inline-flex !important; align-items: center;
 }
 #tabs-resultados .tab-res-custom .badge {
@@ -120,6 +155,15 @@
     border-color: transparent;
 }
 #tabs-resultados .tab-res-custom.tab-res-active i { color: #fff !important; }
+#btn-exportar-filtro .badge,
+#exportar-qtd {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.45rem; height: 1.25rem; padding: 0 0.4rem;
+    border-radius: 999px !important;
+    font-size: 0.78rem !important; font-weight: 800 !important;
+    font-variant-numeric: tabular-nums; line-height: 1;
+    background: #fff !important; color: #146c43 !important;
+}
 .funil-periodo { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text-secondary, #5b6b7d); font-size: 0.8rem; }
 .funil-periodo input { width: 140px; border-radius: 999px; }
 .funil-limpar { color: var(--color-danger, #dc2626); font-weight: 600; border-radius: 999px; }
@@ -183,13 +227,13 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
 
         <!-- Resultados e Tratamento em Tela Cheia -->
         <div id="hist-resumo" class="position-relative mt-2">
-            <div id="hist-spinner" class="hist-prog d-none" role="status" aria-live="polite">
-                <div class="spinner-border" aria-hidden="true"></div>
-                <div class="hist-prog-corpo">
-                    <div class="hist-prog-topo">
-                        <span class="hist-prog-titulo" id="hist-prog-titulo">Buscando no PAP…</span>
-                        <span class="hist-prog-tempo" id="hist-prog-tempo"></span>
-                    </div>
+            <div id="hist-spinner" class="hist-prog is-running d-none" role="status" aria-live="polite">
+                <div class="hist-prog-sumario" tabindex="-1">
+                    <span class="spinner-border" aria-hidden="true"></span>
+                    <span class="hist-prog-titulo" id="hist-prog-titulo">Buscando no PAP…</span>
+                    <span class="hist-prog-resumo" id="hist-prog-tempo"></span>
+                </div>
+                <div class="hist-prog-detalhe">
                     <div class="hist-prog-barra indeterminada" id="hist-prog-barra"><div></div></div>
                     <div class="hist-prog-info" id="hist-prog-info"></div>
                     <div class="hist-prog-etapa" id="hist-spinner-text"></div>
@@ -239,7 +283,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                     </button>
                     <div class="btn-group shadow-sm">
                         <button type="button" class="btn btn-success fw-semibold" id="btn-exportar-filtro" title="Exporta para Excel todos os pedidos da aba com os filtros aplicados (todas as páginas)">
-                            <i class="bi bi-file-earmark-excel me-1"></i>Exportar <span class="badge bg-light text-success ms-1" id="exportar-qtd">0</span>
+                            <i class="bi bi-file-earmark-excel me-1"></i>Exportar <span class="badge ms-1" id="exportar-qtd">0</span>
                         </button>
                         <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais opções de exportação"></button>
                         <ul class="dropdown-menu dropdown-menu-end shadow">
@@ -285,33 +329,44 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                     </button>
                 </div>
             </div>
-            <div id="mailing-lote-info" class="alert alert-info py-2 px-3 small d-none" role="status"></div>
+            <div id="mailing-lote-info" class="funil-status hist-prog d-none" role="status"></div>
 
             <div id="bio-prog" class="hist-prog d-none" role="status" aria-live="polite">
-                <div class="spinner-border" id="bio-prog-spin" aria-hidden="true"></div>
-                <div class="hist-prog-corpo">
-                    <div class="hist-prog-topo">
-                        <span class="hist-prog-titulo" id="bio-prog-titulo">Buscando no GED360…</span>
-                        <span class="hist-prog-tempo" id="bio-prog-periodo"></span>
-                    </div>
+                <button type="button" class="hist-prog-sumario" id="bio-prog-toggle" aria-expanded="false">
+                    <span class="spinner-border d-none" id="bio-prog-spin" aria-hidden="true"></span>
+                    <i class="bi bi-cloud-check hist-prog-ico" id="bio-prog-ico" aria-hidden="true"></i>
+                    <span class="hist-prog-titulo" id="bio-prog-titulo">Buscando no GED360…</span>
+                    <span class="hist-prog-resumo" id="bio-prog-resumo"></span>
+                    <i class="bi bi-chevron-down hist-prog-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="hist-prog-detalhe">
                     <div class="hist-prog-barra indeterminada" id="bio-prog-barra"><div></div></div>
                     <div class="hist-prog-etapa" id="bio-prog-msg"></div>
+                    <span class="visually-hidden" id="bio-prog-periodo"></span>
                 </div>
             </div>
-            <div id="bio-cobertura" class="alert alert-warning py-2 px-3 small d-none" role="status"></div>
+            <div id="bio-cobertura" class="funil-status is-warn d-none" role="status">
+                <div class="hist-prog-sumario">
+                    <i class="bi bi-info-circle-fill hist-prog-ico" aria-hidden="true"></i>
+                    <span class="hist-prog-resumo" id="bio-cobertura-texto"></span>
+                </div>
+            </div>
 
             <div id="nio-prog" class="hist-prog d-none" role="status" aria-live="polite">
-                <div class="spinner-border" id="nio-prog-spin" aria-hidden="true"></div>
-                <div class="hist-prog-corpo">
-                    <div class="hist-prog-topo">
-                        <span class="hist-prog-titulo" id="nio-prog-titulo">Consultando débitos na Nio…</span>
-                        <span class="hist-prog-tempo" id="nio-prog-qtd"></span>
-                    </div>
+                <button type="button" class="hist-prog-sumario" id="nio-prog-toggle" aria-expanded="false">
+                    <span class="spinner-border d-none" id="nio-prog-spin" aria-hidden="true"></span>
+                    <i class="bi bi-shield-check hist-prog-ico" id="nio-prog-ico" aria-hidden="true"></i>
+                    <span class="hist-prog-titulo" id="nio-prog-titulo">Consultando débitos na Nio…</span>
+                    <span class="hist-prog-resumo" id="nio-prog-resumo"></span>
+                    <i class="bi bi-chevron-down hist-prog-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="hist-prog-detalhe">
                     <div class="hist-prog-barra" id="nio-prog-barra"><div></div></div>
                     <div class="hist-prog-info" id="nio-prog-info"></div>
                     <div class="hist-prog-etapa" id="nio-prog-msg"></div>
+                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill mt-1 d-none" id="btn-nio-cancelar"><i class="bi bi-stop-circle me-1"></i>Cancelar</button>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill d-none" id="btn-nio-cancelar"><i class="bi bi-stop-circle me-1"></i>Cancelar</button>
+                <span class="visually-hidden" id="nio-prog-qtd"></span>
             </div>
 
             <div class="card card-modern border-top-0 shadow-sm funil-card" style="border-top-left-radius: 0;">
@@ -709,6 +764,31 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
 
     function esc(v) {
         return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    /** Faixa de status: colapsada por padrão; aberta só enquanto a consulta roda. */
+    function bindStatusToggle(box) {
+        const btn = box && box.querySelector('.hist-prog-sumario');
+        if (!btn || btn.dataset.boundToggle) return;
+        btn.dataset.boundToggle = '1';
+        btn.addEventListener('click', () => {
+            if (box.classList.contains('is-running') || btn.tagName !== 'BUTTON') return;
+            const open = box.classList.toggle('is-open');
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
+
+    function setStatusMode(box, { running = false, warn = false, error = false, ok = false } = {}) {
+        if (!box) return;
+        box.classList.toggle('is-running', !!running);
+        box.classList.toggle('is-warn', !!warn);
+        box.classList.toggle('is-error', !!error);
+        box.classList.toggle('is-ok', !!ok && !running && !error);
+        if (running) box.classList.add('is-open');
+        else box.classList.remove('is-open');
+        const btn = box.querySelector('.hist-prog-sumario');
+        if (btn && btn.tagName === 'BUTTON') btn.setAttribute('aria-expanded', running ? 'true' : 'false');
+        bindStatusToggle(box);
     }
 
     function destacar(texto) {
@@ -1273,21 +1353,40 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         if (!lote || histState.tipo !== 'CHURN') { box.classList.add('d-none'); return; }
         box.classList.remove('d-none');
         const pct = lote.total ? Math.round((lote.processados / lote.total) * 100) : 0;
-        document.getElementById('nio-prog-spin').classList.toggle('d-none', !emAndamento);
-        document.getElementById('btn-nio-cancelar').classList.toggle('d-none', !emAndamento);
-        document.getElementById('nio-prog-barra').firstElementChild.style.width = (emAndamento ? pct : 100) + '%';
-        const titulos = { EM_ANDAMENTO: 'Consultando débitos na Nio…', CONCLUIDO: 'Última consulta de débitos concluída', CANCELADO: 'Consulta de débitos cancelada', ERRO: 'Consulta de débitos interrompida' };
-        document.getElementById('nio-prog-titulo').textContent = titulos[lote.status] || 'Consulta de débitos';
-        document.getElementById('nio-prog-qtd').textContent = lote.total
+        const qtd = lote.total
             ? `${lote.processados.toLocaleString('pt-BR')} de ${lote.total.toLocaleString('pt-BR')} CPFs (${pct}%)`
             : '';
+        document.getElementById('nio-prog-spin').classList.toggle('d-none', !emAndamento);
+        document.getElementById('nio-prog-ico').classList.toggle('d-none', !!emAndamento);
+        document.getElementById('btn-nio-cancelar').classList.toggle('d-none', !emAndamento);
+        document.getElementById('nio-prog-barra').firstElementChild.style.width = (emAndamento ? pct : 100) + '%';
+        const titulos = { EM_ANDAMENTO: 'Consultando débitos na Nio…', CONCLUIDO: 'Débitos Nio', CANCELADO: 'Consulta cancelada', ERRO: 'Consulta com erro' };
+        document.getElementById('nio-prog-titulo').textContent = titulos[lote.status] || 'Consulta de débitos';
+        document.getElementById('nio-prog-qtd').textContent = qtd;
+        const quando = lote.finalizado_em ? new Date(lote.finalizado_em).toLocaleString('pt-BR') : '';
+        document.getElementById('nio-prog-resumo').textContent = [
+            qtd,
+            !emAndamento ? `Adimpl. ${lote.adimplentes} · Inadimpl. ${lote.inadimplentes} · A vencer ${lote.a_vencer}` : '',
+            quando,
+        ].filter(Boolean).join(' · ');
         document.getElementById('nio-prog-info').innerHTML = `
             <span>Adimplentes <strong>${lote.adimplentes}</strong></span>
             <span>Inadimplentes <strong>${lote.inadimplentes}</strong></span>
             <span>A vencer <strong>${lote.a_vencer}</strong></span>
             <span>Erros <strong>${lote.erros}</strong></span>`;
-        const quando = lote.finalizado_em ? ` · ${new Date(lote.finalizado_em).toLocaleString('pt-BR')}` : '';
-        document.getElementById('nio-prog-msg').textContent = (lote.mensagem || '') + quando;
+        document.getElementById('nio-prog-msg').textContent = (lote.mensagem || '') + (quando ? ` · ${quando}` : '');
+        const ico = document.getElementById('nio-prog-ico');
+        ico.className = 'bi hist-prog-ico ' + (
+            lote.status === 'ERRO' ? 'bi-exclamation-triangle-fill'
+            : lote.status === 'CANCELADO' ? 'bi-stop-circle'
+            : 'bi-shield-check'
+        );
+        setStatusMode(box, {
+            running: emAndamento,
+            error: lote.status === 'ERRO',
+            ok: lote.status === 'CONCLUIDO',
+            warn: lote.status === 'CANCELADO',
+        });
     }
 
     async function verificarLoteNio() {
@@ -1446,13 +1545,14 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             document.getElementById('rodape-info').textContent = 'Uma linha por CPF: quem enviou biometria no GED360 ou tem venda criada no período. Valem os envios a partir de 7 dias antes da venda; se algum foi apto, o CPF conta como apto, senão vale o mais recente. Repescável: último envio no GED há mais de 48 horas (fora risco/reprovado e fora DUPLICIDADE), sem venda no CRM ou com venda sem O.S. há mais de 48 horas. CONSTA PEDIDO: consulta o PAP Nio e só libera após 30 dias do pedido.'
                 + (ult ? ` Última busca no GED: ${fmtDataIso(ult.data_inicial)} a ${fmtDataIso(ult.data_final)} (${fmtDataHora(ult.finalizado_em)}).` : '');
             const aviso = document.getElementById('bio-cobertura');
+            const avisoTxt = document.getElementById('bio-cobertura-texto');
             const fimPeriodo = new Date(`${histState.ate}T23:59:59`);
             const buscadoAte = data.ged_buscado_ate ? new Date(data.ged_buscado_ate) : null;
             if (!buscadoAte) {
-                aviso.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> O início deste período ainda não foi buscado no GED. Vendas sem dados do GED aparecem como <strong>Aguardando GED</strong>: use <strong>Buscar no GED</strong>.';
+                avisoTxt.innerHTML = 'Período ainda sem busca no GED — vendas sem dados ficam <strong>Aguardando GED</strong>. Use <strong>Buscar no GED</strong>.';
                 aviso.classList.remove('d-none');
             } else if (buscadoAte < fimPeriodo && buscadoAte < new Date(Date.now() - 30 * 60000)) {
-                aviso.innerHTML = `<i class="bi bi-info-circle-fill me-1"></i> GED buscado até <strong>${esc(fmtDataHora(data.ged_buscado_ate))}</strong>. Vendas depois disso aparecem como <strong>Aguardando GED</strong> até a próxima busca.`;
+                avisoTxt.innerHTML = `GED até <strong>${esc(fmtDataHora(data.ged_buscado_ate))}</strong> — vendas depois disso: <strong>Aguardando GED</strong> até a próxima busca.`;
                 aviso.classList.remove('d-none');
             } else {
                 aviso.classList.add('d-none');
@@ -1586,7 +1686,12 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         mailingLoteAtivo = lote;
         box.classList.remove('d-none');
         btn.classList.remove('d-none');
-        const linhas = lotes.map(l => {
+        const contAtivo = (lote && lote.contagens_situacao) || {};
+        const sitsAtivo = Object.entries(contAtivo).map(([k, v]) => `${k} ${v}`).join(' · ');
+        const resumo = lote
+            ? `#${lote.id} ${lote.nome} · ${lote.status} · ${lote.total_validos} válidos · env. ${lote.total_enviados} · resp. ${lote.total_respostas}${sitsAtivo ? ' · ' + sitsAtivo : ''}`
+            : '';
+        const detalhes = lotes.map(l => {
             const cont = l.contagens_situacao || {};
             const sits = Object.entries(cont).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—';
             const ativo = lote && l.id === lote.id ? ' <span class="badge bg-primary">selecionado</span>' : '';
@@ -1595,9 +1700,26 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                 enviados ${l.total_enviados} · falhas ${l.total_falhas} · respostas ${l.total_respostas}${ativo}
                 <div class="text-muted">${esc(sits)}</div></div>`;
         }).join('');
-        box.innerHTML = linhas;
-        btn.disabled = !lote || lote.status === 'DISPARANDO';
-        btn.innerHTML = lote && lote.status === 'DISPARANDO'
+        const nOutros = Math.max(0, lotes.length - 1);
+        const estavaAberto = box.classList.contains('is-open');
+        box.innerHTML = `
+            <button type="button" class="hist-prog-sumario" aria-expanded="${estavaAberto ? 'true' : 'false'}">
+                <i class="bi bi-collection hist-prog-ico" aria-hidden="true"></i>
+                <span class="hist-prog-titulo">Lotes</span>
+                <span class="hist-prog-resumo">${esc(resumo)}${nOutros ? ` · +${nOutros} outro(s)` : ''}</span>
+                <i class="bi bi-chevron-down hist-prog-chevron" aria-hidden="true"></i>
+            </button>
+            <div class="hist-prog-detalhe">${detalhes}</div>`;
+        const disparando = !!(lote && lote.status === 'DISPARANDO');
+        if (disparando) {
+            setStatusMode(box, { running: true });
+        } else {
+            box.classList.remove('is-running', 'is-error', 'is-warn');
+            box.classList.toggle('is-open', !!estavaAberto);
+            bindStatusToggle(box);
+        }
+        btn.disabled = !lote || disparando;
+        btn.innerHTML = disparando
             ? '<span class="spinner-border spinner-border-sm me-2"></span>Disparando…'
             : '<i class="bi bi-send me-2"></i>Disparar lote';
     }
@@ -1612,14 +1734,27 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         if (!imp || histState.tipo !== 'BIO') { box.classList.add('d-none'); return; }
         box.classList.remove('d-none');
         document.getElementById('bio-prog-spin').classList.toggle('d-none', !emAndamento);
+        document.getElementById('bio-prog-ico').classList.toggle('d-none', !!emAndamento);
         const barra = document.getElementById('bio-prog-barra');
         barra.classList.toggle('indeterminada', !!emAndamento);
         barra.firstElementChild.style.width = emAndamento ? '' : '100%';
-        const titulos = { EM_ANDAMENTO: 'Buscando no GED360…', CONCLUIDO: 'Última busca no GED360 concluída', ERRO: 'Busca no GED360 com erro' };
+        const titulos = { EM_ANDAMENTO: 'Buscando no GED360…', CONCLUIDO: 'GED360', ERRO: 'GED360 com erro' };
         document.getElementById('bio-prog-titulo').textContent = titulos[imp.status] || 'Busca no GED360';
-        document.getElementById('bio-prog-periodo').textContent = `Envios de ${fmtDataIso(imp.data_inicial)} a ${fmtDataIso(imp.data_final)}`;
-        const quando = imp.finalizado_em ? ` · ${fmtDataHora(imp.finalizado_em)}` : '';
-        document.getElementById('bio-prog-msg').textContent = (emAndamento ? (imp.etapa || 'Iniciando…') : (imp.mensagem || '')) + quando;
+        const periodo = `Envios ${fmtDataIso(imp.data_inicial)}–${fmtDataIso(imp.data_final)}`;
+        document.getElementById('bio-prog-periodo').textContent = periodo;
+        const quando = imp.finalizado_em ? fmtDataHora(imp.finalizado_em) : '';
+        const detalhe = (emAndamento ? (imp.etapa || 'Iniciando…') : (imp.mensagem || '')) + (quando ? ` · ${quando}` : '');
+        document.getElementById('bio-prog-msg').textContent = detalhe;
+        document.getElementById('bio-prog-resumo').textContent = emAndamento
+            ? `${periodo} · ${imp.etapa || 'Iniciando…'}`
+            : [periodo, imp.mensagem || '', quando].filter(Boolean).join(' · ');
+        const ico = document.getElementById('bio-prog-ico');
+        ico.className = 'bi hist-prog-ico ' + (imp.status === 'ERRO' ? 'bi-exclamation-triangle-fill' : 'bi-cloud-check');
+        setStatusMode(box, {
+            running: emAndamento,
+            error: imp.status === 'ERRO',
+            ok: imp.status === 'CONCLUIDO',
+        });
     }
 
     async function verificarImportacaoBio() {
