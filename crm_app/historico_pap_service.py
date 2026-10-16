@@ -7,6 +7,7 @@ Não grava Venda — só protocolos em HistoricoPapPedido.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -202,6 +203,192 @@ def limpar_cooldown_login(matricula: str) -> None:
     if matricula_clean:
         _cache_delete(f"pap_cooldown_{matricula_clean}")
     _cache_delete("pap_cooldown_global")
+
+
+
+def _cred_fingerprint_pap(matricula: str, senha: str) -> str:
+    raw = f"{(matricula or '').strip()}|{(senha or '').strip()}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _mensagem_indica_falha_credencial_pap(mensagem: str) -> bool:
+    """Falha de matrícula/senha (não MFA/OTP temporário nem cooldown)."""
+    low = (mensagem or "").lower()
+    if not low:
+        return False
+    # Temporários / operacionais — não pausam a rotina.
+    if any(
+        x in low
+        for x in (
+            "cooldown",
+            "authenticator",
+            "fast pass",
+            "otp",
+            "playwright",
+            "sistema pap ocupado",
+            "jwt malformed",
+        )
+    ):
+        return False
+    return any(
+        x in low
+        for x in (
+            "login falhou",
+            "falha ao logar",
+            "credenciais inválidas",
+            "invalid credentials",
+            "senha expirada",
+            "password expired",
+            "confira a senha",
+            "verifique matrícula",
+            "verifique matricula",
+            "não tem matrícula/senha",
+            "nao tem matricula/senha",
+            "matrícula/senha pap",
+            "matricula/senha pap",
+            "erro_credencial",
+            "senha do pap",
+        )
+    )
+
+
+def registrar_pausa_rotina_automatica(
+    *,
+    motivo: str,
+    login_pap=None,
+    matricula: str = "",
+    senha: str = "",
+    busca_id: Optional[int] = None,
+) -> None:
+    """Pausa a rotina 06:00 até matrícula/senha PAP serem atualizadas (ou login ok)."""
+    from crm_app.models import HistoricoPapBusca
+
+    mat = (matricula or getattr(login_pap, "matricula_pap", None) or "").strip()
+    sen = (senha or getattr(login_pap, "senha_pap", None) or "").strip()
+    fp = _cred_fingerprint_pap(mat, sen)
+    motivo_limpo = (motivo or "Falha de login no PAP.")[:500]
+    agora = timezone.now()
+    payload_extra = {
+        "pausa_rotina_auto": True,
+        "cred_fp": fp,
+        "motivo_pausa": motivo_limpo,
+        "pausada_em": agora.isoformat(),
+        "login_pap_id": getattr(login_pap, "id", None),
+        "login_pap": getattr(login_pap, "username", "") or "",
+    }
+
+    def _gravar():
+        if busca_id:
+            busca = HistoricoPapBusca.objects.filter(pk=busca_id).first()
+            if busca:
+                rj = dict(busca.relatorio_json or {})
+                rj.update(payload_extra)
+                rj["fase"] = "pausado_login"
+                HistoricoPapBusca.objects.filter(pk=busca_id).update(
+                    status=HistoricoPapBusca.STATUS_ERRO,
+                    mensagem=(motivo_limpo + " Rotina automática pausada até atualizar login/senha PAP.")[:500],
+                    finalizado_em=agora,
+                    relatorio_json=rj,
+                )
+                return
+        hoje = timezone.localdate()
+        HistoricoPapBusca.objects.create(
+            usuario=None,
+            login_pap=login_pap,
+            status=HistoricoPapBusca.STATUS_ERRO,
+            data_inicio=hoje,
+            data_fim=hoje,
+            pdv="",
+            tipos=["INTERESSE", "VENDA"],
+            mensagem=(motivo_limpo + " Rotina automática pausada até atualizar login/senha PAP.")[:500],
+            finalizado_em=agora,
+            relatorio_json={**payload_extra, "fase": "pausado_login", "origem_automatica": True},
+        )
+
+    try:
+        # _run_django_sync existe no módulo em tempo de chamada (thread do Playwright).
+        _run_django_sync(_gravar)
+    except Exception:
+        try:
+            _gravar()
+        except Exception:
+            logger.exception("[HISTORICO PAP] Não foi possível gravar pausa da rotina.")
+            return
+    logger.warning(
+        "[HISTORICO PAP] Rotina automática PAUSADA (login): %s (login=%s)",
+        motivo_limpo,
+        getattr(login_pap, "username", "?"),
+    )
+
+
+def limpar_pausa_rotina_automatica(*, motivo: str = "login_ok") -> int:
+    """Remove flags de pausa da rotina (credenciais ok ou atualizadas)."""
+    from crm_app.models import HistoricoPapBusca
+
+    def _limpar():
+        qs = HistoricoPapBusca.objects.filter(relatorio_json__pausa_rotina_auto=True)
+        n = 0
+        agora = timezone.now().isoformat()
+        for busca in qs.iterator():
+            rj = dict(busca.relatorio_json or {})
+            if not rj.get("pausa_rotina_auto"):
+                continue
+            rj["pausa_rotina_auto"] = False
+            rj["pausa_liberada_em"] = agora
+            rj["pausa_liberada_motivo"] = motivo
+            busca.relatorio_json = rj
+            busca.save(update_fields=["relatorio_json"])
+            n += 1
+        return n
+
+    try:
+        n = int(_run_django_sync(_limpar) or 0)
+    except Exception:
+        n = int(_limpar() or 0)
+    if n:
+        logger.info("[HISTORICO PAP] Pausa da rotina liberada (%s) em %s registro(s).", motivo, n)
+    return n
+
+
+def obter_pausa_rotina_automatica() -> Optional[dict]:
+    """
+    Se a rotina 06:00 estiver pausada por falha de login, retorna o resumo.
+    Libera automaticamente se matrícula/senha do login usado mudaram.
+    """
+    from crm_app.models import HistoricoPapBusca
+
+    def _obter():
+        return (
+            HistoricoPapBusca.objects.filter(relatorio_json__pausa_rotina_auto=True)
+            .select_related("login_pap")
+            .order_by("-iniciado_em")
+            .first()
+        )
+
+    try:
+        busca = _obter()
+    except Exception:
+        busca = None
+    if not busca:
+        return None
+    rj = busca.relatorio_json or {}
+    login = busca.login_pap
+    fp_pausa = (rj.get("cred_fp") or "").strip()
+    if login and fp_pausa:
+        fp_atual = _cred_fingerprint_pap(
+            getattr(login, "matricula_pap", None) or "",
+            getattr(login, "senha_pap", None) or "",
+        )
+        if fp_atual != fp_pausa:
+            limpar_pausa_rotina_automatica(motivo="credenciais_atualizadas")
+            return None
+    return {
+        "pausada": True,
+        "motivo": rj.get("motivo_pausa") or busca.mensagem or "Falha de login no PAP.",
+        "desde": rj.get("pausada_em") or (busca.finalizado_em.isoformat() if busca.finalizado_em else ""),
+        "login_pap": getattr(login, "username", None) or rj.get("login_pap") or "",
+        "busca_id": busca.id,
+    }
 
 
 def obter_status_sessao_pap(matricula: str) -> dict:
@@ -2722,6 +2909,7 @@ def criar_e_iniciar_busca(
     pdv: str,
     tipos: list[str],
     token_manual: str = "",
+    origem_automatica: bool = False,
 ):
     from django.db import transaction
 
@@ -2754,10 +2942,17 @@ def criar_e_iniciar_busca(
     with transaction.atomic():
         login_pap, err_pool = obter_login_historico_pap()
         if err_pool:
+            if origem_automatica and _mensagem_indica_falha_credencial_pap(err_pool):
+                registrar_pausa_rotina_automatica(motivo=err_pool, login_pap=None)
             return None, err_pool
 
         ok, msg = _validar_credenciais(login_pap)
         if not ok and not token_manual:
+            if origem_automatica:
+                registrar_pausa_rotina_automatica(
+                    motivo=msg, login_pap=login_pap, matricula=getattr(login_pap, "matricula_pap", "") or "",
+                    senha=getattr(login_pap, "senha_pap", "") or "",
+                )
             return None, msg
 
         busca = HistoricoPapBusca.objects.create(
@@ -2769,7 +2964,12 @@ def criar_e_iniciar_busca(
             pdv=pdv,
             tipos=tipos_ok,
             mensagem=f"Usando login Diretoria: {login_pap.username}" + (" (Token manual)" if token_manual else ""),
-            relatorio_json={"fase": "iniciando", "login_pap": login_pap.username, "token_manual": bool(token_manual)},
+            relatorio_json={
+                "fase": "iniciando",
+                "login_pap": login_pap.username,
+                "token_manual": bool(token_manual),
+                "origem_automatica": bool(origem_automatica),
+            },
         )
         login_id = login_pap.id
         busca_id = busca.id
@@ -3249,6 +3449,7 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
 
     matricula = (getattr(login_pap, "matricula_pap", None) or "").strip()
     senha = (getattr(login_pap, "senha_pap", None) or "").strip()
+    origem_automatica = bool((busca.relatorio_json or {}).get("origem_automatica"))
 
     def _marcar_erro(mensagem: str) -> None:
         _run_django_sync(
@@ -3259,6 +3460,16 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
                 finalizado_em=timezone.now(),
             )
         )
+
+    def _pausar_se_falha_login(mensagem: str) -> None:
+        if origem_automatica and _mensagem_indica_falha_credencial_pap(mensagem):
+            registrar_pausa_rotina_automatica(
+                motivo=mensagem,
+                login_pap=login_pap,
+                matricula=matricula,
+                senha=senha,
+                busca_id=busca_id,
+            )
 
     def _token_rejeitado(err_msg: str) -> bool:
         low = (err_msg or "").lower()
@@ -3313,6 +3524,7 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
             return False, msg or "Falha ao logar no PAP."
 
         limpar_cooldown_login(matricula)
+        limpar_pausa_rotina_automatica(motivo="login_ok")
         try:
             return _executar_loop_busca(page=automacao.page, busca_id=busca_id, busca=busca)
         except SessaoPapExpirada as exc:
@@ -3343,9 +3555,13 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
         if sucesso:
             return
 
-        if "Falha ao logar" in (err_msg or ""):
+        if "Falha ao logar" in (err_msg or "") or _mensagem_indica_falha_credencial_pap(err_msg or ""):
             registrar_cooldown_login(matricula, 900)
-            _marcar_erro((err_msg or "Falha ao logar no PAP.") + " Cooldown anti-bloqueio ativado.")
+            msg_err = (err_msg or "Falha ao logar no PAP.") + " Cooldown anti-bloqueio ativado."
+            if origem_automatica and _mensagem_indica_falha_credencial_pap(err_msg or ""):
+                _pausar_se_falha_login(err_msg or "Falha ao logar no PAP.")
+            else:
+                _marcar_erro(msg_err)
             return
 
         if _token_rejeitado(err_msg):
@@ -3359,6 +3575,7 @@ def _executar_busca(busca_id: int, login_pap_id: int, token_manual: str = ""):
             return
 
         _marcar_erro(err_msg or "Falha na busca do histórico PAP.")
+        _pausar_se_falha_login(err_msg or "")
     finally:
         try:
             automacao._fechar_sessao()

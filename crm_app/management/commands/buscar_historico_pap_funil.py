@@ -38,7 +38,21 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from crm_app.historico_pap_service import busca_em_andamento, criar_e_iniciar_busca
+        from crm_app.historico_pap_service import (
+            busca_em_andamento,
+            criar_e_iniciar_busca,
+            obter_pausa_rotina_automatica,
+        )
+
+        pausa = obter_pausa_rotina_automatica()
+        if pausa:
+            self.stdout.write(self.style.ERROR(
+                "[HistoricoPAP] Rotina PAUSADA após falha de login. "
+                "Atualize matrícula/senha PAP na Governança para retomar. "
+                f"Login: {pausa.get('login_pap') or '—'} | "
+                f"Motivo: {pausa.get('motivo') or '—'}"
+            ))
+            return
 
         tipos = tipos_solicitados(
             [p.strip() for p in str(options["tipos"] or "").split(",") if p.strip()]
@@ -72,6 +86,7 @@ class Command(BaseCommand):
             data_fim=fim,
             pdv="",
             tipos=tipos,
+            origem_automatica=True,
         )
         if err:
             self.stdout.write(self.style.ERROR(err))
