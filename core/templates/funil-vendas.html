@@ -91,9 +91,9 @@
 .funil-toolbar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem;
     padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
-    background: var(--bg-surface, #fff);
+    background: var(--bg-surface, #fff); position: relative;
 }
-.funil-search { position: relative; flex: 1 1 280px; min-width: 200px; max-width: none; }
+.funil-search { position: relative; flex: 1 1 220px; min-width: 160px; max-width: none; }
 .funil-search > .bi-search { position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--text-subtle, #8f9bb3); pointer-events: none; }
 .funil-search input { padding-left: 2.1rem; padding-right: 2rem; border-radius: 999px; }
 .funil-kbd {
@@ -113,6 +113,84 @@
 .funil-seg button.active { background: var(--accent-primary, #0ea5e9); color: var(--text-on-accent, #fff); box-shadow: 0 2px 6px rgba(14,165,233,0.3); }
 .funil-toolbar .btn { border-radius: 10px; font-weight: 600; }
 #acoes-pap .btn, #acoes-churn .btn, #acoes-bio .btn, #acoes-mailing .btn { border-radius: 8px; font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+
+/* Menu central de filtros (drill-down) */
+.funil-filtros-wrap { position: relative; flex: 0 0 auto; }
+.funil-filtros-btn {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    border-radius: 999px !important; font-weight: 700; font-size: 0.8rem;
+    padding: 0.3rem 0.85rem !important;
+}
+.funil-filtros-btn .badge {
+    min-width: 1.25rem; padding: 0.15em 0.4em; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 800; background: var(--accent-primary, #0ea5e9); color: #fff;
+}
+.funil-filtros-btn.is-open {
+    background: var(--accent-primary, #0ea5e9); border-color: var(--accent-primary, #0ea5e9); color: #fff;
+}
+.funil-filtros-panel {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+    width: min(360px, calc(100vw - 1.5rem));
+    border-radius: 12px; border: 1px solid var(--border-color, #e4e9f2);
+    background: var(--bg-card, #fff); box-shadow: 0 12px 36px rgba(15, 23, 42, 0.22);
+    overflow: hidden;
+}
+.funil-filtros-head {
+    display: flex; align-items: center; gap: 0.35rem;
+    padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--border-color, #e4e9f2);
+    background: var(--bg-surface, #fff);
+}
+.funil-filtros-titulo { flex: 1 1 auto; font-weight: 700; font-size: 0.88rem; min-width: 0; }
+.funil-filtros-voltar {
+    border: 0; background: transparent; color: var(--text-secondary, #5b6b7d);
+    padding: 0.15rem 0.35rem; border-radius: 8px; line-height: 1;
+}
+.funil-filtros-voltar:hover { background: var(--bg-secondary, #e8edf5); color: var(--text-primary, #1a2332); }
+.funil-filtros-fechar {
+    border: 0; background: transparent; color: var(--text-secondary, #5b6b7d);
+    width: 1.75rem; height: 1.75rem; border-radius: 8px; line-height: 1; font-size: 1.1rem;
+}
+.funil-filtros-fechar:hover { background: var(--bg-secondary, #e8edf5); }
+.funil-filtros-body { max-height: min(52vh, 380px); overflow-y: auto; padding: 0.25rem; }
+.funil-filtros-item {
+    display: flex; align-items: center; gap: 0.55rem; width: 100%;
+    padding: 0.55rem 0.65rem; border: 0; border-radius: 8px;
+    background: transparent; color: var(--text-primary, #1a2332); text-align: left;
+}
+.funil-filtros-item:hover { background: rgba(14, 165, 233, 0.08); }
+.funil-filtros-item.is-active { background: rgba(14, 165, 233, 0.14); }
+.funil-filtros-item-label { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 0.84rem; }
+.funil-filtros-item-meta {
+    flex: 0 1 45%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.74rem; color: var(--text-secondary, #5b6b7d); text-align: right;
+}
+.funil-filtros-item-count {
+    flex: 0 0 auto; font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: var(--text-secondary, #5b6b7d);
+}
+.funil-filtros-item .bi-chevron-right { flex: 0 0 auto; opacity: 0.45; font-size: 0.85rem; }
+.funil-filtros-periodo {
+    display: flex; flex-direction: column; gap: 0.55rem; padding: 0.55rem 0.65rem 0.75rem;
+}
+.funil-filtros-periodo .funil-periodo { width: 100%; flex-wrap: wrap; }
+.funil-filtros-periodo .funil-periodo input { flex: 1 1 120px; width: auto; }
+.funil-chips {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem;
+    flex: 1 1 auto; min-width: 0;
+}
+.funil-chip {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    max-width: 100%; padding: 0.15rem 0.35rem 0.15rem 0.55rem;
+    border-radius: 999px; font-size: 0.72rem; font-weight: 600;
+    background: rgba(14, 165, 233, 0.12); color: var(--text-primary, #1a2332);
+    border: 1px solid rgba(14, 165, 233, 0.28);
+}
+.funil-chip-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14rem; }
+.funil-chip-x {
+    border: 0; background: transparent; color: inherit; opacity: 0.65;
+    width: 1.2rem; height: 1.2rem; border-radius: 999px; line-height: 1; padding: 0; font-size: 0.95rem;
+}
+.funil-chip-x:hover { opacity: 1; background: rgba(0,0,0,0.08); }
 .funil-page { width: 100%; max-width: none; padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
 .funil-page .card { border-radius: 12px; }
 .funil-tabs-row {
@@ -314,16 +392,6 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                         <i class="bi bi-upload me-1"></i>Importar XLS
                         <input type="file" id="mailing-file" accept=".xlsx,.xls" class="d-none">
                     </label>
-                    <select id="f-mailing-lote" class="form-select form-select-sm funil-select" aria-label="Lote" style="width:auto;min-width:200px" title="Qual lote exibir">
-                        <option value="">Todos os lotes</option>
-                    </select>
-                    <select id="f-mailing-status" class="form-select form-select-sm funil-select" aria-label="Status mailing" style="width:auto;min-width:180px">
-                        <option value="NOVO" selected>Na fila (importados)</option>
-                        <option value="ENVIADO">Enviados (sem resposta)</option>
-                        <option value="RESPONDEU">Respostas</option>
-                        <option value="TRATADO">Tratados</option>
-                        <option value="TODOS">Todos do lote</option>
-                    </select>
                     <button type="button" class="btn btn-primary fw-semibold shadow-sm d-none" id="btn-mailing-disparar" title="Inicia/continua o disparo do lote selecionado">
                         <i class="bi bi-send me-1"></i>Disparar lote
                     </button>
@@ -376,48 +444,80 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                         <input type="search" id="f-busca" class="form-control form-control-sm" placeholder="Busca inteligente: nome, CPF, O.S., vendedor… ou atalhos: apto, link, repescar, adimplente" aria-label="Busca inteligente" autocomplete="off">
                         <kbd class="funil-kbd" title="Atalho: / foca a busca">/</kbd>
                     </div>
-                    <select id="f-status" class="form-select form-select-sm funil-select" aria-label="Filtrar por status PAP">
-                        <option value="">Todos os status</option>
-                    </select>
-                    <div class="funil-seg" id="funil-seg" role="group" aria-label="Situação no CRM">
-                        <button type="button" class="active" data-situacao="">Todos</button>
-                        <button type="button" data-situacao="novos"><i class="bi bi-stars"></i> Novos</button>
-                        <button type="button" data-situacao="base">Já na base</button>
+                    <div class="funil-filtros-wrap">
+                        <button type="button" class="btn btn-sm btn-outline-primary funil-filtros-btn" id="btn-funil-filtros" aria-expanded="false" aria-controls="funil-filtros-panel">
+                            <i class="bi bi-funnel" aria-hidden="true"></i>
+                            <span>Filtros</span>
+                            <span class="badge d-none" id="funil-filtros-count">0</span>
+                        </button>
+                        <div id="funil-filtros-panel" class="funil-filtros-panel d-none" role="dialog" aria-label="Filtros do funil" aria-modal="false">
+                            <div class="funil-filtros-head">
+                                <button type="button" class="funil-filtros-voltar d-none" id="funil-filtros-voltar" title="Voltar" aria-label="Voltar">
+                                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                                </button>
+                                <span class="funil-filtros-titulo" id="funil-filtros-titulo">Filtros</span>
+                                <button type="button" class="funil-filtros-fechar" id="funil-filtros-fechar" title="Fechar" aria-label="Fechar">&times;</button>
+                            </div>
+                            <div class="funil-filtros-body" id="funil-filtros-body"></div>
+                        </div>
                     </div>
-                    <select id="f-nio" class="form-select form-select-sm funil-select d-none" aria-label="Situação de débito na Nio">
-                        <option value="">Débito Nio: todos</option>
-                        <option value="ADIMPLENTE">Adimplentes</option>
-                        <option value="INADIMPLENTE">Inadimplentes</option>
-                        <option value="A_VENCER">A vencer</option>
-                        <option value="NAO_CONSULTADO">Não consultados</option>
-                        <option value="ERRO">Erro</option>
-                    </select>
-                    <select id="f-bio" class="form-select form-select-sm funil-select funil-select-wide d-none" aria-label="Situação da biometria">
-                        <option value="">Biometria: todas</option>
-                        <option value="APTO">Fez (apto)</option>
-                        <option value="EM_ANALISE">Em análise</option>
-                        <option value="LINK_ENVIADO">Link enviado</option>
-                        <option value="REFAZER">Refazer</option>
-                        <option value="RISCO">Risco/Reprovado</option>
-                        <option value="SEM_BIOMETRIA">Sem biometria</option>
-                        <option value="APTO_SEM_VENDA">Apto sem venda</option>
-                        <option value="NAO_VERIFICADO">Aguardando GED</option>
-                    </select>
-                    <select id="f-rep" class="form-select form-select-sm funil-select d-none" aria-label="Repescável" title="Biometria há mais de 48h, sem O.S. ou sem venda; fora risco e DUPLICIDADE; CONSTA PEDIDO após 30 dias no PAP">
-                        <option value="">Repescável: todos</option>
-                        <option value="SIM">Só repescáveis</option>
-                        <option value="NAO">Só não repescáveis</option>
-                    </select>
-                    <select id="f-mes" class="form-select form-select-sm funil-select" aria-label="Mês da data do pedido" title="Mês pela Data do pedido">
-                        <option value="">Todos os meses</option>
-                    </select>
-                    <div class="funil-periodo" id="funil-periodo" title="Data do pedido no PAP">
-                        <i class="bi bi-calendar3"></i>
-                        <input type="date" id="f-de" class="form-control form-control-sm" aria-label="Data do pedido a partir de">
-                        <span>até</span>
-                        <input type="date" id="f-ate" class="form-control form-control-sm" aria-label="Data do pedido até">
-                    </div>
+                    <div class="funil-chips" id="funil-chips" aria-live="polite"></div>
                     <button type="button" id="f-limpar" class="btn btn-sm funil-limpar d-none"><i class="bi bi-x-circle me-1"></i>Limpar</button>
+
+                    <!-- Controles legados (sincronizados pelo menu; fora da vista) -->
+                    <div id="funil-filtros-hidden" class="d-none" aria-hidden="true">
+                        <select id="f-status" class="form-select form-select-sm funil-select" aria-label="Filtrar por status PAP">
+                            <option value="">Todos os status</option>
+                        </select>
+                        <div class="funil-seg" id="funil-seg" role="group" aria-label="Situação no CRM">
+                            <button type="button" class="active" data-situacao="">Todos</button>
+                            <button type="button" data-situacao="novos"><i class="bi bi-stars"></i> Novos</button>
+                            <button type="button" data-situacao="base">Já na base</button>
+                        </div>
+                        <select id="f-nio" class="form-select form-select-sm funil-select" aria-label="Situação de débito na Nio">
+                            <option value="">Débito Nio: todos</option>
+                            <option value="ADIMPLENTE">Adimplentes</option>
+                            <option value="INADIMPLENTE">Inadimplentes</option>
+                            <option value="A_VENCER">A vencer</option>
+                            <option value="NAO_CONSULTADO">Não consultados</option>
+                            <option value="ERRO">Erro</option>
+                        </select>
+                        <select id="f-bio" class="form-select form-select-sm funil-select funil-select-wide" aria-label="Situação da biometria">
+                            <option value="">Biometria: todas</option>
+                            <option value="APTO">Fez (apto)</option>
+                            <option value="EM_ANALISE">Em análise</option>
+                            <option value="LINK_ENVIADO">Link enviado</option>
+                            <option value="REFAZER">Refazer</option>
+                            <option value="RISCO">Risco/Reprovado</option>
+                            <option value="SEM_BIOMETRIA">Sem biometria</option>
+                            <option value="APTO_SEM_VENDA">Apto sem venda</option>
+                            <option value="NAO_VERIFICADO">Aguardando GED</option>
+                        </select>
+                        <select id="f-rep" class="form-select form-select-sm funil-select" aria-label="Repescável" title="Biometria há mais de 48h, sem O.S. ou sem venda; fora risco e DUPLICIDADE; CONSTA PEDIDO após 30 dias no PAP">
+                            <option value="">Repescável: todos</option>
+                            <option value="SIM">Só repescáveis</option>
+                            <option value="NAO">Só não repescáveis</option>
+                        </select>
+                        <select id="f-mes" class="form-select form-select-sm funil-select" aria-label="Mês da data do pedido" title="Mês pela Data do pedido">
+                            <option value="">Todos os meses</option>
+                        </select>
+                        <div class="funil-periodo" id="funil-periodo" title="Data do pedido no PAP">
+                            <i class="bi bi-calendar3"></i>
+                            <input type="date" id="f-de" class="form-control form-control-sm" aria-label="Data do pedido a partir de">
+                            <span>até</span>
+                            <input type="date" id="f-ate" class="form-control form-control-sm" aria-label="Data do pedido até">
+                        </div>
+                        <select id="f-mailing-lote" class="form-select form-select-sm funil-select" aria-label="Lote" title="Qual lote exibir">
+                            <option value="">Todos os lotes</option>
+                        </select>
+                        <select id="f-mailing-status" class="form-select form-select-sm funil-select" aria-label="Status mailing">
+                            <option value="NOVO" selected>Na fila (importados)</option>
+                            <option value="ENVIADO">Enviados (sem resposta)</option>
+                            <option value="RESPONDEU">Respostas</option>
+                            <option value="TRATADO">Tratados</option>
+                            <option value="TODOS">Todos do lote</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive funil-scroll" id="funil-scroll">
@@ -828,6 +928,296 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
     }
 
+    function grupoFiltrosAba() {
+        if (histState.tipo === 'CHURN') return 'CHURN';
+        if (histState.tipo === 'BIO') return 'BIO';
+        if (histState.tipo === 'MAILING') return 'MAILING';
+        return 'PAP';
+    }
+
+    function labelSelectOpt(selId, valor) {
+        const sel = document.getElementById(selId);
+        if (!sel) return valor || '';
+        const opt = [...sel.options].find(o => o.value === String(valor ?? ''));
+        if (!opt) return valor || '';
+        return (opt.dataset.label || opt.textContent).replace(/\s*\([\d.]+\)\s*$/, '').trim();
+    }
+
+    function resumoDimensao(dim) {
+        if (dim.kind === 'situacao') {
+            return ({ '': 'Todos', novos: 'Novos', base: 'Já na base' })[histState.situacao || ''] || 'Todos';
+        }
+        if (dim.kind === 'periodo') {
+            if (histState.de && histState.ate) return `${fmtDataIso(histState.de)} – ${fmtDataIso(histState.ate)}`;
+            if (histState.de || histState.ate) return fmtDataIso(histState.de || histState.ate);
+            return 'Qualquer';
+        }
+        if (dim.kind === 'mes') {
+            const m = mesSelecionado();
+            if (!m) return 'Todos';
+            if (m === 'custom') return 'Personalizado';
+            return labelSelectOpt('f-mes', m) || m;
+        }
+        if (dim.selectId) {
+            const sel = document.getElementById(dim.selectId);
+            const v = sel ? sel.value : (dim.stateKey ? histState[dim.stateKey] : '');
+            return labelSelectOpt(dim.selectId, v) || 'Todos';
+        }
+        return '';
+    }
+
+    function dimensoesDaAba() {
+        const g = grupoFiltrosAba();
+        const mapa = {
+            PAP: [
+                { id: 'status', label: 'Status PAP', selectId: 'f-status', stateKey: 'status' },
+                { id: 'situacao', label: 'Situação no CRM', kind: 'situacao' },
+                { id: 'mes', label: 'Mês', selectId: 'f-mes', kind: 'mes' },
+                { id: 'periodo', label: 'Período', kind: 'periodo' },
+            ],
+            CHURN: [
+                { id: 'nio', label: 'Débito Nio', selectId: 'f-nio', stateKey: 'nio' },
+                { id: 'mes', label: 'Mês', selectId: 'f-mes', kind: 'mes' },
+                { id: 'periodo', label: 'Período', kind: 'periodo' },
+            ],
+            BIO: [
+                { id: 'bio', label: 'Biometria', selectId: 'f-bio', stateKey: 'bio' },
+                { id: 'rep', label: 'Repescável', selectId: 'f-rep', stateKey: 'rep' },
+                { id: 'periodo', label: 'Período', kind: 'periodo' },
+            ],
+            MAILING: [
+                { id: 'mailing_lote', label: 'Lote', selectId: 'f-mailing-lote', kind: 'mailing' },
+                { id: 'mailing_status', label: 'Status do mailing', selectId: 'f-mailing-status', kind: 'mailing' },
+            ],
+        };
+        return mapa[g] || mapa.PAP;
+    }
+
+    function chipsAtivos() {
+        const chips = [];
+        if (histState.q) chips.push({ id: 'q', label: `Busca: ${histState.q}`, clear: { q: '' } });
+        const g = grupoFiltrosAba();
+        if (g === 'PAP') {
+            if (histState.status) chips.push({ id: 'status', label: `Status: ${labelSelectOpt('f-status', histState.status)}`, clear: { status: '' } });
+            if (histState.situacao) chips.push({ id: 'situacao', label: histState.situacao === 'novos' ? 'Novos' : 'Já na base', clear: { situacao: '' } });
+            if (histState.de || histState.ate) {
+                chips.push({
+                    id: 'periodo',
+                    label: histState.de && histState.ate
+                        ? `${fmtDataIso(histState.de)} – ${fmtDataIso(histState.ate)}`
+                        : fmtDataIso(histState.de || histState.ate),
+                    clear: { de: '', ate: '' },
+                });
+            }
+        } else if (g === 'CHURN') {
+            if (histState.nio) chips.push({ id: 'nio', label: labelSelectOpt('f-nio', histState.nio), clear: { nio: '' } });
+            if (histState.de || histState.ate) {
+                chips.push({
+                    id: 'periodo',
+                    label: histState.de && histState.ate
+                        ? `${fmtDataIso(histState.de)} – ${fmtDataIso(histState.ate)}`
+                        : fmtDataIso(histState.de || histState.ate),
+                    clear: { de: '', ate: '' },
+                });
+            }
+        } else if (g === 'BIO') {
+            if (histState.bio) chips.push({ id: 'bio', label: labelSelectOpt('f-bio', histState.bio), clear: { bio: '' } });
+            if (histState.rep) chips.push({ id: 'rep', label: labelSelectOpt('f-rep', histState.rep), clear: { rep: '' } });
+            if (histState.de || histState.ate) {
+                chips.push({
+                    id: 'periodo',
+                    label: histState.de && histState.ate
+                        ? `${fmtDataIso(histState.de)} – ${fmtDataIso(histState.ate)}`
+                        : fmtDataIso(histState.de || histState.ate),
+                    clear: { de: '', ate: '' },
+                });
+            }
+        } else if (g === 'MAILING') {
+            const lote = document.getElementById('f-mailing-lote');
+            const st = document.getElementById('f-mailing-status');
+            if (lote && lote.value) chips.push({ id: 'mailing_lote', label: labelSelectOpt('f-mailing-lote', lote.value), clearMailing: { lote: '' } });
+            if (st && st.value && st.value !== 'NOVO') chips.push({ id: 'mailing_status', label: labelSelectOpt('f-mailing-status', st.value), clearMailing: { status: 'NOVO' } });
+        }
+        return chips;
+    }
+
+    function renderChips() {
+        const box = document.getElementById('funil-chips');
+        const chips = chipsAtivos();
+        const badge = document.getElementById('funil-filtros-count');
+        const nFiltro = chips.filter(c => c.id !== 'q').length;
+        if (badge) {
+            badge.textContent = String(nFiltro);
+            badge.classList.toggle('d-none', nFiltro === 0);
+        }
+        document.getElementById('f-limpar').classList.toggle('d-none', chips.length === 0);
+        if (!box) return;
+        box.innerHTML = chips.map(c => `
+            <span class="funil-chip" data-chip="${esc(c.id)}">
+                <span class="funil-chip-txt" title="${esc(c.label)}">${esc(c.label)}</span>
+                <button type="button" class="funil-chip-x" data-chip-clear="${esc(c.id)}" aria-label="Remover filtro">&times;</button>
+            </span>`).join('');
+    }
+
+    let funilFiltrosDim = null; // dimensão aberta no nível 2
+
+    function fecharPainelFiltros() {
+        const panel = document.getElementById('funil-filtros-panel');
+        const btn = document.getElementById('btn-funil-filtros');
+        panel.classList.add('d-none');
+        btn.classList.remove('is-open');
+        btn.setAttribute('aria-expanded', 'false');
+        funilFiltrosDim = null;
+    }
+
+    function abrirPainelFiltros() {
+        const panel = document.getElementById('funil-filtros-panel');
+        const btn = document.getElementById('btn-funil-filtros');
+        panel.classList.remove('d-none');
+        btn.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        funilFiltrosDim = null;
+        renderListaDimensoes();
+    }
+
+    function renderListaDimensoes() {
+        funilFiltrosDim = null;
+        document.getElementById('funil-filtros-voltar').classList.add('d-none');
+        document.getElementById('funil-filtros-titulo').textContent = 'Filtros';
+        const body = document.getElementById('funil-filtros-body');
+        body.innerHTML = dimensoesDaAba().map(dim => `
+            <button type="button" class="funil-filtros-item" data-dim="${esc(dim.id)}">
+                <span class="funil-filtros-item-label">${esc(dim.label)}</span>
+                <span class="funil-filtros-item-meta">${esc(resumoDimensao(dim))}</span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>`).join('');
+    }
+
+    function renderOpcoesDimensao(dim) {
+        funilFiltrosDim = dim;
+        document.getElementById('funil-filtros-voltar').classList.remove('d-none');
+        document.getElementById('funil-filtros-titulo').textContent = dim.label;
+        const body = document.getElementById('funil-filtros-body');
+
+        if (dim.kind === 'periodo') {
+            body.innerHTML = `
+                <div class="funil-filtros-periodo">
+                    <div class="funil-periodo" title="Período">
+                        <i class="bi bi-calendar3"></i>
+                        <input type="date" id="funil-filtro-de" class="form-control form-control-sm" value="${esc(histState.de || '')}" aria-label="Data inicial">
+                        <span>até</span>
+                        <input type="date" id="funil-filtro-ate" class="form-control form-control-sm" value="${esc(histState.ate || '')}" aria-label="Data final">
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary" id="funil-filtro-periodo-ok">Aplicar período</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="funil-filtro-periodo-limpar">Qualquer data</button>
+                </div>`;
+            document.getElementById('funil-filtro-periodo-ok').onclick = () => {
+                const de = document.getElementById('funil-filtro-de').value;
+                const ate = document.getElementById('funil-filtro-ate').value;
+                aplicarFiltros({ de, ate });
+                renderListaDimensoes();
+            };
+            document.getElementById('funil-filtro-periodo-limpar').onclick = () => {
+                aplicarFiltros({ de: '', ate: '' });
+                renderListaDimensoes();
+            };
+            return;
+        }
+
+        if (dim.kind === 'situacao') {
+            const opts = [
+                { value: '', label: 'Todos' },
+                { value: 'novos', label: 'Novos' },
+                { value: 'base', label: 'Já na base' },
+            ];
+            body.innerHTML = opts.map(o => `
+                <button type="button" class="funil-filtros-item ${histState.situacao === o.value ? 'is-active' : ''}" data-opt="${esc(o.value)}">
+                    <span class="funil-filtros-item-label">${esc(o.label)}</span>
+                    ${histState.situacao === o.value ? '<i class="bi bi-check2" aria-hidden="true"></i>' : ''}
+                </button>`).join('');
+            body.querySelectorAll('[data-opt]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    aplicarFiltros({ situacao: btn.getAttribute('data-opt') || '' });
+                    renderListaDimensoes();
+                });
+            });
+            return;
+        }
+
+        const sel = document.getElementById(dim.selectId);
+        if (!sel) { body.innerHTML = '<div class="p-3 text-muted small">Sem opções.</div>'; return; }
+        const atual = sel.value;
+        body.innerHTML = [...sel.options].map(opt => {
+            const label = (opt.dataset.label || opt.textContent).replace(/\s*\([\d.]+\)\s*$/, '').trim();
+            const m = opt.textContent.match(/\(([\d.]+)\)\s*$/);
+            const count = m ? m[1] : '';
+            const active = opt.value === atual;
+            return `<button type="button" class="funil-filtros-item ${active ? 'is-active' : ''}" data-opt="${esc(opt.value)}">
+                <span class="funil-filtros-item-label">${esc(label)}</span>
+                ${count ? `<span class="funil-filtros-item-count">${esc(count)}</span>` : ''}
+                ${active ? '<i class="bi bi-check2" aria-hidden="true"></i>' : ''}
+            </button>`;
+        }).join('');
+        body.querySelectorAll('[data-opt]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const v = btn.getAttribute('data-opt') || '';
+                sel.value = v;
+                if (dim.kind === 'mailing') {
+                    histState.page = 1;
+                    carregarMailing({ rolarTopo: true });
+                } else if (dim.kind === 'mes') {
+                    if (v === 'custom') return;
+                    aplicarFiltros(v ? limitesDoMes(v) : { de: '', ate: '' });
+                } else if (dim.stateKey) {
+                    aplicarFiltros({ [dim.stateKey]: v });
+                } else {
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                renderListaDimensoes();
+            });
+        });
+    }
+
+    document.getElementById('btn-funil-filtros').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const panel = document.getElementById('funil-filtros-panel');
+        if (panel.classList.contains('d-none')) abrirPainelFiltros();
+        else fecharPainelFiltros();
+    });
+    document.getElementById('funil-filtros-fechar').addEventListener('click', fecharPainelFiltros);
+    document.getElementById('funil-filtros-voltar').addEventListener('click', renderListaDimensoes);
+    document.getElementById('funil-filtros-body').addEventListener('click', (e) => {
+        const dimBtn = e.target.closest('[data-dim]');
+        if (!dimBtn || funilFiltrosDim) return;
+        const dim = dimensoesDaAba().find(d => d.id === dimBtn.getAttribute('data-dim'));
+        if (dim) renderOpcoesDimensao(dim);
+    });
+    document.getElementById('funil-chips').addEventListener('click', (e) => {
+        const x = e.target.closest('[data-chip-clear]');
+        if (!x) return;
+        const id = x.getAttribute('data-chip-clear');
+        const chip = chipsAtivos().find(c => c.id === id);
+        if (!chip) return;
+        if (chip.clearMailing) {
+            if ('lote' in chip.clearMailing) document.getElementById('f-mailing-lote').value = chip.clearMailing.lote;
+            if ('status' in chip.clearMailing) document.getElementById('f-mailing-status').value = chip.clearMailing.status;
+            histState.page = 1;
+            carregarMailing({ rolarTopo: true });
+            return;
+        }
+        if (chip.clear) aplicarFiltros(chip.clear);
+    });
+    document.addEventListener('click', (e) => {
+        const wrap = document.querySelector('.funil-filtros-wrap');
+        if (!wrap || wrap.contains(e.target)) return;
+        if (!document.getElementById('funil-filtros-panel').classList.contains('d-none')) fecharPainelFiltros();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !document.getElementById('funil-filtros-panel').classList.contains('d-none')) {
+            fecharPainelFiltros();
+        }
+    });
+
     function sincronizarControles() {
         document.querySelectorAll('.tab-res-custom').forEach(b => {
             b.classList.toggle('tab-res-active', b.getAttribute('data-tipo') === histState.tipo);
@@ -839,9 +1229,11 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         document.querySelectorAll('#funil-seg button').forEach(b => {
             b.classList.toggle('active', b.getAttribute('data-situacao') === histState.situacao);
         });
+        const fStatus = document.getElementById('f-status');
         const fNio = document.getElementById('f-nio');
         const fBio = document.getElementById('f-bio');
         const fRep = document.getElementById('f-rep');
+        if (fStatus) fStatus.value = histState.status || '';
         if (fNio) fNio.value = histState.nio || '';
         if (fBio) fBio.value = histState.bio || '';
         if (fRep) fRep.value = histState.rep || '';
@@ -850,22 +1242,9 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
         const bio = histState.tipo === 'BIO';
         const mailing = histState.tipo === 'MAILING';
         const pap = !churn && !bio && !mailing;
-        const temFiltro = churn
-            ? !!(histState.q || histState.de || histState.ate || histState.nio)
-            : bio
-                ? !!(histState.q || histState.bio || histState.rep)
-                : mailing
-                    ? !!(histState.q)
-                    : !!(histState.q || histState.status || histState.situacao || histState.de || histState.ate);
-        document.getElementById('f-limpar').classList.toggle('d-none', !temFiltro);
-        document.getElementById('f-status').classList.toggle('d-none', !pap);
-        document.getElementById('funil-seg').classList.toggle('d-none', !pap);
-        fNio.classList.toggle('d-none', !churn);
-        fBio.classList.toggle('d-none', !bio);
-        fRep.classList.toggle('d-none', !bio);
-        document.getElementById('funil-periodo').classList.toggle('d-none', churn || mailing);
-        document.getElementById('funil-periodo').title = bio ? 'Data de envio da biometria no GED ou data da venda no CRM' : 'Data do pedido no PAP';
-        document.getElementById('f-mes').classList.toggle('d-none', bio || mailing);
+        document.getElementById('funil-periodo').title = bio
+            ? 'Data de envio da biometria no GED ou data da venda no CRM'
+            : 'Data do pedido no PAP';
         document.getElementById('acoes-pap').classList.toggle('d-none', !pap);
         document.getElementById('acoes-churn').classList.toggle('d-none', !churn);
         document.getElementById('acoes-bio').classList.toggle('d-none', !bio);
@@ -889,6 +1268,16 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                     ? 'Busca: nome, CPF, telefone ou cidade'
                     : 'Busca: protocolo, O.S., cliente, CPF… atalhos: novos, base';
         document.getElementById('f-mes').title = churn ? 'Mês da retirada do churn' : 'Mês pela Data do pedido';
+        renderChips();
+        if (!document.getElementById('funil-filtros-panel').classList.contains('d-none')) {
+            if (funilFiltrosDim) {
+                const dim = dimensoesDaAba().find(d => d.id === funilFiltrosDim.id);
+                if (dim) renderOpcoesDimensao(dim);
+                else renderListaDimensoes();
+            } else {
+                renderListaDimensoes();
+            }
+        }
     }
 
     /** Interpreta atalhos na busca (ex.: "repescar", "apto joao") e devolve { q, ...filtros }. */
@@ -1000,8 +1389,17 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
     document.getElementById('f-de').addEventListener('change', (e) => aplicarFiltros({ de: e.target.value }));
     document.getElementById('f-ate').addEventListener('change', (e) => aplicarFiltros({ ate: e.target.value }));
     document.getElementById('f-limpar').addEventListener('click', () => {
-        if (histState.tipo === 'BIO') { aplicarFiltros({ q: '', bio: '', rep: '' }); return; }
+        if (histState.tipo === 'BIO') { aplicarFiltros({ q: '', bio: '', rep: '', de: '', ate: '' }); return; }
         if (histState.tipo === 'CHURN') { aplicarFiltros({ q: '', nio: '', de: '', ate: '' }); return; }
+        if (histState.tipo === 'MAILING') {
+            document.getElementById('f-mailing-lote').value = '';
+            document.getElementById('f-mailing-status').value = 'NOVO';
+            histState.q = '';
+            document.getElementById('f-busca').value = '';
+            histState.page = 1;
+            carregarMailing({ rolarTopo: true });
+            return;
+        }
         aplicarFiltros({ q: '', status: '', situacao: '', de: '', ate: '', nio: '' });
     });
     document.getElementById('th-ordem-data').addEventListener('click', () => {
@@ -1643,6 +2041,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                 'Mailings: filtre por lote e status. "Na fila" = importados prontos para disparo. Respostas ao template Meta aparecem em "Respostas".';
             preencherSelectLotes(data.lotes || []);
             renderLotesMailingInfo(data.lotes || []);
+            renderChips();
             const itens = data.lista || [];
             if (!itens.length) {
                 const dica = statusFiltro === 'RESPONDEU'
