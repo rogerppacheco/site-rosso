@@ -392,9 +392,11 @@ class FunilHistoricoPapPedidosView(APIView):
             cliente_val = mapped.get("cliente") or payload.get("cliente") or payload.get("nomeCliente") or "Desconhecido"
             doc_val = mapped.get("cpf") or mapped.get("documento") or payload.get("cpf") or payload.get("documento") or ""
             status_val = p.status_exibicao or "Desconhecido"
-            # Etapa do interesse no PAP = status secundário (ex.: INTERESSE_AUTOMATICO / INTERESSE_ENCERRADO).
+            # Etapa do fluxo de interesse no PAP (ex.: FROM_ANALISE_CREDITO).
+            # Fallback: status secundário (INTERESSE_AUTOMATICO / INTERESSE_ENCERRADO).
             etapa_val = (
-                mapped.get("status_secundario")
+                payload.get("etapaInteresse")
+                or mapped.get("status_secundario")
                 or payload.get("subStatus")
                 or payload.get("chaveStatusSecundario")
                 or payload.get("statusSecundario")
