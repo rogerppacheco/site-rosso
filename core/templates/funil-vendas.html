@@ -568,7 +568,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                                 </tr>
                             </thead>
                             <tbody id="tbody-resultados">
-                                <tr><td colspan="7" class="text-center py-5 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>Sem registros.</td></tr>
+                                <tr><td colspan="8" class="text-center py-5 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>Sem registros.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -2387,7 +2387,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
                 signal: sinal,
             });
             if (!r.ok) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-4">Erro HTTP ${r.status} ao carregar dados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">Erro HTTP ${r.status} ao carregar dados.</td></tr>`;
                 return;
             }
             const data = await r.json();
@@ -2411,7 +2411,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             const itens = data.results || [];
             if (!itens.length) {
                 const temFiltro = !!(histState.q || histState.status || histState.situacao || histState.de || histState.ate);
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5 text-muted">
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 text-muted">
                     <i class="bi bi-inbox fs-2 d-block mb-2 text-light"></i>
                     ${temFiltro ? 'Nenhum pedido encontrado com esses filtros.' : 'Nenhum item nesta categoria.'}
                     ${temFiltro ? '<div class="mt-3"><button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="document.getElementById(\'f-limpar\').click()"><i class="bi bi-x-circle me-1"></i>Limpar filtros</button></div>' : ''}
@@ -2422,7 +2422,7 @@ mark.funil-mark { padding: 0 2px; border-radius: 3px; background: rgba(250, 204,
             if (rolarTopo) scroll.scrollTop = 0;
         } catch (e) {
             if (e.name === 'AbortError') return;
-            tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-4">Erro ao carregar os dados: ${esc(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-danger text-center py-4">Erro ao carregar os dados: ${esc(e.message)}</td></tr>`;
         } finally {
             if (!sinal.aborted) scroll.classList.remove('funil-carregando');
         }
