@@ -1,5 +1,5 @@
 /**
- * MENU.JS v5.3 - Sistema de Navegação Padronizado Record PAP
+ * MENU.JS v6.0 - Sistema de Navegação Padronizado Record PAP
  * Gerencia menu responsivo, autenticação e funcionalidades globais
  */
 
@@ -12,8 +12,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentPath = window.location.pathname;
     const isLandingPage = currentPath === '/' || currentPath === '/login/';
     const isInternalHome = currentPath === '/area-interna/';
-    const backLinkEl = document.getElementById('header-back-link');
-    const hasAppShellBack = !!(backLinkEl && !backLinkEl.classList.contains('d-none'));
+    // App Shell sempre declara #header-back-link — nunca injeta o Voltar legado
+    const hasAppShell = !!document.getElementById('header-back-link');
+
+    function stripLegacyBackLinks(navList) {
+        navList.querySelectorAll('a.nav-back-button, a[href="/area-interna/"]').forEach(link => {
+            if (link.classList.contains('btn-login-trigger')) return;
+            const txt = (link.textContent || '').trim().toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            if (
+                link.classList.contains('nav-back-button') ||
+                txt === 'voltar' ||
+                txt === 'voltar para area interna' ||
+                txt === 'area interna' ||
+                txt.indexOf('voltar para area') !== -1
+            ) {
+                link.closest('li')?.remove();
+            }
+        });
+    }
 
     function normalizeInternalBackButton() {
         if (!mainNav) return;
@@ -21,18 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const navList = mainNav.querySelector('ul');
         if (!navList) return;
 
-        // App Shell já tem Voltar discreto — não injeta o botão grande antigo
-        if (hasAppShellBack) {
-            navList.querySelectorAll('a.nav-back-button, a[href="/area-interna/"].nav-button').forEach(link => {
-                const li = link.closest('li');
-                if (li && !link.classList.contains('btn-login-trigger')) {
-                    // Remove apenas o "Voltar/Área Interna" legado; mantém links de ação do módulo
-                    const txt = (link.textContent || '').trim().toLowerCase();
-                    if (txt === 'voltar' || txt === 'voltar para área interna' || txt === 'área interna' || txt === 'area interna') {
-                        li.remove();
-                    }
-                }
-            });
+        // App Shell: só o Voltar discreto do header
+        if (hasAppShell) {
+            stripLegacyBackLinks(navList);
             return;
         }
 
@@ -65,6 +73,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     normalizeInternalBackButton();
+    // Remove legado injetado por scripts antigos em cache
+    setTimeout(() => {
+        if (hasAppShell && mainNav) {
+            const navList = mainNav.querySelector('ul');
+            if (navList) stripLegacyBackLinks(navList);
+        }
+    }, 0);
 
     // ===== LÓGICA DO BOTÃO HAMBÚRGUER =====
     if (menuToggle && mainNav) {
@@ -131,12 +146,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== AUTENTICAÇÃO E USUÁRIO =====
     const token = localStorage.getItem('accessToken');
+
+    function decodeJwtPayload(jwt) {
+        if (!jwt || typeof jwt !== 'string') return null;
+        try {
+            const part = jwt.split('.')[1];
+            if (!part) return null;
+            const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = b64 + '==='.slice((b64.length + 3) % 4);
+            const json = decodeURIComponent(
+                atob(padded).split('').map((c) =>
+                    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                ).join('')
+            );
+            return JSON.parse(json);
+        } catch (e) {
+            try {
+                const part = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                return JSON.parse(atob(part));
+            } catch (e2) {
+                return null;
+            }
+        }
+    }
     
     // Verifica se token é válido
     function isTokenValid() {
         if (!token) return false;
         try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
+            const payload = decodeJwtPayload(token);
+            if (!payload || !payload.exp) return false;
             const now = Date.now() / 1000;
             return payload.exp > now;
         } catch (e) {
@@ -146,18 +185,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Carrega nome do usuário (área interna + menu do shell)
     function nomeDoToken() {
-        if (!token) return 'Conta';
-        try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            return payload.first_name || payload.user_name || payload.username || 'Conta';
-        } catch (e) {
-            return 'Conta';
+        const payload = decodeJwtPayload(token);
+        if (payload) {
+            const raw = payload.first_name || payload.user_name || payload.name || payload.username;
+            if (raw && String(raw).trim()) return String(raw).trim();
         }
+        try {
+            const perfil = localStorage.getItem('userProfile');
+            // userProfile às vezes é só o nome do perfil (Admin); ignore
+        } catch (e) { /* ignore */ }
+        try {
+            const cached = localStorage.getItem('user_name') || localStorage.getItem('userName');
+            if (cached && String(cached).trim()) return String(cached).trim();
+        } catch (e) { /* ignore */ }
+        return 'Conta';
     }
     const nomeUsuario = nomeDoToken();
     if (userDisplay) userDisplay.textContent = nomeUsuario;
-    if (headerUserName && token) {
-        headerUserName.textContent = String(nomeUsuario).split(' ')[0] || 'Conta';
+    if (headerUserName) {
+        const primeiro = String(nomeUsuario).split(/\s+/)[0] || 'Conta';
+        headerUserName.textContent = primeiro;
+        headerUserName.title = nomeUsuario;
     }
     if (headerLogoutBtn) {
         headerLogoutBtn.addEventListener('click', (e) => {

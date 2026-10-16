@@ -401,6 +401,10 @@ async function login(username, password) {
             if (decodedToken && decodedToken.perfil) {
                 localStorage.setItem('userProfile', decodedToken.perfil);
             }
+            if (decodedToken) {
+                const nome = decodedToken.first_name || decodedToken.user_name || decodedToken.username;
+                if (nome) localStorage.setItem('user_name', String(nome).trim());
+            }
             
             // --- TRAVA DE SEGURANÇA ---
             if (data.obriga_troca_senha === true) {

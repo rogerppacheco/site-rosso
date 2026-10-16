@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copia arquivos do projeto
+# CACHEBUST invalida camadas seguintes (collectstatic) quando só JS/CSS mudam
+ARG CACHEBUST=1
 COPY . /app/
 
 # Instala dependências Python

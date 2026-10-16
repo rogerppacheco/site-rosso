@@ -12,11 +12,10 @@ else
 fi
 python manage.py createcachetable 2>/dev/null || true
 
-# Fallback se imagem antiga não tiver staticfiles (deploy de emergência)
-if [ ! -d staticfiles ] || [ -z "$(ls -A staticfiles 2>/dev/null)" ]; then
-  echo "[STATIC] staticfiles ausente — executando collectstatic..."
-  python manage.py collectstatic --noinput --skip-checks 2>/dev/null || true
-fi
+# Sempre regenera staticfiles no boot — evita CSS/JS antigos quando a imagem
+# Docker reutiliza camada de collectstatic desatualizada.
+echo "[STATIC] collectstatic (garante menu.js/CSS do App Shell)..."
+python manage.py collectstatic --noinput --skip-checks 2>/dev/null || true
 
 echo "[GUNICORN] workers=${WORKERS} threads=${THREADS} timeout=1200"
 
